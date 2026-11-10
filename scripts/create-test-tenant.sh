@@ -55,7 +55,8 @@ org_id="$(api "$base/organizations?search=$(jq -rn --arg o "$org" '$o|@uri')&exa
 [ -n "$org_id" ] || die "no organization named $org in realm $realm (create it in the console first)"
 
 if [ ! -s "$password_file" ]; then
-  (umask 077; openssl rand -base64 30 | tr -d '/+=\n' | cut -c1-24 > "$password_file")
+  # No trailing newline: curl's --data-urlencode password@FILE would send it.
+  (umask 077; printf '%s' "$(openssl rand -base64 30 | tr -d '/+=\n' | cut -c1-24)" > "$password_file")
   echo "Generated a password in $password_file."
 fi
 
