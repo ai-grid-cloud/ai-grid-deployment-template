@@ -1,0 +1,19 @@
+# Tenants reach MaaS on site-b at https://maas.<site-b apps domain>. The router
+# terminates TLS with its own certificate (publicly trusted on demo.redhat.com)
+# and forwards to the MaaS gateway's HTTP listener, which carries the same
+# hostname. Site-specific: the host is site-b's apps domain.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: maas-gateway-route
+  namespace: openshift-ingress
+spec:
+  host: maas.apps.ocp.865h4.sandbox5343.opentlc.com
+  to:
+    kind: Service
+    name: maas-default-gateway-maas-gateway-class
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
