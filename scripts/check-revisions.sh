@@ -4,8 +4,8 @@
 # Applications that nested ApplicationSets generate.
 # Usage: scripts/check-revisions.sh [--kubeconfig PATH]   (exit 1 on any offender)
 set -Eeuo pipefail
+args=(); [ "${1:-}" = --kubeconfig ] && args=(--kubeconfig "$(cd "$(dirname "$2")" && pwd)/$(basename "$2")")
 cd "$(dirname "$0")/.."
-args=(); [ "${1:-}" = --kubeconfig ] && args=(--kubeconfig "$2")
 sha="$(sed -n 's#.*bootstrap/hub?ref=\([0-9a-f]\{40\}\).*#\1#p' root/kustomization.yaml)"
 repo="$(sed -n 's#.*- \(https://github.com/[^/]*/[^/]*\)//bootstrap/hub?ref=.*#\1#p' root/kustomization.yaml)"
 oc "${args[@]}" get applications.argoproj.io -n openshift-gitops -o json | python3 -c '
