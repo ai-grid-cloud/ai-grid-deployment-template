@@ -87,7 +87,7 @@ ConfigMap before the first sync.
 
 ## Image
 
-The image is `registry.redhat.io/rhbk/keycloak-rhel9:26.4`, a tag, not a digest.
+The image is `registry.redhat.io/rhbk/keycloak-rhel9:26.6-25`, pinned by digest. 26.4 is too old: the console backend sends `autoRedirect` in an organization domain, which 26.4 rejects (Bad Request on organization create).
 Pinning a digest needs `registry.redhat.io` credentials to look it up; do that
 before anything beyond the prototype.
 
