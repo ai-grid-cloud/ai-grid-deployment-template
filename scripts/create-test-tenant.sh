@@ -51,6 +51,16 @@ printf 'Authorization: Bearer %s\n' "$token" > "$tmp/auth"; chmod 600 "$tmp/auth
 api() { curl -fsS -H "@$tmp/auth" -H 'Content-Type: application/json' "$@"; }
 base="https://$host/admin/realms/$realm"
 
+# The maas_* attributes are unmanaged: the user profile must let an admin set
+# them, or Keycloak drops them silently and tokens carry no org claims. The
+# realm import's user-profile component isn't applied by Keycloak 26.8, and the
+# library sets this in its realm-sync step, which idp/ leaves out.
+profile="$(api "$base/users/profile")"
+if [ "$(printf '%s' "$profile" | jq -r '.unmanagedAttributePolicy // ""')" != ADMIN_EDIT ]; then
+  printf '%s' "$profile" | jq '.unmanagedAttributePolicy = "ADMIN_EDIT"' | api -X PUT "$base/users/profile" -d @- >/dev/null
+  echo "Set the realm's user profile to let admins set unmanaged attributes."
+fi
+
 org_id="$(api "$base/organizations?search=$(jq -rn --arg o "$org" '$o|@uri')&exact=true" | jq -r --arg o "$org" '.[] | select(.name==$o) | .id')"
 [ -n "$org_id" ] || die "no organization named $org in realm $realm (create it in the console first)"
 
