@@ -13,4 +13,4 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 data:
-  portalRedirectURI: https://REPLACE-ME/*
+  portalRedirectURI: https://maas.apps.ocp.865h4.sandbox5343.opentlc.com/*

@@ -1,0 +1,76 @@
+# The hub's root: the library's component set at a pinned commit, with this
+# deployment's selection and inputs. deployment-root (self.yaml) syncs this
+# directory, so a commit here (a selection change, a new pin) reaches the hub
+# with no script.
+#
+# To upgrade the library, change LIBRARY_SHA in all three places below (the
+# remote base, the generator revision and values.libraryRevision) in one commit.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  # Git form, not a raw URL: raw.githubusercontent.com caches a new commit as 404
+  # for minutes (finding F16).
+  - https://github.com/cfchase/ai-grid-cluster-gitops//bootstrap/hub?ref=718462324042ad2699f8f2f69eefd4715ad71adc
+  - self.yaml
+patches:
+  - target: { group: argoproj.io, kind: ApplicationSet, name: apps }
+    patch: |
+      # "test" ops fail the render if the library moves a field this patch relies on.
+      - { op: test, path: /spec/generators/0/git/repoURL, value: REQUIRED-libraryRepoURL }
+      - { op: replace, path: /spec/generators/0/git/repoURL, value: https://github.com/cfchase/ai-grid-cluster-gitops.git }
+      - { op: test, path: /spec/generators/0/git/revision, value: REQUIRED-libraryRevision }
+      - { op: replace, path: /spec/generators/0/git/revision, value: 718462324042ad2699f8f2f69eefd4715ad71adc }
+      # The components this hub runs. Not selected (README.md, "Components"):
+      # cert-manager (the platform's), keycloak (idp/, our own), metallb (AWS),
+      # object-storage/odf and odf (S4 instead), ai-grid-o11y and
+      # ai-grid-usage-logs (Loki has no object-storage input yet).
+      - op: replace
+        path: /spec/generators/0/git/files
+        value:
+          - path: apps/acm/application.yaml
+          - path: apps/acm-models/application.yaml
+          - path: apps/ai-grid-policies/application.yaml
+          - path: apps/ai-grid-spokes/application.yaml
+          - path: apps/argo-registration/application.yaml
+          - path: apps/console/application.yaml
+          - path: apps/external-secrets/application.yaml
+          - path: apps/external-services/application.yaml
+          - path: apps/gitops-config/application.yaml
+          - path: apps/grid-bootstrap/application.yaml
+          - path: apps/limitador-redis/application.yaml
+          - path: apps/maas-db/application.yaml
+          - path: apps/object-storage/s4/application.yaml
+          - path: apps/rhoai/application.yaml
+          - path: apps/rhoai-prerequisites/application.yaml
+          - path: cluster-config/application.yaml
+      - op: replace
+        path: /spec/generators/0/git/values
+        value: &inputs
+          libraryRepoURL: https://github.com/cfchase/ai-grid-cluster-gitops.git
+          libraryRevision: 718462324042ad2699f8f2f69eefd4715ad71adc
+          deploymentRepoURL: https://github.com/cfchase/ai-grid-deployment-proto.git
+          deploymentRevision: main
+          catalogRepoURL: https://github.com/cfchase/ai-grid-catalog-proto.git
+          catalogRevision: main
+          idpIssuerURL: https://keycloak-tenant-idp.apps.ocp.z9f4z.sandbox2934.opentlc.com/realms/tenants
+          idpClientID: ai-grid-tenants
+          idpClientSecretNamespace: tenant-idp-client
+          idpClientSecretName: tenant-idp-client
+          idpClientSecretKey: client-secret
+          idpCANamespace: openshift-config-managed
+          idpCAName: default-ingress-cert
+          idpCAKey: ca-bundle.crt
+      # ODF isn't selected, so its generator goes.
+      - { op: test, path: /spec/generators/1/matrix/generators/0/git/repoURL, value: REQUIRED-libraryRepoURL }
+      - { op: remove, path: /spec/generators/1 }
+      # This deployment's own apps: one Application per apps/*.yaml here. The
+      # library's templatePatch needs the same values on every generator.
+      - op: add
+        path: /spec/generators/-
+        value:
+          git:
+            repoURL: https://github.com/cfchase/ai-grid-deployment-proto.git
+            revision: main
+            files:
+              - path: apps/*.yaml
+            values: *inputs

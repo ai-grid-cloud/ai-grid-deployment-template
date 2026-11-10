@@ -46,8 +46,9 @@ For the provider console, run `apps/console/create-secrets.sh` with
 
 ConfigMap `tenant-idp-settings` (`manifests/settings.yaml`), key
 `portalRedirectURI`, is the tenant portal's redirect URI pattern for client
-`ai-grid-tenants`. It ships as `https://REPLACE-ME/*`. Prototype Task 12 sets it to
-`site-b`'s MaaS gateway host, for example `https://MAAS_HOST/*`.
+`ai-grid-tenants`. It is set to `site-b`'s MaaS host
+(`https://maas.apps.ocp.865h4.sandbox5343.opentlc.com/*`); another deployment sets it to its ingress site's
+MaaS gateway host, `https://MAAS_HOST/*`.
 
 The realm is imported only when it doesn't exist (`kc.sh import --override
 false`), so editing the ConfigMap after Keycloak's first start doesn't change the

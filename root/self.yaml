@@ -1,0 +1,21 @@
+# deployment-root: syncs root/ from this repository, so the root ApplicationSet
+# follows git after bootstrap.sh applies it once. No pruning: removing the root
+# must never cascade to the hub's components (finding F2).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: deployment-root
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/cfchase/ai-grid-deployment-proto.git
+    targetRevision: main
+    path: root
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-gitops
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true

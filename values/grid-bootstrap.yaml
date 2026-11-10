@@ -1,0 +1,7 @@
+# This hub starts a new grid, so it generates the grid CA.
+external:
+  certManager:
+    ca:
+      mode: Generate
+managedClusters:
+  createClusterSetBinding: true
