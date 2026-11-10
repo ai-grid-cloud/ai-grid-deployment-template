@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Create a test tenant user in our tenant Keycloak (idp/), a member of an
 # organization the console created, with the attributes the realm's mappers turn
-# into MaaS claims: org_id, org_name, groups (<org-id>/<group>) and roles.
+# into MaaS claims: org_id, org_name, groups and roles. Groups are plain names
+# (such as ai-grid-users): MaaS prefixes them with org_id itself and drops any
+# group that already starts with an organization ID (flat claims, ADR PR 181).
 #
 # A real tenant's users come from the tenant's own identity provider; this user
 # exists only to prove the end-to-end call (prototype goal 3).
@@ -70,7 +72,7 @@ if [ ! -s "$password_file" ]; then
   echo "Generated a password in $password_file."
 fi
 
-attrs="$(jq -n --arg id "$org_id" --arg name "$org" --arg g "$org_id/$group" --arg r "$role" \
+attrs="$(jq -n --arg id "$org_id" --arg name "$org" --arg g "$group" --arg r "$role" \
   '{maas_org_id: [$id], maas_org_name: [$name], maas_groups: [$g], maas_roles: [$r]}')"
 user_id="$(api "$base/users?username=$(jq -rn --arg u "$user" '$u|@uri')&exact=true" | jq -r '.[0].id // empty')"
 if [ -z "$user_id" ]; then
@@ -88,4 +90,4 @@ jq -n --rawfile p "$password_file" '{type: "password", temporary: false, value: 
 api -X POST "$base/organizations/$org_id/members" -d "\"$user_id\"" >/dev/null 2>&1 || true
 api "$base/organizations/$org_id/members?search=$(jq -rn --arg u "$user" '$u|@uri')" | jq -e --arg u "$user" 'any(.[]; .username==$u)' >/dev/null ||
   die "$user is not a member of $org"
-echo "$user is in $org ($org_id), group $org_id/$group, role $role."
+echo "$user is in $org ($org_id), group $group (MaaS sees $org_id/$group), role $role."
