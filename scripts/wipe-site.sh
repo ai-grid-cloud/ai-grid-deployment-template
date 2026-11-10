@@ -102,7 +102,11 @@ echo "== 5. gateways and their EnvoyFilters (F28)"
 for gw in $GATEWAYS; do del gateway.gateway.networking.k8s.io "$gw" -n openshift-ingress; done
 for ef in $(k get envoyfilters.networking.istio.io -n openshift-ingress -o name 2>/dev/null); do del "$ef" -n openshift-ingress; done
 
-echo "== 6. operators"
+echo "== 6. operator-owned CRs, then operators"
+# Delete what an operator reconciles while the operator still runs, or its
+# finalizer never clears (seen on site-b: Kuadrant and Authorino).
+for r in kuadrants.kuadrant.io authorinos.operator.authorino.kuadrant.io limitadors.limitador.kuadrant.io; do del_all_of "$r"; done
+for r in kuadrants.kuadrant.io authorinos.operator.authorino.kuadrant.io limitadors.limitador.kuadrant.io; do wait_gone "$r" 300 k get "$r" -A --no-headers; done
 k get subscriptions.operators.coreos.com -A --no-headers -o custom-columns=NS:.metadata.namespace,N:.metadata.name,P:.spec.name,CSV:.status.installedCSV |
   while read -r ns name pkg csv; do
     contains "$OPERATOR_PACKAGES" "$pkg" || continue
@@ -113,7 +117,7 @@ k get subscriptions.operators.coreos.com -A --no-headers -o custom-columns=NS:.m
 
 echo "== 7. leftover webhooks (F6)"
 for kind in validatingwebhookconfigurations mutatingwebhookconfigurations; do
-  k get "$kind" -o name | grep -E "$WEBHOOK_PATTERN" | while read -r w; do del "$w"; done
+  { k get "$kind" -o name | grep -E "$WEBHOOK_PATTERN" || true; } | while read -r w; do del "$w"; done
 done
 
 echo "== 8. namespaces"
