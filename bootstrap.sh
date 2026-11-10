@@ -38,8 +38,14 @@ done
 oc apply -f "$lib/bootstrap/openshift-gitops-admin.yaml"
 kustomize build root/ | oc apply -f -
 
-RHOAI_QUAY_PULL_SECRET="$(jq -er '.auths["quay.io/rhoai"].auth // .auths["quay.io"].auth' "$auth_file")" ||
-  die "no quay.io login in $auth_file"
+# Prefer a login scoped to quay.io/rhoai (a robot token). A general quay.io
+# login is copied to the hub and to every site's pull secret, so using one needs
+# RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1.
+if ! RHOAI_QUAY_PULL_SECRET="$(jq -er '.auths["quay.io/rhoai"].auth' "$auth_file" 2>/dev/null)"; then
+  [ "${RHOAI_QUAY_ALLOW_GENERIC_LOGIN:-}" = 1 ] ||
+    die "no quay.io/rhoai login in $auth_file; add a robot token for quay.io/rhoai, or set RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1 to use the general quay.io login"
+  RHOAI_QUAY_PULL_SECRET="$(jq -er '.auths["quay.io"].auth' "$auth_file")" || die "no quay.io login in $auth_file"
+fi
 export RHOAI_QUAY_PULL_SECRET
 bash "$lib/apps/rhoai-prerequisites/create-hub-secret.sh"
 echo "Bootstrapped. Watch: oc get applications.argoproj.io -n openshift-gitops"
