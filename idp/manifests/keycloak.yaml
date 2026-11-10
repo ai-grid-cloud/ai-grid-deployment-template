@@ -14,10 +14,12 @@ metadata:
     app.kubernetes.io/name: keycloak
 spec:
   replicas: 1
-  # The realm is imported only when it doesn't exist, so a new pod changes
-  # nothing while the old one serves: roll without a gap.
+  # Recreate: two Keycloak versions must never run against one database. During
+  # a rolling update the old pod keeps serving, and after a reset it can win the
+  # race and set up the schema at its own, older version (seen on proto-hub
+  # moving 26.4 -> 26.6).
   strategy:
-    type: RollingUpdate
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: keycloak
