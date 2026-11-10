@@ -1,5 +1,5 @@
 # Adapted from ai-grid-cluster-gitops apps/keycloak/base/manifests/keycloak.yaml@60578f5
-# (Apache-2.0). Changes: Red Hat build of Keycloak image; one realm (tenants);
+# (Apache-2.0). Changes: community Keycloak 26.8.0 pinned by digest; one realm (tenants);
 # no signing keystore, redirect-URI or realm-sync secrets; its own
 # CloudNativePG cluster in this namespace; the client secret from Secret
 # keycloak-client.

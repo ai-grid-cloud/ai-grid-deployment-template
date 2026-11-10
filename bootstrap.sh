@@ -24,7 +24,7 @@ lib="$(mktemp -d)"; trap 'rm -rf "$lib"' EXIT
 git clone -q --filter=blob:none "$repo.git" "$lib" && git -C "$lib" checkout -q "$sha"
 echo "Library $repo at $sha."
 
-bash "$lib/scripts/check-prerequisites.sh" --step hub --context "$(oc config current-context)" ||
+RHOAI_QUAY_PULL_SECRET_FILE="$auth_file" bash "$lib/scripts/check-prerequisites.sh" --step hub --context "$(oc config current-context)" ||
   echo "Prerequisites incomplete before install; the ones this script installs are expected to be missing."
 
 oc apply -f "$lib/bootstrap/namespace.yaml" -f "$lib/bootstrap/gitops-operator-group.yaml" -f "$lib/bootstrap/openshift-gitops-sub.yaml"

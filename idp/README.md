@@ -1,7 +1,7 @@
 # Tenant identity provider
 
-This directory is the deployment's own tenant identity provider: a Red Hat build
-of Keycloak in namespace `tenant-idp`, with realm `tenants` and client
+This directory is the deployment's own tenant identity provider: community
+Keycloak 26.8.0 in namespace `tenant-idp`, with realm `tenants` and client
 `ai-grid-tenants`. It's the prototype's Keycloak skip test. The deployment
 doesn't select the library's `keycloak` component, installs this one as its own
 app (`apps/tenant-idp.yaml`), and connects it to the library only through the
