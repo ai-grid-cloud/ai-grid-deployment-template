@@ -28,5 +28,7 @@ Tested 2026-11-10: a hub on OpenShift 4.22 with ACM 2.17 and one combined site, 
 
 ## Scripts
 
-`bootstrap.sh` (install step 1), and in `scripts/`: `render.sh`, `check-revisions.sh`, `add-htpasswd-admin.sh`,
-`wipe-site.sh`, `console-call.sh`, `create-test-tenant.sh`. Each says what it does at its top; the guide uses them.
+The install scripts live in the library's `scripts/` from commit `e44fa66` on (`bootstrap-hub.sh`,
+`check-deployment.sh`, `check-revisions.sh`, `add-htpasswd-admin.sh`, `wipe-site.sh`, `console-call.sh`), and the guide
+runs those. This repository's `bootstrap.sh` and `scripts/` copies stay only until its pin moves past that commit;
+`scripts/create-test-tenant.sh` stays, because it's specific to this repository's Keycloak.
