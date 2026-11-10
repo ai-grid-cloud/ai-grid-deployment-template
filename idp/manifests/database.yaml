@@ -1,0 +1,21 @@
+# Replaces ai-grid-cluster-gitops apps/keycloak/base/manifests/database.yaml@60578f5,
+# which adds a role and database to the shared maas-db cluster. This IdP has its
+# own one-instance cluster instead, so it shares nothing with the library.
+# The CloudNativePG operator is installed cluster-wide by the library's maas-db
+# component. CloudNativePG generates Secret tenant-idp-db-app (username,
+# password) and the server CA in Secret tenant-idp-db-ca.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: tenant-idp-db
+  namespace: tenant-idp
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  instances: 1
+  bootstrap:
+    initdb:
+      database: keycloak
+      owner: keycloak
+  storage:
+    size: 10Gi

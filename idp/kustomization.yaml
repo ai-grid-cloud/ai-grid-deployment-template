@@ -1,0 +1,41 @@
+# The deployment's own tenant identity provider: a Red Hat build of Keycloak in
+# namespace tenant-idp, realm tenants, client ai-grid-tenants. Adapted from
+# ai-grid-cluster-gitops apps/keycloak/base/kustomization.yaml@60578f5
+# (Apache-2.0). See README.md.
+#
+# Sync waves: -1 namespaces; 0 generated secrets, settings, RBAC; 1 database
+# and SecretStore; 2 realm files and keycloak-client; 3 Service, Route and the
+# public-URL Policy's RBAC and Placement; 4 the Policy; 5 Keycloak.
+#
+# No top-level namespace: the resources span tenant-idp and tenant-idp-client,
+# and each file names its namespace.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - manifests/namespaces.yaml
+  - manifests/settings.yaml
+  - manifests/secrets.yaml
+  - manifests/client-secret.yaml
+  - manifests/database.yaml
+  - manifests/route.yaml
+  - manifests/public-url-policy.yaml
+  - manifests/keycloak.yaml
+configMapGenerator:
+  # tenants-realm.json is derived from the library's
+  # apps/keycloak/base/manifests/realms/saas-realm.json@60578f5 (JSON holds no
+  # comments, so its citation lives here and in README.md). Imported only
+  # when the realm doesn't exist (kc.sh import --override false).
+  - name: keycloak-realm-import
+    namespace: tenant-idp
+    options:
+      annotations:
+        argocd.argoproj.io/sync-wave: "2"
+    files:
+      - manifests/realms/tenants-realm.json
+  - name: keycloak-realm-scripts
+    namespace: tenant-idp
+    options:
+      annotations:
+        argocd.argoproj.io/sync-wave: "2"
+    files:
+      - manifests/scripts/render-realm.sh

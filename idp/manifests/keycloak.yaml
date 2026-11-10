@@ -1,0 +1,180 @@
+# Adapted from ai-grid-cluster-gitops apps/keycloak/base/manifests/keycloak.yaml@60578f5
+# (Apache-2.0). Changes: Red Hat build of Keycloak image; one realm (tenants);
+# no signing keystore, redirect-URI or realm-sync secrets; its own
+# CloudNativePG cluster in this namespace; the client secret from Secret
+# keycloak-client.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: tenant-idp
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+  labels:
+    app.kubernetes.io/name: keycloak
+spec:
+  replicas: 1
+  # The realm is imported only when it doesn't exist, so a new pod changes
+  # nothing while the old one serves: roll without a gap.
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+    spec:
+      initContainers:
+        # Renders the realm into a memory-backed volume. The keycloak container
+        # imports it, because the import needs the same database settings.
+        - name: render-realm-import
+          image: registry.redhat.io/rhbk/keycloak-rhel9:26.4
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |
+              set -Eeuo pipefail
+              mkdir -p /opt/keycloak/data/import/create-only
+              bash /opt/keycloak/realm-scripts/render-realm.sh \
+                < /opt/keycloak/realm-import-source/tenants-realm.json \
+                > /opt/keycloak/data/import/create-only/tenants-realm.json
+          env:
+            - name: KEYCLOAK_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client
+                  key: client-secret
+            - name: TENANT_PORTAL_REDIRECT_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: tenant-idp-settings
+                  key: portalRedirectURI
+          volumeMounts:
+            - name: realm-import-source
+              mountPath: /opt/keycloak/realm-import-source
+              readOnly: true
+            - name: realm-scripts
+              mountPath: /opt/keycloak/realm-scripts
+              readOnly: true
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+      containers:
+        - name: keycloak
+          image: registry.redhat.io/rhbk/keycloak-rhel9:26.4
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |
+              set -Eeuo pipefail
+              /opt/keycloak/bin/kc.sh import --dir /opt/keycloak/data/import/create-only --override false
+              exec /opt/keycloak/bin/kc.sh start
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: management
+              containerPort: 9000
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: management
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 60
+          envFrom:
+            # KC_BOOTSTRAP_ADMIN_USERNAME and KC_BOOTSTRAP_ADMIN_PASSWORD.
+            - secretRef:
+                name: keycloak-secrets
+          env:
+            - name: KC_DB
+              value: postgres
+            # verify-full against the CloudNativePG CA: the server certificate
+            # names tenant-idp-db-rw.
+            - name: KC_DB_URL
+              value: jdbc:postgresql://tenant-idp-db-rw:5432/keycloak?sslmode=verify-full&sslrootcert=/opt/keycloak/database-ca/ca.crt
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-idp-db-app
+                  key: username
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tenant-idp-db-app
+                  key: password
+            # The Route's host, written by Policy tenant-idp-public-url.
+            - name: KC_HOSTNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: tenant-idp-public-url
+                  key: KEYCLOAK_PUBLIC_URL
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: database-ca
+              mountPath: /opt/keycloak/database-ca
+              readOnly: true
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+      volumes:
+        - name: database-ca
+          secret:
+            secretName: tenant-idp-db-ca
+            items:
+              - key: ca.crt
+                path: ca.crt
+        - name: realm-import-source
+          configMap:
+            name: keycloak-realm-import
+        - name: realm-scripts
+          configMap:
+            name: keycloak-realm-scripts
+        # The rendered realm holds the client secret: keep it off the node's disk.
+        - name: realm-import
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: tenant-idp
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  labels:
+    app.kubernetes.io/name: keycloak
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

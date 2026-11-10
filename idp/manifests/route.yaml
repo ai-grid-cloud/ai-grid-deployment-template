@@ -1,0 +1,22 @@
+# Copied from ai-grid-cluster-gitops apps/keycloak/base/manifests/route.yaml@60578f5
+# (Apache-2.0), namespace changed. spec.host is left empty, so OpenShift assigns
+# keycloak-tenant-idp.<apps domain>. The provider console's create-secrets.sh
+# reads this Route's host (KEYCLOAK_NAMESPACE=tenant-idp).
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: keycloak
+  namespace: tenant-idp
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  to:
+    kind: Service
+    name: keycloak
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

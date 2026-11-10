@@ -1,0 +1,32 @@
+# The deployment's own tenant identity provider (idp/), in place of the
+# library's Keycloak. Same format as the library's apps/*/application.yaml: the
+# deployment's root reads this file's metadata and spec as template parameters.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tenant-idp
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/cfchase/ai-grid-deployment-proto.git
+    targetRevision: main
+    path: idp
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tenant-idp
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      refresh: true
+      limit: 20
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 30m
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true

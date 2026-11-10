@@ -1,0 +1,135 @@
+{
+  "realm": "tenants",
+  "keycloakVersion": "26.4.0",
+  "accessTokenLifespan": 21600,
+  "ssoSessionIdleTimeout": 21600,
+  "enabled": true,
+  "loginWithEmailAllowed": true,
+  "organizationsEnabled": true,
+  "clients": [
+    {
+      "clientId": "ai-grid-tenants",
+      "name": "AI Grid tenants",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_CLIENT_SECRET}",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "${TENANT_PORTAL_REDIRECT_URI}"
+      ],
+      "defaultClientScopes": [
+        "basic",
+        "acr",
+        "profile",
+        "email",
+        "roles",
+        "web-origins"
+      ],
+      "optionalClientScopes": [
+        "organization"
+      ],
+      "protocolMappers": [
+        {
+          "name": "MaaS tenant groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "maas_groups",
+            "claim.name": "groups",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "MaaS org id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "maas_org_id",
+            "claim.name": "org_id",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "MaaS org name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "maas_org_name",
+            "claim.name": "org_name",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "MaaS roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "maas_roles",
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "MaaS audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "ai-grid-tenants",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "MaaS access token purpose",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "token_use",
+            "claim.value": "access",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "config-pieces-count": [
+            "1"
+          ],
+          "config-piece-0": [
+            "{\"unmanagedAttributePolicy\":\"ADMIN_EDIT\"}"
+          ]
+        }
+      }
+    ]
+  }
+}

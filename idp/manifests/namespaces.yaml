@@ -1,0 +1,17 @@
+# tenant-idp holds Keycloak, its database and its settings.
+# tenant-idp-client holds the tenant client's secret only: the library's
+# hub-templating service account gets `get` there, so no other Secret may live
+# in it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-idp
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-idp-client
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
