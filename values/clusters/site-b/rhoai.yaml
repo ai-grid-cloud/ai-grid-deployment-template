@@ -1,0 +1,8 @@
+# site-b is combined, so it runs the MaaS gateway: its tenants call
+# https://maas.<site-b apps domain>.
+components:
+  aigateway:
+    modelsAsAService:
+      gateway:
+        annotations:
+          ai-grid/maas-gateway-hostname-prefix: maas
