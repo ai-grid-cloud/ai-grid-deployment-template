@@ -9,8 +9,8 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/cfchase/ai-grid-deployment-proto.git
-    targetRevision: main
+    repoURL: '@deploymentRepoURL@'
+    targetRevision: '@deploymentRevision@'
     path: idp
   destination:
     server: https://kubernetes.default.svc

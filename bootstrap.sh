@@ -17,11 +17,14 @@ for c in oc kustomize jq git; do command -v "$c" >/dev/null || die "required com
 auth_file="${RHOAI_QUAY_AUTH_FILE:-}"
 [ -f "$auth_file" ] || die "set RHOAI_QUAY_AUTH_FILE to a container auth file (such as ~/.config/containers/auth.json) with a quay.io/rhoai login"
 
-sha="$(sed -n 's#.*bootstrap/hub?ref=\([0-9a-f]\{40\}\).*#\1#p' root/kustomization.yaml)"
-repo="$(sed -n 's#.*- \(https://github.com/[^/]*/[^/]*\)//bootstrap/hub?ref=.*#\1#p' root/kustomization.yaml)"
-[ -n "$sha" ] && [ -n "$repo" ] || die "could not read the library's repository and commit from root/kustomization.yaml"
+# The library and its pin, from the root's libraryRepoURL and libraryRevision
+# inputs (any git host).
+root="$(kustomize build root/)"
+input() { printf '%s\n' "$root" | sed -n "s/^ *$1: *//p" | head -1 | tr -d "'\""; }
+sha="$(input libraryRevision)"; repo="$(input libraryRepoURL)"
+[[ $sha =~ ^[0-9a-f]{40}$ ]] && [ -n "$repo" ] || die "could not read libraryRepoURL and a 40-character libraryRevision from root/"
 lib="$(mktemp -d)"; trap 'rm -rf "$lib"' EXIT
-git clone -q --filter=blob:none "$repo.git" "$lib" && git -C "$lib" checkout -q "$sha"
+git clone -q --filter=blob:none "$repo" "$lib" && git -C "$lib" checkout -q "$sha"
 echo "Library $repo at $sha."
 
 RHOAI_QUAY_PULL_SECRET_FILE="$auth_file" bash "$lib/scripts/check-prerequisites.sh" --step hub --context "$(oc config current-context)" ||

@@ -48,8 +48,8 @@ patches:
         value: &inputs
           libraryRepoURL: https://github.com/cfchase/ai-grid-cluster-gitops.git
           libraryRevision: edf8e09fb0de642ff739e0ecbb99605a297035b5
-          deploymentRepoURL: https://github.com/cfchase/ai-grid-deployment-proto.git
-          deploymentRevision: main
+          deploymentRepoURL: &deploymentRepoURL https://github.com/cfchase/ai-grid-deployment-proto.git
+          deploymentRevision: &deploymentRevision main
           catalogRepoURL: https://github.com/cfchase/ai-grid-catalog-proto.git
           catalogRevision: main
           idpIssuerURL: https://keycloak-tenant-idp.apps.ocp.z9f4z.sandbox2934.opentlc.com/realms/tenants
@@ -69,8 +69,10 @@ patches:
         path: /spec/generators/-
         value:
           git:
-            repoURL: https://github.com/cfchase/ai-grid-deployment-proto.git
-            revision: main
+            # Generator fields can't take @inputs@; these aliases reuse the
+            # deploymentRepoURL and deploymentRevision values set above.
+            repoURL: *deploymentRepoURL
+            revision: *deploymentRevision
             files:
               - path: apps/*.yaml
             values: *inputs

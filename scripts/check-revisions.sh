@@ -6,8 +6,9 @@
 set -Eeuo pipefail
 args=(); [ "${1:-}" = --kubeconfig ] && args=(--kubeconfig "$(cd "$(dirname "$2")" && pwd)/$(basename "$2")")
 cd "$(dirname "$0")/.."
-sha="$(sed -n 's#.*bootstrap/hub?ref=\([0-9a-f]\{40\}\).*#\1#p' root/kustomization.yaml)"
-repo="$(sed -n 's#.*- \(https://github.com/[^/]*/[^/]*\)//bootstrap/hub?ref=.*#\1#p' root/kustomization.yaml)"
+root="$(kustomize build root/)"
+input() { printf '%s\n' "$root" | sed -n "s/^ *$1: *//p" | head -1 | tr -d "'\""; }
+sha="$(input libraryRevision)"; repo="$(input libraryRepoURL)"
 oc "${args[@]}" get applications.argoproj.io -n openshift-gitops -o json | python3 -c '
 import json, sys
 repo, sha = sys.argv[1].removesuffix(".git"), sys.argv[2]
