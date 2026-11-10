@@ -1,0 +1,18 @@
+# Tenants call https://maas.<site-b apps domain>. OpenShift points that name at
+# the MaaS gateway's own load balancer (a DNSRecord for the listener hostname),
+# so the router never sees it and the gateway must present a certificate tenants
+# trust. demo.redhat.com's ClusterIssuer rhoai-gateway-letsencrypt answers its
+# HTTP-01 challenge through this gateway's HTTP listener. Site-specific: the
+# host is site-b's apps domain.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: maas-gateway-public
+  namespace: openshift-ingress
+spec:
+  secretName: maas-gateway-public-tls
+  dnsNames:
+    - maas.apps.ocp.865h4.sandbox5343.opentlc.com
+  issuerRef:
+    kind: ClusterIssuer
+    name: rhoai-gateway-letsencrypt

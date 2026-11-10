@@ -1,17 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  # site-b's public MaaS entry point (sites/site-b/maas-route). The library's
-  # MaaS gateway serves its in-cluster certificate on the public hostname, which
-  # no client can verify; this is the deployment's fix (finding F22, as on demo1).
-  name: site-b-maas-route
+  # A publicly trusted certificate for site-b's MaaS gateway
+  # (sites/site-b/maas-tls); values/clusters/site-b/rhoai.yaml points the
+  # gateway's HTTPS listener at it.
+  name: site-b-maas-tls
   namespace: openshift-gitops
 spec:
   project: default
   source:
     repoURL: '@deploymentRepoURL@'
     targetRevision: '@deploymentRevision@'
-    path: sites/site-b/maas-route
+    path: sites/site-b/maas-tls
   destination:
     server: https://cluster-proxy-addon-user.multicluster-engine.svc.cluster.local:9092/site-b
     namespace: openshift-ingress

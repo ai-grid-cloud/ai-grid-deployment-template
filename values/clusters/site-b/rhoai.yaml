@@ -6,3 +6,37 @@ components:
       gateway:
         annotations:
           ai-grid/maas-gateway-hostname-prefix: maas
+        spec:
+          # The chart's listeners, with the HTTPS listener's certificate from
+          # sites/site-b/maas-tls (publicly trusted) instead of the in-cluster
+          # service certificate. Helm replaces lists whole, so both listeners
+          # are here. Hostnames come from the library's gateway-hostname Policy.
+          listeners:
+            - name: http
+              port: 80
+              protocol: HTTP
+              allowedRoutes:
+                namespaces:
+                  from: Selector
+                  selector:
+                    matchExpressions:
+                      - key: kubernetes.io/metadata.name
+                        operator: In
+                        values: [openshift-ingress, models-as-a-service, redhat-ai-gateway-infra]
+            - name: https
+              port: 443
+              protocol: HTTPS
+              allowedRoutes:
+                namespaces:
+                  from: Selector
+                  selector:
+                    matchExpressions:
+                      - key: kubernetes.io/metadata.name
+                        operator: In
+                        values: [openshift-ingress, models-as-a-service, redhat-ai-gateway-infra]
+              tls:
+                mode: Terminate
+                certificateRefs:
+                  - group: ""
+                    kind: Secret
+                    name: maas-gateway-public-tls
