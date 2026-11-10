@@ -32,7 +32,7 @@ spec:
         # Renders the realm into a memory-backed volume. The keycloak container
         # imports it, because the import needs the same database settings.
         - name: render-realm-import
-          image: registry.redhat.io/rhbk/keycloak-rhel9@sha256:91937e38d3507d29a4bc5898a77abda62a204b508c77c730cd0bc745dcdb0d03  # 26.6-25
+          image: quay.io/keycloak/keycloak@sha256:27b3230fbabb8c9ff3c66c864cf09dcd8a41aca82e5100679d109ef0eeb05741  # 26.8.0, as the library's Keycloak
           imagePullPolicy: IfNotPresent
           command:
             - /bin/bash
@@ -66,7 +66,7 @@ spec:
               mountPath: /opt/keycloak/data/import
       containers:
         - name: keycloak
-          image: registry.redhat.io/rhbk/keycloak-rhel9@sha256:91937e38d3507d29a4bc5898a77abda62a204b508c77c730cd0bc745dcdb0d03  # 26.6-25
+          image: quay.io/keycloak/keycloak@sha256:27b3230fbabb8c9ff3c66c864cf09dcd8a41aca82e5100679d109ef0eeb05741  # 26.8.0, as the library's Keycloak
           imagePullPolicy: IfNotPresent
           command:
             - /bin/bash

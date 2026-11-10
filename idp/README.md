@@ -87,7 +87,7 @@ ConfigMap before the first sync.
 
 ## Image
 
-The image is `registry.redhat.io/rhbk/keycloak-rhel9:26.6-25`, pinned by digest. 26.4 is too old: the console backend sends `autoRedirect` in an organization domain, which 26.4 rejects (Bad Request on organization create).
+The image is community Keycloak `quay.io/keycloak/keycloak:26.8.0`, pinned by digest, the same version the library's Keycloak runs. Red Hat build of Keycloak doesn't work yet: the console backend (9a449bb) sends `autoRedirect` in each organization domain, and RHBK 26.4 and 26.6-25 (the newest on 2026-11-10) both reject it with Bad Request, so the console can't create organizations. Gap for the team.
 Pinning a digest needs `registry.redhat.io` credentials to look it up; do that
 before anything beyond the prototype.
 
