@@ -5,8 +5,9 @@
 # 2. Installs OpenShift GitOps from the library's bootstrap files at that commit.
 # 3. Applies root/ (the root ApplicationSet and deployment-root). From then on
 #    Argo CD follows git; this script is not run again.
-# 4. Seeds the quay.io/rhoai pull secret that the library's prerequisites
-#    Policy copies to every site. The credential is read from a container auth
+# 4. Seeds the quay.io/rhoai pull secret (and the registry.stage.redhat.io
+#    login, when present) that the library's prerequisites Policy copies to
+#    every site. The credential is read from a container auth
 #    file and never printed.
 #
 # Usage: KUBECONFIG=HUB_KUBECONFIG RHOAI_QUAY_AUTH_FILE=AUTH_JSON ./bootstrap.sh
@@ -50,5 +51,13 @@ if ! RHOAI_QUAY_PULL_SECRET="$(jq -er '.auths["quay.io/rhoai"].auth' "$auth_file
   RHOAI_QUAY_PULL_SECRET="$(jq -er '.auths["quay.io"].auth' "$auth_file")" || die "no quay.io login in $auth_file"
 fi
 export RHOAI_QUAY_PULL_SECRET
+# The library's mirror sends registry.redhat.io/rhaii* (model runtimes) to
+# registry.stage.redhat.io, so pass a stage login on when the auth file has one.
+if RHOAI_STAGE_PULL_SECRET="$(jq -er '.auths["registry.stage.redhat.io"].auth' "$auth_file" 2>/dev/null)"; then
+  export RHOAI_STAGE_PULL_SECRET
+else
+  unset RHOAI_STAGE_PULL_SECRET
+  echo "warning: no registry.stage.redhat.io login in $auth_file; registry.redhat.io/rhaii* images won't pull on the sites" >&2
+fi
 bash "$lib/apps/rhoai-prerequisites/create-hub-secret.sh"
 echo "Bootstrapped. Watch: oc get applications.argoproj.io -n openshift-gitops"
