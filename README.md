@@ -8,7 +8,7 @@ their inputs, per-cluster values, and its own extra apps. Models and subscriptio
 writer changes.
 
 Draft install documentation, written from what was run on the prototype hub `proto-hub` and site `site-b`.
-Steps 3 and 4 are added as they are run.
+Steps 3 and 4 were run with `site-b`.
 
 ## Layout
 
@@ -85,6 +85,37 @@ Check that every Application reading the library runs the pinned commit:
 ```sh
 scripts/check-revisions.sh --kubeconfig HUB_KUBECONFIG
 ```
+
+## Step 3: prepare a site and join it to ACM
+
+Prerequisites on the site: OpenShift 4.21 or later and a default StorageClass. The hub's prerequisites Policy
+delivers the `quay.io/rhoai` pull secret and mirror once the site is labelled (its nodes reboot once).
+
+1. On a demo.redhat.com cluster, add the htpasswd admin first (step 1.1). If the site ran AI Grid before, wipe it
+   after it has left its old hub: `scripts/wipe-site.sh --kubeconfig SITE_KUBECONFIG --dry-run`, read the list, then
+   run it without `--dry-run`.
+2. Check the site: `LIBRARY_CHECKOUT/scripts/check-prerequisites.sh --step spoke --context SITE_CONTEXT`.
+3. Import it, with both clusters' contexts in one `KUBECONFIG` (needs `clusteradm`):
+
+   ```sh
+   HUB_CONTEXT=HUB_CONTEXT bash LIBRARY_CHECKOUT/docs/acm/cluster-onboarding/import-managed-cluster.sh \
+     --spoke-context SITE_CONTEXT --cluster-name SITE --yes
+   ```
+
+## Step 4: join the site to the grid
+
+1. If the site runs the MaaS gateway (role `ingress` or `combined`), add `values/clusters/SITE/rhoai.yaml` with its
+   hostname prefix (`ai-grid/maas-gateway-hostname-prefix`, as in `values/clusters/site-b/rhoai.yaml`) and push it
+   first. Without it the site's `rhoai-*` Application doesn't render.
+2. Label it. The labels install OpenShift AI in that role, the grid and the tenant settings:
+
+   ```sh
+   oc label managedcluster SITE ai-grid/enabled=true ai-grid/role=ROLE location=LOCATION
+   ```
+
+   `ROLE` is `ingress`, `inference` or `combined`. OpenShift AI takes 45 to 60 minutes.
+3. Check: the site's DataScienceCluster is `Ready`, and `oc get gridnetworks,gridsites` on the site shows the grid
+   Active and the site listed.
 
 ## Upgrade
 
