@@ -33,13 +33,13 @@ You should see the MultiClusterHub with status `Running`.
 
 1. **Your tenant identity provider's objects,** if you bring your own: the client Secret and CA ConfigMap that your
    `idp*` inputs name, and anything your IdP's own apps need. See
-   [tenant identity provider](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/04-tenant-identity.md#tenant-identity-provider). Then rerun the `--expect-idp own` check from
+   [tenant identity provider](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/04-tenant-identity.md#tenant-identity-provider). Then rerun the `--expect-idp own` check from
    [prepare the hub](03-prepare-hub.md#2-check-the-infrastructure).
 
 2. **The provider console's secrets,** if you selected the console: the catalog token for the git writer, and the
    console's Keycloak admin credentials. The console needs a Keycloak tenant IdP with Organizations, with Route
    `keycloak` and Secret `keycloak-secrets` in `KEYCLOAK_NAMESPACE`; with another IdP, skip the console
-   ([provider console](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/05-console-and-model-delivery.md#provider-console)).
+   ([provider console](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/05-console-and-model-delivery.md#provider-console)).
 
    The script calls Keycloak with `curl`. On a hub whose ingress certificate isn't publicly trusted, give it the
    ingress CA, and let the backend reach Keycloak in-cluster:
@@ -62,7 +62,7 @@ You should see the MultiClusterHub with status `Running`.
      library's Keycloak runs in `maas-db`).
    - `TENANT_REALM`: the tenant realm (`tenants` in the example).
 
-   See [provider console](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/05-console-and-model-delivery.md#provider-console) for every variable. The console restarts to read the new Secrets.
+   See [provider console](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/05-console-and-model-delivery.md#provider-console) for every variable. The console restarts to read the new Secrets.
 
 ## 3. Verify
 
@@ -91,7 +91,7 @@ You should see the MultiClusterHub with status `Running`.
    oc --context "$HUB_CONTEXT" get managedclustersetbinding global -n redhat-ai-grid
    ```
 
-   You should see `global`. grid-bootstrap creates it ([grid bootstrap](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/02-grid.md#grid-bootstrap)).
+   You should see `global`. grid-bootstrap creates it ([grid bootstrap](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/02-grid.md#grid-bootstrap)).
 
 4. The console is up:
 

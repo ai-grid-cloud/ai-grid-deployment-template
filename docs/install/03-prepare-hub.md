@@ -16,7 +16,7 @@ repository's checkout, with the library checked out at your pin in `../library`
 ## 1. Add a break-glass admin
 
 If the hub's only sign-in is an external identity provider, add an htpasswd admin first
-([cluster sign-in and admins](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/00-platform-services.md#cluster-sign-in-and-admins)):
+([cluster sign-in and admins](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/00-platform-services.md#cluster-sign-in-and-admins)):
 
 ```sh
 oc config use-context "$HUB_CONTEXT"
@@ -59,9 +59,9 @@ You should see the script confirm the sign-in. Sign in once in the web console a
    |---|---|
    | OpenShift version | Upgrade the cluster to 4.21 or later. |
    | default StorageClass | Annotate one StorageClass `storageclass.kubernetes.io/is-default-class=true`. |
-   | cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or select `apps/cert-manager` ([cert-manager](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/00-platform-services.md#cert-manager)). |
-   | quay.io/rhoai pull secret file | Log in: `podman login quay.io` with a `quay.io/rhoai` robot token ([OpenShift AI prerequisites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
-   | object storage | Expected here if you selected `apps/object-storage/s4` or `odf`: it appears when you [install the hub components](04-hub-components.md). If you bring your own, create the Secret now ([object storage](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/01-acm.md#object-storage)). |
+   | cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or select `apps/cert-manager` ([cert-manager](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/00-platform-services.md#cert-manager)). |
+   | quay.io/rhoai pull secret file | Log in: `podman login quay.io` with a `quay.io/rhoai` robot token ([OpenShift AI prerequisites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
+   | object storage | Expected here if you selected `apps/object-storage/s4` or `odf`: it appears when you [install the hub components](04-hub-components.md). If you bring your own, create the Secret now ([object storage](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/01-acm.md#object-storage)). |
 
 4. If you bring your own tenant identity provider, check its two hub objects as well:
 
@@ -79,7 +79,7 @@ You should see the script confirm the sign-in. Sign in once in the web console a
 The library's `bootstrap-hub.sh` checks your deployment, installs OpenShift GitOps from the library at your pinned
 commit, applies `root/` once, and seeds the
 `quay.io/rhoai` and `registry.stage.redhat.io` logins that the prerequisites Policy copies to every site
-([OpenShift AI prerequisites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). It reads them from the auth file and never prints them. It stops if
+([OpenShift AI prerequisites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). It reads them from the auth file and never prints them. It stops if
 `../library` isn't checked out at your `libraryRevision`.
 
 ```sh
