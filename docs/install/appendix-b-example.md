@@ -16,6 +16,7 @@ A repository you make from the template starts with these files, and
 | `apps/tenant-idp.yaml`, `idp/` | Its own tenant Keycloak: community Keycloak 26.8.0 pinned by digest, realm `tenants`, client `ai-grid-tenants`, its own CloudNativePG database, `strategy: Recreate`; the client secret in a namespace of its own |
 | `apps/site-b-maas-tls.yaml`, `sites/site-b/maas-tls/` | A DNS-01 certificate for the site's MaaS hostname |
 | `scripts/create-test-tenant.sh` | A test tenant user in its Keycloak |
+| `docs/install/`, `scripts/sync-guide-pin.sh` | This guide, and the script that points its links into the library at the pin |
 
 The scripts this guide runs live in the library's `scripts/`: `bootstrap-hub.sh`, `check-deployment.sh`,
 `check-revisions.sh`, `add-htpasswd-admin.sh`, `wipe-site.sh`, `console-call.sh`. The example keeps only

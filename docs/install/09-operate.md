@@ -8,12 +8,14 @@ An upgrade is one commit to your deployment repository that moves the library pi
    manual step.
 
 2. In `root/kustomization.yaml`, replace the old SHA with the new one in all three places: the remote base
-   (`?ref=`), the generator `revision`, and `values.libraryRevision`.
+   (`?ref=`), the generator `revision`, and `values.libraryRevision`. `sync-guide-pin.sh` then moves this guide's links
+   into the library to the new SHA, and the commit carries both.
 
    ```sh
    sed -i.bak "s/OLD_SHA/NEW_SHA/g" root/kustomization.yaml && rm root/kustomization.yaml.bak
    git -C ../library fetch -q && git -C ../library checkout -q NEW_SHA
    ../library/scripts/check-deployment.sh .
+   scripts/sync-guide-pin.sh
    git commit -am "root: move the library pin to NEW_SHA_SHORT" && git push
    ```
 

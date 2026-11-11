@@ -37,7 +37,7 @@ GitHub. The deployment template is this repository, and it carries the example d
    | `apps/site-b-maas-tls.yaml`, `sites/site-b/` | The example site's MaaS certificate. Delete them, or change them for your site. | [MaaS gateway certificate](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/spokes/maas-certificate.md) |
    | `apps/tenant-idp.yaml`, `idp/`, `scripts/create-test-tenant.sh` | The example's own Keycloak. Keep them only if you run your own Keycloak the way the example does, and then set its hostnames in `idp/`; otherwise delete them. | [Tenant identity provider](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/04-tenant-identity.md#tenant-identity-provider) |
 
-   Keep `docs/`: it's this guide.
+   Keep `docs/` and `scripts/sync-guide-pin.sh`: they're this guide and the script that points its links at your pin.
 
 ## 2. Pin the library commit
 
@@ -71,6 +71,17 @@ The root takes the library's `bootstrap/hub` at one commit. Every component then
    ```
 
    Replace `LIBRARY_SHA` with the full SHA. After an upgrade, check out the new SHA here too.
+
+4. Point this guide's links into the library at your pin, so each reference page you open matches the components you
+   install:
+
+   ```sh
+   scripts/sync-guide-pin.sh
+   scripts/sync-guide-pin.sh --check
+   ```
+
+   You should see `guide links at https://github.com/.../blob/LIBRARY_SHA/`. The script reads `libraryRevision` and
+   `libraryRepoURL` from `root/kustomization.yaml` and rewrites the links in `docs/install/`.
 
 ## 3. Select components
 
