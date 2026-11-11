@@ -29,13 +29,18 @@ console writes them there with a token that can write only this repository.
 
    With the GitHub CLI instead: `gh repo create OWNER/CATALOG_REPO --add-readme --public`.
 
-2. [Create a fine-grained token](https://github.com/settings/personal-access-tokens/new):
-   - **Repository access:** **Only select repositories**, and select your catalog repository.
-   - **Permissions:** **Add permissions** > **Contents**, then set it to **Read and write**. Leave every other
-     permission off; GitHub adds **Metadata: Read-only** itself.
+2. [Create a fine-grained token](https://github.com/settings/personal-access-tokens/new), named such as `ai-grid-catalog`:
 
-   <img src="images/token-repository-access.png" width="420" alt="Repository access set to Only select repositories">
-   <img src="images/token-permissions.png" width="420" alt="Contents set to Read and write">
+   1. Under **Repository access**, select **Only select repositories**, and select your catalog repository.
+
+      <img src="images/token-repository-access.png" width="480" alt="Repository access set to Only select repositories">
+
+   2. Under **Permissions**, click **Add permissions** > **Contents**, then set it to **Read and write**. Leave every
+      other permission off; GitHub adds **Metadata: Read-only** itself.
+
+      <img src="images/token-permissions.png" width="480" alt="Contents set to Read and write">
+
+   3. Click **Generate token** and copy it.
 
    Note its expiration date: when it expires, the console can't save models or subscriptions until you replace it.
 
