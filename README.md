@@ -3,10 +3,23 @@
 
 # AI Grid deployment template
 
-A GitHub template for an AI Grid **deployment repository**: the components one hub runs, its inputs, and its sites'
-files. It installs from the component library
-[`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) at one pinned commit. Tested end
-to end on 2026-11-10 ([install guide](docs/install/README.md)).
+A GitHub template for an AI Grid **deployment repository**. You create your deployment repository from it, and your
+hub's Argo CD installs AI Grid from it: on the hub, ACM, Argo CD, the grid, the MaaS shared services, a tenant
+Keycloak and the provider console; on each site, OpenShift AI with MaaS and the grid in the site's role. The template
+carries tested choices, so you change only your names. Tested end to end on 2026-11-10
+([install guide](docs/install/README.md)).
+
+## The three repositories
+
+| Repository | What it holds | Who changes it |
+|---|---|---|
+| Library, [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) | The components (Argo CD applications, ACM policies, charts) and their reference docs | Its maintainers; you pin one commit and don't edit it |
+| Your deployment repository, from this template | The library pin, which components run, your inputs, each site's files, and the install guide | You |
+| Your catalog repository | Models and subscriptions | The provider console |
+
+The hub's Argo CD reads all three. Your deployment repository points at the library and the catalog in
+`root/kustomization.yaml`; to upgrade, you move the library pin. For more, see
+[How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/195ccd7ab783d5154549c597fef4b20dc12acd91/docs/install/README.md#how-ai-grid-works).
 
 ## Start here
 
