@@ -2,7 +2,7 @@
 # Point the install guide's links into the library at the library commit this
 # repository pins, so the component reference a page links to matches the pin.
 #
-#   scripts/sync-guide-pin.sh           rewrite docs/install/**/*.md
+#   scripts/sync-guide-pin.sh           rewrite README.md and docs/install/**/*.md
 #   scripts/sync-guide-pin.sh --check   change nothing; exit 1 if a link differs
 #
 # The pin is values.libraryRevision in root/kustomization.yaml, and the library
@@ -43,7 +43,7 @@ while IFS= read -r -d '' f; do
     sed -E -i.bak "s#$link#$want#g" "$f" && rm -f "$f.bak"
     echo "$f: $n link(s) moved to $want"
   fi
-done < <(find docs/install -name '*.md' -print0)
+done < <(find README.md docs/install -name '*.md' -print0)
 
 if $check && [ "$stale" -gt 0 ]; then
   echo "$stale link(s) differ from the pin; run $0" >&2; exit 1
