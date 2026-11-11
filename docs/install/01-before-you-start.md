@@ -2,10 +2,10 @@
 
 Gather the following before you run anything.
 
-> **Important:** This release installs pre-release OpenShift AI 3.6 builds. Every cluster pulls them from
-> `quay.io/rhoai`, and model runtime images from `registry.stage.redhat.io`. You need logins for both registries,
-> which Red Hat gives only to early-access partners; ask your Red Hat contact. Without a stage login, model images fail
-> to pull on every site.
+> **Note:** Pre-release builds only. This template installs a pre-release (nightly) OpenShift AI 3.6 build: every
+> cluster pulls it from `quay.io/rhoai`, and model runtime images from `registry.stage.redhat.io`. Those registries
+> need logins that Red Hat gives only to early-access partners; ask your Red Hat contact. A released OpenShift AI
+> build won't need them, but the library can't install one yet ([known gaps](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/195ccd7ab783d5154549c597fef4b20dc12acd91/docs/install/known-gaps.md)).
 
 ## 1. Clusters
 
@@ -35,7 +35,7 @@ GridSite stays `Connecting` ([site networking](https://github.com/ai-grid-cloud/
 
 | What | Used in |
 |---|---|
-| A container auth file with a `quay.io/rhoai` login (a robot token scoped to `quay.io/rhoai`) and a `registry.stage.redhat.io` login | [Prepare the hub](03-prepare-hub.md) |
+| Pre-release builds only: a container auth file with a `quay.io/rhoai` login (a robot token scoped to `quay.io/rhoai`) and a `registry.stage.redhat.io` login | [Prepare the hub](03-prepare-hub.md) |
 | A cert-manager ClusterIssuer on each ingress or combined site that issues publicly trusted certificates by **DNS-01** | [Join the site to the grid](06-join-grid.md) |
 | `cluster-admin` on every cluster | Every page |
 
