@@ -19,22 +19,41 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 | OpenShift version | Upgrade the cluster to 4.21 or later. |
 | default StorageClass | Annotate one StorageClass `storageclass.kubernetes.io/is-default-class=true`. |
 | cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or select `apps/cert-manager` ([cert-manager](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/hub/00-platform-services.md#cert-manager)). |
-| quay.io/rhoai pull secret file | Log in: `podman login quay.io` with a `quay.io/rhoai` robot token ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
+| quay.io/rhoai pull secret file | Log in to `quay.io` with a `quay.io/rhoai` robot token, as follows this table ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
 | object storage | Expected with `apps/object-storage/s4` or `odf` selected: it appears when you [install the hub components](04-hub-components.md). If you bring your own bucket, create the Secret now ([object storage](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/hub/01-acm.md#object-storage)). |
+
+To log in to `quay.io`:
+
+```sh
+podman login quay.io
+```
 
 ## `bootstrap-hub.sh` refuses a general `quay.io` login
 
 **Cause:** the auth file holds a login for all of `quay.io`, which the hub would copy to every site.
 
-**Fix:** use a robot token scoped to `quay.io/rhoai`, or accept the risk with `RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1`.
+**Fix:** use a robot token scoped to `quay.io/rhoai`, or accept the risk by running the bootstrap with the variable
+set:
+
+```sh
+RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1 KUBECONFIG="$HUB_KUBECONFIG" RHOAI_QUAY_AUTH_FILE=QUAY_AUTH_FILE ../library/scripts/bootstrap-hub.sh --deployment .
+```
 
 ## The root reports `missing input: NAME` or `invalid input: NAME`
 
 **Cause:** your root's `values` don't set input `NAME`, or set it empty or with `"`, `'`, `\` or `@`.
 
-**Fix:** set it in `root/kustomization.yaml` ([inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/appendix-a-inputs.md#inputs)), run
-`../library/scripts/check-deployment.sh .`, and push. Read the message with
-`oc get applicationset apps -n openshift-gitops -o jsonpath='{.status.conditions}'`.
+**Fix:** set it in `root/kustomization.yaml` ([inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/appendix-a-inputs.md#inputs)), check it, and push:
+
+```sh
+../library/scripts/check-deployment.sh .
+```
+
+To read the message on the hub:
+
+```sh
+oc get applicationset apps -n openshift-gitops -o jsonpath='{.status.conditions}'
+```
 
 ## Hub Applications for Submariner, `limitador-redis` or the MaaS database stay unhealthy
 

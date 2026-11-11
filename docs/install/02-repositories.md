@@ -24,12 +24,19 @@ make prereqs
 ```
 
 It checks your tools and that `../library` is at your pin. It changes nothing and never blocks. Checks whose input
-you haven't set yet print `skipped`; set them as you reach them, such as
-`make prereqs HUB_CONTEXT=hub QUAY_AUTH_FILE=~/.config/containers/auth.json`:
+you haven't set yet print `skipped`. Set them as you reach them, for example:
+
+```sh
+make prereqs HUB_CONTEXT=HUB_CONTEXT SITE_CONTEXT=SITE_CONTEXT QUAY_AUTH_FILE=QUAY_AUTH_FILE
+```
+
+Replace the following:
 
 - `HUB_CONTEXT` and `SITE_CONTEXT`: each cluster's kubeconfig context.
-- `QUAY_AUTH_FILE`: your container auth file with the pre-release registry logins.
-- `CATALOG_TOKEN_FILE`: your catalog token file, from part 2.
+- `QUAY_AUTH_FILE`: your container auth file with the pre-release registry logins, such as
+  `~/.config/containers/auth.json`.
+
+Add `CATALOG_TOKEN_FILE=~/.ai-grid/catalog-token` after part 2.
 
 The output is similar to the following:
 
@@ -58,7 +65,11 @@ console writes them there with a token that can write only this repository.
 
    <img src="images/new-catalog-repository.png" width="420" alt="The new repository form with Add README on">
 
-   With the GitHub CLI instead: `gh repo create OWNER/CATALOG_REPO --add-readme --public`.
+   With the GitHub CLI instead:
+
+   ```sh
+   gh repo create OWNER/CATALOG_REPO --add-readme --public
+   ```
 
 2. [Create a fine-grained token](https://github.com/settings/personal-access-tokens/new), named such as `ai-grid-catalog`:
 

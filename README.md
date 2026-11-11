@@ -38,7 +38,10 @@ The hub's Argo CD reads all three. Your deployment repository points at the libr
       <img src="docs/install/images/new-deployment-repository.png" width="480" alt="The new repository form with this template selected">
 
    With the GitHub CLI instead:
-   `gh repo create OWNER/DEPLOYMENT_REPO --template ai-grid-cloud/ai-grid-deployment-template --public`.
+
+   ```sh
+   gh repo create OWNER/DEPLOYMENT_REPO --template ai-grid-cloud/ai-grid-deployment-template --public
+   ```
 
 2. Follow the [install guide](docs/install/README.md) in your new repository.
 
@@ -55,5 +58,16 @@ git merge --allow-unrelated-histories template/main
 
 Repositories made from a template share no history with it, so the first merge needs `--allow-unrelated-histories` and
 shows a conflict in each file the template changed since you created yours: keep your values, take the rest. If you
-haven't changed anything yet, add `-X theirs` to take the template's version of every conflict. After that, update
-with `git fetch template && git merge template/main`, then push.
+haven't changed anything yet, take the template's version of every conflict instead:
+
+```sh
+git merge --allow-unrelated-histories -X theirs template/main
+```
+
+After the first merge, update with:
+
+```sh
+git fetch template
+git merge template/main
+git push
+```
