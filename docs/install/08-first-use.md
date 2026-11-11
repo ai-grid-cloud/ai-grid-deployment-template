@@ -5,7 +5,7 @@ call it as a tenant. The provider console writes the model and subscription to y
 delivers them to the site.
 
 Each step gives the console's pages first, as tested in a browser on 2026-11-10. The same calls through the console's
-API follow as an alternative, with the library's [`scripts/console-call.sh`](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/scripts/console-call.sh), which signs
+API follow as an alternative, with the library's [`scripts/console-call.sh`](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/scripts/console-call.sh), which signs
 in as an OpenShift user through the htpasswd provider and makes one call:
 
 ```sh
@@ -150,7 +150,7 @@ oc --context "$SITE_CONTEXT" get llminferenceservices,maassubscriptions,maasauth
 You should see the model `Ready` and the subscription and its auth policy on the site. In the console, **Models**
 shows the model **Ready** and **Available**, and **Subscriptions** shows the subscription **Active**. If no catalog Applications
 appear after the catalog's first commits, refresh the ApplicationSets once
-([model delivery](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/05-console-and-model-delivery.md#model-delivery)).
+([model delivery](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/05-console-and-model-delivery.md#model-delivery)).
 
 ## 6. Call the model as a tenant
 

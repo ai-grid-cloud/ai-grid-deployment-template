@@ -21,7 +21,7 @@ Replace the following:
 | `combined` | Both on one cluster. | Both |
 
 The smallest grid is one combined site. A typical grid is one ingress site plus inference sites. See
-[OpenShift AI with MaaS](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/spokes/openshift-ai.md#openshift-ai-with-maas).
+[OpenShift AI with MaaS](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/spokes/openshift-ai.md#openshift-ai-with-maas).
 
 ## 2. Add a break-glass admin
 
@@ -71,15 +71,15 @@ bash ../library/scripts/check-prerequisites.sh --step spoke --context "$SITE_CON
 
 You should see `OK` for `OpenShift 4.21 or later` and `default StorageClass`. The hub delivers the rest: the
 `quay.io/rhoai` pull secret and image mirror arrive by Policy once the site is imported, without draining or rebooting the nodes
-([OpenShift AI prerequisites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)).
+([OpenShift AI prerequisites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)).
 
 Also check, for every role:
 
 - Two worker nodes can run Submariner gateways, and the site can open a LoadBalancer Service for them, with UDP 4500 and
-  4490 allowed ([Submariner](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/01-acm.md#submariner)). `cluster-config` labels the gateway nodes, except on compact
+  4490 allowed ([Submariner](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/01-acm.md#submariner)). `cluster-config` labels the gateway nodes, except on compact
   clusters and single-node OpenShift.
 - `dig AAAA router-default.apps.CLUSTER_DOMAIN` doesn't return `NXDOMAIN`.
-- On inference and combined sites with GPUs: see [GPU operator and NFD](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/spokes/openshift-ai.md#nvidia-gpu-operator-and-node-feature-discovery).
+- On inference and combined sites with GPUs: see [GPU operator and NFD](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/spokes/openshift-ai.md#nvidia-gpu-operator-and-node-feature-discovery).
 
 ## 5. Import the site into ACM
 

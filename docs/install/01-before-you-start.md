@@ -19,13 +19,13 @@ Gather the following before you run anything. Each item names the section that n
 | Combined site | 4.21 or later | Both of the preceding | 4.21.37, 6 nodes, CPU model only |
 
 - Every cluster, the hub included, needs two worker nodes that Submariner can use as gateways
-  ([Submariner](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/01-acm.md#submariner)). On compact clusters and single-node OpenShift you label them by hand.
+  ([Submariner](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/01-acm.md#submariner)). On compact clusters and single-node OpenShift you label them by hand.
 - A model's size sets a site's capacity. The CPU sample model in [first use](08-first-use.md) requests 4 CPU and
   8 GiB.
 - With more than one site, give the hub's Argo CD application controller 8 GiB of memory
-  ([OpenShift GitOps](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/00-platform-services.md#openshift-gitops)).
+  ([OpenShift GitOps](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/00-platform-services.md#openshift-gitops)).
 - Managed OpenShift (OSD, ROSA) needs extra namespaces created by hand
-  ([OpenShift AI prerequisites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). *(Unverified.)*
+  ([OpenShift AI prerequisites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). *(Unverified.)*
 
 Exact CPU and memory sizing for a hub isn't established yet ([known gaps](appendix-c-gaps.md)).
 
@@ -54,8 +54,8 @@ DNS:
 | A `quay.io/rhoai` login, and a `registry.stage.redhat.io` login, in a container auth file (pre-release access, see the preceding note) | [Prepare the hub](03-prepare-hub.md) | Prefer a robot token scoped to `quay.io/rhoai`. A general `quay.io` login is copied to every site, so the bootstrap script refuses it unless you set `RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1`. |
 | A git host the hub can read | [Repositories](02-repositories.md) | The templates are GitHub repositories (**Use this template**); the example uses public GitHub repositories. |
 | A token that can write only the catalog repository | [Install the hub components](04-hub-components.md) | A GitHub fine-grained token with `contents: write` on that one repository. The console's git writer uses it. |
-| A tenant identity provider | [Repositories](02-repositories.md), [tenant identity provider](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/04-tenant-identity.md#tenant-identity-provider) | An OIDC issuer, a confidential client, and Keycloak Organizations if you use the console to create organizations. |
-| A cert-manager ClusterIssuer that can issue publicly trusted certificates by **DNS-01** on every ingress or combined site, or your own certificate for each site's MaaS hostname | [Join each site to the grid](06-join-grid.md#1-add-the-sites-values), [MaaS gateway certificate](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/spokes/maas-certificate.md) | The MaaS gateway's load balancer serves its hostname directly, so HTTP-01 can't solve, and without a trusted certificate tenants get a certificate error. |
+| A tenant identity provider | [Repositories](02-repositories.md), [tenant identity provider](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/04-tenant-identity.md#tenant-identity-provider) | An OIDC issuer, a confidential client, and Keycloak Organizations if you use the console to create organizations. |
+| A cert-manager ClusterIssuer that can issue publicly trusted certificates by **DNS-01** on every ingress or combined site, or your own certificate for each site's MaaS hostname | [Join each site to the grid](06-join-grid.md#1-add-the-sites-values), [MaaS gateway certificate](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/spokes/maas-certificate.md) | The MaaS gateway's load balancer serves its hostname directly, so HTTP-01 can't solve, and without a trusted certificate tenants get a certificate error. |
 | `cluster-admin` on every cluster | Every page | |
 
 ## 4. Tools on your workstation
@@ -76,7 +76,7 @@ You should see no output.
 
 Before you change anything on a cluster whose only sign-in is an external identity provider (for example a platform
 Keycloak), add a break-glass htpasswd admin and confirm it works. If you lose the external provider later, this is the
-only way back in. See [cluster sign-in and admins](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/00-platform-services.md#cluster-sign-in-and-admins).
+only way back in. See [cluster sign-in and admins](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/00-platform-services.md#cluster-sign-in-and-admins).
 
 Never delete an identity provider, or the namespace that runs it, that your platform's sign-in depends on.
 

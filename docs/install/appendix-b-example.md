@@ -22,4 +22,4 @@ The scripts this guide runs live in the library's `scripts/`: `bootstrap-hub.sh`
 `check-revisions.sh`, `add-htpasswd-admin.sh`, `wipe-site.sh`, `console-call.sh`. The example keeps only
 `create-test-tenant.sh`, which is specific to its own Keycloak.
 
-What it chose: [your choices](README.md#your-choices), last column, and each [hub item](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/README.md)'s "Example chose".
+What it chose: [your choices](README.md#your-choices), last column, and each [hub item](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/README.md)'s "Example chose".

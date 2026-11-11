@@ -26,7 +26,7 @@ GitHub: the deployment repository from a template, and the catalog repository em
    *(Unverified.)*
 
 2. Give the console's token write access to the catalog repository only
-   ([provider console](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/05-console-and-model-delivery.md#provider-console)).
+   ([provider console](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/05-console-and-model-delivery.md#provider-console)).
    You create the token in [install the hub components](04-hub-components.md).
 
 3. Clone your deployment repository:
@@ -45,8 +45,8 @@ GitHub: the deployment repository from a template, and the catalog repository em
    | `root/self.yaml` | Point `spec.source.repoURL` at your deployment repository. | Part 6 |
    | `values/cluster-admins.yaml`, `values/grid-bootstrap.yaml` | Set your cluster admins and grid CA mode. | Part 5 |
    | `values/clusters/site-b/` | The example site's values. Delete them, and add a folder per ingress or combined site. | [Join each site to the grid](06-join-grid.md#1-add-the-sites-values) |
-   | `apps/site-b-maas-tls.yaml`, `sites/site-b/` | The example site's MaaS certificate. Delete them, or change them for your site. | [MaaS gateway certificate](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/spokes/maas-certificate.md) |
-   | `apps/tenant-idp.yaml`, `idp/`, `scripts/create-test-tenant.sh` | The example's own Keycloak. Keep them only if you run your own Keycloak the way the example does, and then set its hostnames in `idp/`; otherwise delete them. | [Tenant identity provider](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/04-tenant-identity.md#tenant-identity-provider) |
+   | `apps/site-b-maas-tls.yaml`, `sites/site-b/` | The example site's MaaS certificate. Delete them, or change them for your site. | [MaaS gateway certificate](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/spokes/maas-certificate.md) |
+   | `apps/tenant-idp.yaml`, `idp/`, `scripts/create-test-tenant.sh` | The example's own Keycloak. Keep them only if you run your own Keycloak the way the example does, and then set its hostnames in `idp/`; otherwise delete them. | [Tenant identity provider](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/04-tenant-identity.md#tenant-identity-provider) |
 
    Keep `docs/` and `scripts/sync-guide-pin.sh`: they're this guide and the script that points its links at your pin.
 
@@ -102,19 +102,19 @@ certificates and any other app of your own go there, and its `repoURL` and `revi
 `deploymentRepoURL` and `deploymentRevision` values through YAML aliases (generator fields can't take `@NAME@`).
 
 In `root/kustomization.yaml`, the patch that replaces `/spec/generators/0/git/files` is your component list. For each
-[hub item](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/README.md), keep the example's lines, or swap in the lines for your choice from that item's page. The
+[hub item](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/README.md), keep the example's lines, or swap in the lines for your choice from that item's page. The
 example's list, by item:
 
 | Hub item | The example's lines | Change them when |
 |---|---|---|
-| [0. Platform services](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/00-platform-services.md#select-it) | `apps/gitops-config`, `cluster-config`, `apps/external-secrets` | Add `apps/cert-manager` if the hub has no cert-manager. |
-| [1. ACM](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/01-acm.md#select-it) | `apps/acm`, `apps/object-storage/s4` | Use `apps/object-storage/odf` or your own bucket instead of S4; add `apps/metallb` for bare-metal sites. |
-| [2. Grid](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/02-grid.md#select-it) | `apps/grid-bootstrap`, `apps/ai-grid-policies` | Never. |
-| [3. MaaS shared services](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/03-maas-shared-services.md#select-it) | `apps/maas-db`, `apps/limitador-redis`, `apps/external-services` | To run them on a site instead of the hub, keep `apps/external-services` and label that site ([run them on a site](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/03-maas-shared-services.md#run-the-shared-services-on-a-site)); otherwise you can leave it out. |
-| [4. Tenant identity](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/04-tenant-identity.md#select-it) | None: its own IdP is in `apps/tenant-idp.yaml` | Add `apps/keycloak` to use the library's Keycloak. |
-| [5. Provider console and model delivery](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/05-console-and-model-delivery.md#select-it) | `apps/acm-models`, `apps/console` | Leave out `apps/console` with an IdP that isn't Keycloak. |
-| [6. Site delivery](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/06-site-delivery.md#select-it) | `apps/ai-grid-spokes`, `apps/argo-registration`, `apps/rhoai`, `apps/rhoai-prerequisites` | Never. |
-| [7. Observability and usage logs](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/07-observability.md#select-it) | None | Add `apps/ai-grid-o11y` and `apps/ai-grid-usage-logs` to turn it on. |
+| [0. Platform services](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/00-platform-services.md#select-it) | `apps/gitops-config`, `cluster-config`, `apps/external-secrets` | Add `apps/cert-manager` if the hub has no cert-manager. |
+| [1. ACM](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/01-acm.md#select-it) | `apps/acm`, `apps/object-storage/s4` | Use `apps/object-storage/odf` or your own bucket instead of S4; add `apps/metallb` for bare-metal sites. |
+| [2. Grid](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/02-grid.md#select-it) | `apps/grid-bootstrap`, `apps/ai-grid-policies` | Never. |
+| [3. MaaS shared services](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/03-maas-shared-services.md#select-it) | `apps/maas-db`, `apps/limitador-redis`, `apps/external-services` | To run them on a site instead of the hub, keep `apps/external-services` and label that site ([run them on a site](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/03-maas-shared-services.md#run-the-shared-services-on-a-site)); otherwise you can leave it out. |
+| [4. Tenant identity](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/04-tenant-identity.md#select-it) | None: its own IdP is in `apps/tenant-idp.yaml` | Add `apps/keycloak` to use the library's Keycloak. |
+| [5. Provider console and model delivery](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/05-console-and-model-delivery.md#select-it) | `apps/acm-models`, `apps/console` | Leave out `apps/console` with an IdP that isn't Keycloak. |
+| [6. Site delivery](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/06-site-delivery.md#select-it) | `apps/ai-grid-spokes`, `apps/argo-registration`, `apps/rhoai`, `apps/rhoai-prerequisites` | Never. |
+| [7. Observability and usage logs](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/07-observability.md#select-it) | None | Add `apps/ai-grid-o11y` and `apps/ai-grid-usage-logs` to turn it on. |
 
 Each line is `- path: apps/NAME/application.yaml`, except `- path: cluster-config/application.yaml` and the object
 storage options, `- path: apps/object-storage/s4/application.yaml` and `- path: apps/object-storage/odf/application.yaml`.
@@ -155,7 +155,7 @@ Rules:
   both generators (28), the library URL and revision in each generator's own `repoURL` and `revision` (4), and the
   root's own check for leftover markers (1). Every one of the 32 markers is set by the steps in this section.
 - If you bring your own tenant identity provider, the `idp*` inputs point at it. If you use ours (`apps/keycloak`),
-  use the values its page gives ([Keycloak](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/04-tenant-identity.md#keycloak)).
+  use the values its page gives ([Keycloak](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/04-tenant-identity.md#keycloak)).
 
 ## 5. Fill in the values files
 
@@ -170,10 +170,10 @@ Your deployment repository holds three kinds of values file. The library reads t
    ```
 
    Use `cluster_admins: []` for none. If the file is missing, `cluster-config` fails rather than removing every
-   binding ([cluster sign-in and admins](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/00-platform-services.md#cluster-sign-in-and-admins)).
+   binding ([cluster sign-in and admins](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/00-platform-services.md#cluster-sign-in-and-admins)).
 
 2. `values/grid-bootstrap.yaml`: `Generate` starts a new grid with a new CA; `Existing` keeps a CA you already have
-   ([grid bootstrap](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/02-grid.md#grid-bootstrap)).
+   ([grid bootstrap](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/02-grid.md#grid-bootstrap)).
 
    ```yaml
    external:

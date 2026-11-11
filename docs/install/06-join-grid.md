@@ -27,7 +27,7 @@ file.
    at the gateway's own load balancer. For the same reason an HTTP-01 issuer can't solve; you need a DNS-01
    ClusterIssuer on the site ([before you start](01-before-you-start.md#3-accounts-and-credentials)). The library
    has no input for this certificate yet ([known gaps](appendix-c-gaps.md)), so you add it as your own app
-   ([MaaS gateway certificate](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/spokes/maas-certificate.md)).
+   ([MaaS gateway certificate](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/spokes/maas-certificate.md)).
 
    1. Add the Certificate to your deployment repository, as `sites/SITE/maas-tls/certificate.yaml`:
 
@@ -117,7 +117,7 @@ file.
 
    - `SITE`: the site's ACM cluster name.
    - `PREFIX`: the MaaS hostname prefix from the previous step. With the library's Keycloak, use `maas`
-     ([Keycloak](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/04-tenant-identity.md#keycloak)).
+     ([Keycloak](https://github.com/cfchase/ai-grid-cluster-gitops/blob/f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95/docs/install/hub/04-tenant-identity.md#keycloak)).
    - `CLUSTER_DOMAIN`: the site's cluster domain, so the name matches `oc get ingresses.config.openshift.io cluster
      -o jsonpath='{.spec.domain}'` with `PREFIX.` in front of it.
    - `DNS01_ISSUER`: your DNS-01 ClusterIssuer on the site.

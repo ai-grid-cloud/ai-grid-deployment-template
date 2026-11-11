@@ -10,7 +10,7 @@ kind: Kustomization
 resources:
   # Git form, not a raw URL: raw.githubusercontent.com caches a new commit as 404
   # for minutes (finding F16).
-  - https://github.com/cfchase/ai-grid-cluster-gitops//bootstrap/hub?ref=edf8e09fb0de642ff739e0ecbb99605a297035b5
+  - https://github.com/cfchase/ai-grid-cluster-gitops//bootstrap/hub?ref=f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95
   - self.yaml
 patches:
   - target: { group: argoproj.io, kind: ApplicationSet, name: apps }
@@ -19,7 +19,7 @@ patches:
       - { op: test, path: /spec/generators/0/git/repoURL, value: REQUIRED-libraryRepoURL }
       - { op: replace, path: /spec/generators/0/git/repoURL, value: https://github.com/cfchase/ai-grid-cluster-gitops.git }
       - { op: test, path: /spec/generators/0/git/revision, value: REQUIRED-libraryRevision }
-      - { op: replace, path: /spec/generators/0/git/revision, value: edf8e09fb0de642ff739e0ecbb99605a297035b5 }
+      - { op: replace, path: /spec/generators/0/git/revision, value: f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95 }
       # The components this hub runs. Not selected (README.md, "Components"):
       # cert-manager (the platform's), keycloak (idp/, our own), metallb (AWS),
       # object-storage/odf and odf (S4 instead), ai-grid-o11y and
@@ -47,7 +47,7 @@ patches:
         path: /spec/generators/0/git/values
         value: &inputs
           libraryRepoURL: https://github.com/cfchase/ai-grid-cluster-gitops.git
-          libraryRevision: edf8e09fb0de642ff739e0ecbb99605a297035b5
+          libraryRevision: f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95
           deploymentRepoURL: &deploymentRepoURL https://github.com/cfchase/ai-grid-deployment-proto.git
           deploymentRevision: &deploymentRevision main
           catalogRepoURL: https://github.com/cfchase/ai-grid-catalog-proto.git
