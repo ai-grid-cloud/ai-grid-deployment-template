@@ -1,6 +1,6 @@
 # deployment-root: syncs root/ from this repository, so the root ApplicationSet
-# follows git after bootstrap.sh applies it once. No pruning: removing the root
-# must never cascade to the hub's components (finding F2).
+# follows git after the library's bootstrap-hub.sh applies it once. No pruning:
+# removing the root must never cascade to the hub's components.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -9,7 +9,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/cfchase/ai-grid-deployment-proto.git
+    repoURL: REQUIRED-deploymentRepoURL
     targetRevision: main
     path: root
   destination:

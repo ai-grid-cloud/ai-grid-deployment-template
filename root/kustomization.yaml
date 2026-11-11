@@ -1,15 +1,16 @@
-# The hub's root: the library's component set at a pinned commit, with this
+# The hub's root: the library's components at a pinned commit, with this
 # deployment's selection and inputs. deployment-root (self.yaml) syncs this
-# directory, so a commit here (a selection change, a new pin) reaches the hub
-# with no script.
+# directory, so a commit here (a selection change, a new pin) reaches the hub.
+# Reference: the library's docs/install/appendix-a-inputs.md ("Your root").
 #
-# To upgrade the library, change LIBRARY_SHA in all three places below (the
-# remote base, the generator revision and values.libraryRevision) in one commit.
+# Set the three REQUIRED- inputs below to yours; check-deployment.sh names any
+# left. To upgrade the library, change the SHA in all three places (the remote
+# base, the generator revision and values.libraryRevision) in one commit.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
   # Git form, not a raw URL: raw.githubusercontent.com caches a new commit as 404
-  # for minutes (finding F16).
+  # for minutes.
   - https://github.com/cfchase/ai-grid-cluster-gitops//bootstrap/hub?ref=f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95
   - self.yaml
 patches:
@@ -20,39 +21,47 @@ patches:
       - { op: replace, path: /spec/generators/0/git/repoURL, value: https://github.com/cfchase/ai-grid-cluster-gitops.git }
       - { op: test, path: /spec/generators/0/git/revision, value: REQUIRED-libraryRevision }
       - { op: replace, path: /spec/generators/0/git/revision, value: f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95 }
-      # The components this hub runs. Not selected (README.md, "Components"):
-      # cert-manager (the platform's), keycloak (idp/, our own), metallb (AWS),
-      # object-storage/odf and odf (S4 instead), ai-grid-o11y and
-      # ai-grid-usage-logs (Loki has no object-storage input yet).
+      # The components this hub runs, by hub item. Reference for each item:
+      # the library's docs/install/hub/0N-*.md; to change one, see "Select
+      # components" in docs/install/hub/README.md.
       - op: replace
         path: /spec/generators/0/git/files
         value:
+          # 0. Platform services (hub/00-platform-services.md); cert-manager is the platform's.
+          - path: apps/gitops-config/application.yaml
+          - path: cluster-config/application.yaml
+          - path: apps/external-secrets/application.yaml
+          # 1. ACM, the multicluster engine and Submariner (hub/01-acm.md), with S4 object storage.
           - path: apps/acm/application.yaml
-          - path: apps/acm-models/application.yaml
+          - path: apps/object-storage/s4/application.yaml
+          # 2. Grid (hub/02-grid.md).
+          - path: apps/grid-bootstrap/application.yaml
           - path: apps/ai-grid-policies/application.yaml
+          # 3. MaaS shared services (hub/03-maas-shared-services.md).
+          - path: apps/maas-db/application.yaml
+          - path: apps/limitador-redis/application.yaml
+          - path: apps/external-services/application.yaml
+          # 4. Tenant identity (hub/04-tenant-identity.md): none here; this
+          #    deployment's own Keycloak is apps/tenant-idp.yaml.
+          # 5. Provider console and model delivery (hub/05-console-and-model-delivery.md).
+          - path: apps/acm-models/application.yaml
+          - path: apps/console/application.yaml
+          # 6. Site delivery (hub/06-site-delivery.md).
           - path: apps/ai-grid-spokes/application.yaml
           - path: apps/argo-registration/application.yaml
-          - path: apps/console/application.yaml
-          - path: apps/external-secrets/application.yaml
-          - path: apps/external-services/application.yaml
-          - path: apps/gitops-config/application.yaml
-          - path: apps/grid-bootstrap/application.yaml
-          - path: apps/limitador-redis/application.yaml
-          - path: apps/maas-db/application.yaml
-          - path: apps/object-storage/s4/application.yaml
           - path: apps/rhoai/application.yaml
           - path: apps/rhoai-prerequisites/application.yaml
-          - path: cluster-config/application.yaml
+          # 7. Observability and usage logs (hub/07-observability.md): off.
       - op: replace
         path: /spec/generators/0/git/values
         value: &inputs
           libraryRepoURL: https://github.com/cfchase/ai-grid-cluster-gitops.git
           libraryRevision: f6ffc2377c29d1b7c68bf737ab2dbf3b47e98d95
-          deploymentRepoURL: &deploymentRepoURL https://github.com/cfchase/ai-grid-deployment-proto.git
+          deploymentRepoURL: &deploymentRepoURL REQUIRED-deploymentRepoURL
           deploymentRevision: &deploymentRevision main
-          catalogRepoURL: https://github.com/cfchase/ai-grid-catalog-proto.git
+          catalogRepoURL: REQUIRED-catalogRepoURL
           catalogRevision: main
-          idpIssuerURL: https://keycloak-tenant-idp.apps.ocp.z9f4z.sandbox2934.opentlc.com/realms/tenants
+          idpIssuerURL: REQUIRED-idpIssuerURL
           idpClientID: ai-grid-tenants
           idpClientSecretNamespace: tenant-idp-client
           idpClientSecretName: tenant-idp-client
