@@ -24,7 +24,7 @@ git add -A && git commit -m "site $SITE: values and MaaS certificate" && git pus
 
 Replace `ISSUER_NAME` with your DNS-01 ClusterIssuer on the site. You should see `root renders; every input is set;
 every repository is an input.` before the commit. What the files do, and other ways to get the certificate:
-[MaaS gateway certificate](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/spokes/maas-certificate.md).
+[MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/spokes/maas-certificate.md).
 
 ## 2. Label the site
 
@@ -33,7 +33,7 @@ oc --context "$HUB_CONTEXT" label managedcluster "$SITE" ai-grid/enabled=true ai
 ```
 
 Replace `LOCATION` with a label for where the site is, such as `us-east`. The console shows it. For `ingress` and
-`inference` sites, see [Sites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/spokes/README.md#what-you-choose-per-site).
+`inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/spokes/README.md#what-you-choose-per-site).
 
 You should see `managedcluster.cluster.open-cluster-management.io/SITE labeled`. Within a minute the hub creates the
 site's Applications:

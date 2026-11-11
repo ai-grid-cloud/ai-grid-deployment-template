@@ -10,7 +10,7 @@ come from the library checkout, so they always match your pin:
 
 ```sh
 git clone DEPLOYMENT_REPO_URL deployment && cd deployment
-git clone -q https://github.com/cfchase/ai-grid-cluster-gitops.git ../library
+git clone -q https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git ../library
 git -C ../library checkout -q "$(sed -n 's/^ *libraryRevision: *//p' root/kustomization.yaml)"
 ```
 
@@ -74,8 +74,8 @@ Replace each `REQUIRED-` placeholder:
 | `tenant-idp/manifests/settings.yaml` | `REQUIRED-portalRedirectURI` | `https://maas.SITE_APPS_DOMAIN/*`, with the site's apps domain |
 
 Keep every other value. Each one is a tested choice: for what it means and how to change it, see
-[Appendix A: inputs and values](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/appendix-a-inputs.md) and
-[Hub components](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/README.md#select-components).
+[Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/appendix-a-inputs.md) and
+[Hub components](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/README.md#select-components).
 
 ## 4. Check and push
 

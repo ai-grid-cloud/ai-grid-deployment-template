@@ -1,11 +1,11 @@
-> **Prototype:** this template pins [`cfchase/ai-grid-cluster-gitops`](https://github.com/cfchase/ai-grid-cluster-gitops)
-> branch `proto/library-v2` until the library lands upstream.
+> **Prototype:** this template pins [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops)
+> branch `feat/deployment-inputs` until it merges into `main`.
 
 # AI Grid deployment template
 
 A GitHub template for an AI Grid **deployment repository**: the components one hub runs, its inputs, and its sites'
 files. It installs from the component library
-[`cfchase/ai-grid-cluster-gitops`](https://github.com/cfchase/ai-grid-cluster-gitops) at one pinned commit. Tested end
+[`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) at one pinned commit. Tested end
 to end on 2026-11-10 ([the example deployment](docs/install/appendix-b-example.md)).
 
 ## Start here

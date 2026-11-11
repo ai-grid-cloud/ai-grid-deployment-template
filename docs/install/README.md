@@ -8,7 +8,7 @@ be true before you move on.
 The guide installs the template's choices, which were tested end to end: the components selected in
 `root/kustomization.yaml`, S4 object storage, the template's own Keycloak for tenants (`tenant-idp/`), the provider
 console, and one combined site. You change only the names that must be yours. To change a choice, see
-[Hub components](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/README.md) and [Sites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/spokes/README.md).
+[Hub components](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/README.md) and [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/spokes/README.md).
 
 ## What AI Grid is
 
@@ -55,7 +55,7 @@ To add more sites, repeat pages 5 and 6 for each.
 - [Operate](operate.md): upgrade, add and remove sites, reuse a cluster, rotate credentials, uninstall.
 - [Tenant access](tenant-access.md): API keys, refusal checks, revoking a key.
 - [Troubleshooting](troubleshooting.md).
-- The component reference, in the library at your pin: [Hub](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/README.md),
-  [Sites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/spokes/README.md),
-  [Appendix A: inputs and values](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/appendix-a-inputs.md).
+- The component reference, in the library at your pin: [Hub](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/README.md),
+  [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/spokes/README.md),
+  [Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/appendix-a-inputs.md).
 - [Appendix B: the example deployment](appendix-b-example.md) · [Appendix C: known gaps](appendix-c-gaps.md)

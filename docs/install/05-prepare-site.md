@@ -33,7 +33,7 @@ dig AAAA router-default.$(oc --context "$SITE_CONTEXT" get ingresses.config.open
 
 You should see `OK` for `OpenShift 4.21 or later` and `default StorageClass`, and a `dig` status other than
 `NXDOMAIN`. The hub delivers the registry logins and image mirror once the site is imported. For GPU sites, see
-[GPU operator and NFD](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/spokes/openshift-ai.md#nvidia-gpu-operator-and-node-feature-discovery).
+[GPU operator and NFD](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/spokes/openshift-ai.md#nvidia-gpu-operator-and-node-feature-discovery).
 
 ## 3. Import the site into ACM
 

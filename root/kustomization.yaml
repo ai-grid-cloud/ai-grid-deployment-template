@@ -11,16 +11,16 @@ kind: Kustomization
 resources:
   # Git form, not a raw URL: raw.githubusercontent.com caches a new commit as 404
   # for minutes.
-  - https://github.com/cfchase/ai-grid-cluster-gitops//bootstrap/hub?ref=3ccbe609b841affcd02ce9d4f132f48baa5b27bc
+  - https://github.com/ai-grid-cloud/ai-grid-cluster-gitops//bootstrap/hub?ref=06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36
   - self.yaml
 patches:
   - target: { group: argoproj.io, kind: ApplicationSet, name: apps }
     patch: |
       # "test" ops fail the render if the library moves a field this patch relies on.
       - { op: test, path: /spec/generators/0/git/repoURL, value: REQUIRED-libraryRepoURL }
-      - { op: replace, path: /spec/generators/0/git/repoURL, value: https://github.com/cfchase/ai-grid-cluster-gitops.git }
+      - { op: replace, path: /spec/generators/0/git/repoURL, value: https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git }
       - { op: test, path: /spec/generators/0/git/revision, value: REQUIRED-libraryRevision }
-      - { op: replace, path: /spec/generators/0/git/revision, value: 3ccbe609b841affcd02ce9d4f132f48baa5b27bc }
+      - { op: replace, path: /spec/generators/0/git/revision, value: 06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36 }
       # The components this hub runs, by hub item. Reference for each item:
       # the library's docs/install/hub/0N-*.md; to change one, see "Select
       # components" in docs/install/hub/README.md.
@@ -55,8 +55,8 @@ patches:
       - op: replace
         path: /spec/generators/0/git/values
         value: &inputs
-          libraryRepoURL: https://github.com/cfchase/ai-grid-cluster-gitops.git
-          libraryRevision: 3ccbe609b841affcd02ce9d4f132f48baa5b27bc
+          libraryRepoURL: https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git
+          libraryRevision: 06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36
           deploymentRepoURL: &deploymentRepoURL REQUIRED-deploymentRepoURL
           deploymentRevision: &deploymentRevision main
           catalogRepoURL: REQUIRED-catalogRepoURL
