@@ -11,4 +11,4 @@ help: ## Show the targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /: /'
 
 prereqs: ## Report what is installed and what isn't found; never blocks
-	@python3 $(LIBRARY)/scripts/prereqs.py --deployment .
+	@python3 scripts/prereqs.py --library $(LIBRARY)
