@@ -1,13 +1,13 @@
 # Troubleshooting
 
-Each entry gives the symptom, the cause and the fix. The [hub](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/README.md) and [spokes](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/spokes/README.md) pages list more under **Known issues**.
+Each entry gives the symptom, the cause and the fix. The [hub](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/README.md) and [spokes](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/spokes/README.md) pages list more under **Known issues**.
 
 ## `check-deployment.sh` reports `unset inputs` or `placeholders left in your files`
 
 **Cause:** an input in `root/kustomization.yaml`, or a value in another file, is still a `REQUIRED-NAME` placeholder.
 
 **Fix:** set each one it names ([set your names](02-repositories.md#3-set-your-names);
-[inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/appendix-a-inputs.md#inputs)), and run the check again.
+[inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/appendix-a-inputs.md#inputs)), and run the check again.
 
 ## The hub check prints `MISSING`
 
@@ -17,9 +17,9 @@ Each entry gives the symptom, the cause and the fix. The [hub](https://github.co
 |---|---|
 | OpenShift version | Upgrade the cluster to 4.21 or later. |
 | default StorageClass | Annotate one StorageClass `storageclass.kubernetes.io/is-default-class=true`. |
-| cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or select `apps/cert-manager` ([cert-manager](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/00-platform-services.md#cert-manager)). |
-| quay.io/rhoai pull secret file | Log in: `podman login quay.io` with a `quay.io/rhoai` robot token ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
-| object storage | Expected with `apps/object-storage/s4` or `odf` selected: it appears when you [install the hub components](04-hub-components.md). If you bring your own bucket, create the Secret now ([object storage](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/01-acm.md#object-storage)). |
+| cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or select `apps/cert-manager` ([cert-manager](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/00-platform-services.md#cert-manager)). |
+| quay.io/rhoai pull secret file | Log in: `podman login quay.io` with a `quay.io/rhoai` robot token ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
+| object storage | Expected with `apps/object-storage/s4` or `odf` selected: it appears when you [install the hub components](04-hub-components.md). If you bring your own bucket, create the Secret now ([object storage](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/01-acm.md#object-storage)). |
 
 ## `bootstrap-hub.sh` refuses a general `quay.io` login
 
@@ -31,7 +31,7 @@ Each entry gives the symptom, the cause and the fix. The [hub](https://github.co
 
 **Cause:** your root's `values` don't set input `NAME`, or set it empty or with `"`, `'`, `\` or `@`.
 
-**Fix:** set it in `root/kustomization.yaml` ([inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/appendix-a-inputs.md#inputs)), run
+**Fix:** set it in `root/kustomization.yaml` ([inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/appendix-a-inputs.md#inputs)), run
 `../library/scripts/check-deployment.sh .`, and push. Read the message with
 `oc get applicationset apps -n openshift-gitops -o jsonpath='{.status.conditions}'`.
 
@@ -47,21 +47,21 @@ Each entry gives the symptom, the cause and the fix. The [hub](https://github.co
 26.6 reject.
 
 **Fix:** run community Keycloak 26.8.0 for tenants, as the library and the example do
-([Keycloak](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/04-tenant-identity.md#known-issues-1)).
+([Keycloak](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/04-tenant-identity.md#known-issues-1)).
 
 ## Tenants get certificate errors on the MaaS hostname
 
 **Cause:** the MaaS gateway presents its in-cluster service certificate on the public hostname.
 
 **Fix:** give the gateway a trusted certificate through the site's values file
-([join the site to the grid, part 1](06-join-grid.md#1-add-the-sites-values); [MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/spokes/maas-certificate.md)).
+([join the site to the grid, part 1](06-join-grid.md#1-add-the-sites-values); [MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/spokes/maas-certificate.md)).
 
 ## Every model call returns `403`, "access denied to requested subscription"
 
 **Cause:** the token's `groups` are already prefixed with the organization ID (`ORG_ID/ai-grid-users`). MaaS adds the
 prefix itself and drops groups that already carry one.
 
-**Fix:** emit plain group names from the IdP ([tenant identity provider](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/04-tenant-identity.md#tenant-identity-provider)).
+**Fix:** emit plain group names from the IdP ([tenant identity provider](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/04-tenant-identity.md#tenant-identity-provider)).
 
 ## A chat call returns `400` "Field required: messages" or a template error
 
@@ -75,7 +75,7 @@ endpoint.
 **Cause:** the pod runs `kc.sh import` before `kc.sh start`, and the import refuses to migrate an older database.
 
 **Fix:** use `strategy: Recreate`, back up the database before a version change, and see
-[Keycloak](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/04-tenant-identity.md#known-issues-1).
+[Keycloak](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/04-tenant-identity.md#known-issues-1).
 
 ## An API key reaches a model outside its subscription, or is refused with `403`
 
@@ -138,14 +138,14 @@ doesn't exist.
 
 **Cause:** the dashboards come from the observability components, which you didn't select.
 
-**Fix:** none needed if you skipped observability on purpose; see [observability](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/07-observability.md) and
+**Fix:** none needed if you skipped observability on purpose; see [observability](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/07-observability.md) and
 [known gaps](appendix-c-gaps.md).
 
 ## A model's catalog Applications don't appear
 
 **Cause:** the catalog ApplicationSets' git generator didn't pick up the catalog's first commits.
 
-**Fix:** refresh them once ([model delivery](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/05-console-and-model-delivery.md#model-delivery)).
+**Fix:** refresh them once ([model delivery](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/05-console-and-model-delivery.md#model-delivery)).
 
 ## A deleted model stays on the site for several minutes
 
@@ -159,10 +159,10 @@ model's pods end, about 9 minutes after the delete.
 **Cause:** one of the MaaS gateway load balancer's addresses doesn't answer, probably a zone with no gateway pod behind
 it.
 
-**Fix:** see [load balancers](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/spokes/networking.md#load-balancers).
+**Fix:** see [load balancers](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/spokes/networking.md#load-balancers).
 
 ## Hub Applications for Submariner, `limitador-redis` or the MaaS database stay unhealthy
 
 **Cause:** they wait for the first site to join.
 
-**Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#1-watch-the-components-install)). After a site joins, check the site's Submariner gateways ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/01-acm.md#submariner)).
+**Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#1-watch-the-components-install)). After a site joins, check the site's Submariner gateways ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/01-acm.md#submariner)).

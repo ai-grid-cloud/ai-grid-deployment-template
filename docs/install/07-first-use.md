@@ -3,7 +3,7 @@
 In this section you create an organization, deploy a model to the site, subscribe the organization's users to it,
 and call it as a tenant. The provider console writes the model and subscription to your catalog repository, and Argo
 CD delivers them to the site. To script these steps instead, see
-[call the console's API](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/05-console-and-model-delivery.md#call-the-consoles-api).
+[call the console's API](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/05-console-and-model-delivery.md#call-the-consoles-api).
 
 ## 1. Sign in to the console
 

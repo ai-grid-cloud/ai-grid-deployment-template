@@ -32,7 +32,7 @@ An upgrade is one commit to your deployment repository that moves the library pi
 4. Rerun the checks from [join the site to the grid](06-join-grid.md#3-verify) and a tenant call from [first use](07-first-use.md#6-call-the-model-as-a-tenant).
 
 Before a pin that changes the Keycloak version, read
-[Keycloak](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/04-tenant-identity.md#known-issues-1): Keycloak's import-then-start layout can't migrate
+[Keycloak](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/04-tenant-identity.md#known-issues-1): Keycloak's import-then-start layout can't migrate
 an older database.
 
 ## Add a site
@@ -40,10 +40,10 @@ an older database.
 Follow [prepare the site](05-prepare-site.md) and [join the site to the grid](06-join-grid.md) for the new site.
 
 - For an `ingress` or `inference` site instead of `combined`, see
-  [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/spokes/README.md#what-you-choose-per-site). An `inference` site needs no files from
+  [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/spokes/README.md#what-you-choose-per-site). An `inference` site needs no files from
   `site-template/`; label it with `ai-grid/role=inference`.
 - With more than one site, give the hub's Argo CD application controller 8 GiB of memory
-  ([OpenShift GitOps](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/00-platform-services.md#openshift-gitops)).
+  ([OpenShift GitOps](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/00-platform-services.md#openshift-gitops)).
 - Add each ingress or combined site's `https://maas.SITE_APPS_DOMAIN/*` to the tenant Keycloak's redirect URIs, in its
   admin console ([tenant-idp/README.md](../../tenant-idp/README.md#settings)).
 
@@ -114,9 +114,9 @@ On the site, a model takes about 9 minutes to go
 
 | Credential | How | Verified |
 |---|---|---|
-| Catalog token | Rerun `apps/console/create-secrets.sh` with the new token file ([provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/05-console-and-model-delivery.md#provider-console)). | No |
+| Catalog token | Rerun `apps/console/create-secrets.sh` with the new token file ([provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/05-console-and-model-delivery.md#provider-console)). | No |
 | Tenant IdP client secret | Change it in the IdP, then update the hub Secret your `idpClientSecret*` inputs name; the tenant Policy copies it to the sites. | No |
-| `quay.io/rhoai` pull secret | Rerun `apps/rhoai-prerequisites/create-hub-secret.sh` ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/06226f8e9f92a20ee40db8f46f1e3ac2bbfffb36/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). | No |
+| `quay.io/rhoai` pull secret | Rerun `apps/rhoai-prerequisites/create-hub-secret.sh` ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). | No |
 
 ## Uninstall
 
