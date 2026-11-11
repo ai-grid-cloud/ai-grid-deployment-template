@@ -26,10 +26,10 @@ An upgrade is one commit to your deployment repository that moves the library pi
    ../library/scripts/check-revisions.sh --deployment . --kubeconfig HUB_KUBECONFIG
    ```
 
-   You should see `0 not at NEW_SHA7`. On the tested hub, 28 library sources moved in about 6 minutes with no manual
-   step.
+   You should see `N library sources checked, 0 not at NEW_SHA7`. Any `OFF` line names an Application that still
+   reads another commit. On the tested hub, 28 library sources moved in about 6 minutes.
 
-4. Rerun the checks from [join each site to the grid](06-join-grid.md#3-verify) and a tenant call from [first use](08-first-use.md#6-call-the-model-as-a-tenant).
+4. Rerun the checks from [join the site to the grid](06-join-grid.md#3-verify) and a tenant call from [first use](07-first-use.md#6-call-the-model-as-a-tenant).
 
 Before a pin that changes the Keycloak version, read
 [Keycloak](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/04-tenant-identity.md#known-issues-1): Keycloak's import-then-start layout can't migrate
@@ -37,8 +37,15 @@ an older database.
 
 ## Add a site
 
-Follow [prepare each site and join it to ACM](05-prepare-site.md) and [join each site to the grid](06-join-grid.md) for
-the new site.
+Follow [prepare the site](05-prepare-site.md) and [join the site to the grid](06-join-grid.md) for the new site.
+
+- For an `ingress` or `inference` site instead of `combined`, see
+  [Sites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/spokes/README.md#what-you-choose-per-site). An `inference` site needs no files from
+  `site-template/`; label it with `ai-grid/role=inference`.
+- With more than one site, give the hub's Argo CD application controller 8 GiB of memory
+  ([OpenShift GitOps](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/00-platform-services.md#openshift-gitops)).
+- Add each ingress or combined site's `https://maas.SITE_APPS_DOMAIN/*` to the tenant Keycloak's redirect URIs, in its
+  admin console ([tenant-idp/README.md](../../tenant-idp/README.md#settings)).
 
 ## Change a site's role
 
@@ -59,7 +66,49 @@ there. *(Unverified.)*
    later, with the site's models and subscriptions as before.
 2. To remove it from ACM too, delete the ManagedCluster, then any Argo CD cluster Secret and grid identity Secret
    (`redhat-ai-grid/grid-site-SITE`) left on the hub.
-3. To reuse the cluster, wipe it ([prepare each site, part 3](05-prepare-site.md#3-if-the-cluster-ran-ai-grid-before-wipe-it)).
+3. To reuse the cluster with another hub, [clean it](#reuse-a-cluster-from-another-hub).
+
+## Reuse a cluster from another hub
+
+A cluster that was a site of another hub must leave that hub first, then lose its old install.
+
+1. On the old hub, remove the site's labels and wait for its Applications to go, then delete its ManagedCluster.
+   Delete its Argo CD cluster Secret and grid identity Secret if they stay behind.
+2. Preview the wipe with the library's script:
+
+   ```sh
+   ../library/scripts/wipe-site.sh --kubeconfig SITE_KUBECONFIG --dry-run
+   ```
+
+   Read the list. It must not name your platform's identity provider, cert-manager, NFD, the GPU operator or your
+   ACME ClusterIssuers; the script protects those by name. If your platform uses other names, add them,
+   space-separated, in `WIPE_PROTECT_NAMESPACES` and `WIPE_PROTECT_PACKAGES` (operator package names) before both
+   runs.
+
+3. Run it without `--dry-run`. It removes models, MaaS objects, the DataScienceCluster, the grid, the gateways, their
+   operators and leftover webhooks, in that order, and leaves the cluster pull secret and image mirror (removing a
+   mirror drains every node, and the new hub delivers the same mirror again).
+
+You should end with no DataScienceCluster, GridNetwork, GridSite or LLMInferenceService, and no `Terminating`
+namespaces:
+
+```sh
+oc --context SITE_CONTEXT get datasciencecluster,gridnetworks,gridsites,llminferenceservices -A
+oc --context SITE_CONTEXT get ns | grep Terminating
+```
+
+## Remove a subscription, model or organization
+
+In the console, open the row's menu in each list and click **Delete**, then type the name to confirm. Delete in this
+order:
+
+1. The subscription. Its authorization policy is deleted with it.
+2. The model. It's removed from every site it runs on.
+3. The organization, with its identity provider configuration.
+
+Each delete of a subscription or model is a commit to your catalog repository; the organization lives in Keycloak.
+On the site, a model takes about 9 minutes to go
+([troubleshooting](troubleshooting.md#a-deleted-model-stays-on-the-site-for-several-minutes)).
 
 ## Rotate credentials
 
@@ -108,7 +157,7 @@ caches in `openshift-marketplace`.
 ### 1. Empty the catalog
 
 So a reinstall starts with no models or subscriptions, remove them from your catalog repository. With the console,
-delete each subscription, then each model ([first use, part 7](08-first-use.md#7-delete-what-you-created-optional)).
+delete each subscription, then each model ([remove a subscription, model or organization](#remove-a-subscription-model-or-organization)).
 Or in git:
 
 ```sh
@@ -120,8 +169,7 @@ git commit -m "catalog: empty for uninstall" && git push origin HEAD:main && cd 
 Within a few minutes the hub deletes the catalog's Applications, and with them the subscriptions, auth policies and
 MaaS model entries, so no access outlives them. The models themselves keep running: the models ApplicationSet keeps
 its resources when a cluster's folder goes (`preserveResourcesOnDeletion`, see `apps/acm-models/README.md`). The
-site step deletes them first, while KServe still runs. On site-b both models were still running 13 minutes after
-the catalog was emptied.
+site step deletes them first, while KServe still runs.
 
 ### 2. Preview each step
 
@@ -167,9 +215,7 @@ command again with the same plan file to resume. It:
    `redhat-ai-gateway-infra`, each only if it's still there.
 6. Signs in as the break-glass admin again.
 
-A site took about 15 minutes on site-b (2026-11-10), not counting the stops this run fixed: the hub's detach and
-Submariner's removal a few minutes, `wipe-site.sh` about 10 (most of it the DataScienceCluster and operators), the
-rest under a minute.
+A site takes about 15 minutes, most of it removing the DataScienceCluster and the operators.
 
 ### 4. Uninstall the hub
 
@@ -196,8 +242,7 @@ It refuses while any site is still managed. It:
    reinstall's writes.
 6. Signs in as the break-glass admin again.
 
-A hub took about 25 minutes on proto-hub (2026-11-10): stopping Argo CD about 2 (six rounds), MultiClusterHub and
-the multicluster engine about 7, OpenShift GitOps up to 10.
+A hub takes about 25 minutes, most of it removing MultiClusterHub, the multicluster engine and OpenShift GitOps.
 
 ### 5. Check
 
@@ -213,4 +258,5 @@ You should see that the Argo CD Application kind doesn't exist (`the server does
 namespace from the list, and your platform's identity providers plus `htpasswd`. Sign in once in the web console as the
 break-glass admin.
 
-To reinstall, start again at [the repositories page](02-repositories.md) with the same or new repositories.
+To reinstall, start again at [set up your deployment repository](02-repositories.md) with the same or new
+repositories.

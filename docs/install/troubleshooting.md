@@ -2,11 +2,36 @@
 
 Each entry gives the symptom, the cause and the fix. The [hub](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/README.md) and [spokes](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/spokes/README.md) pages list more under **Known issues**.
 
+## `check-deployment.sh` reports `unset inputs` or `placeholders left in your files`
+
+**Cause:** an input in `root/kustomization.yaml`, or a value in another file, is still a `REQUIRED-NAME` placeholder.
+
+**Fix:** set each one it names ([set your names](02-repositories.md#2-set-your-names);
+[inputs](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/appendix-a-inputs.md#inputs)), and run the check again.
+
+## The hub check prints `MISSING`
+
+**Fix:** for each `MISSING` line that a selected component doesn't install:
+
+| Line | Fix |
+|---|---|
+| OpenShift version | Upgrade the cluster to 4.21 or later. |
+| default StorageClass | Annotate one StorageClass `storageclass.kubernetes.io/is-default-class=true`. |
+| cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or select `apps/cert-manager` ([cert-manager](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/00-platform-services.md#cert-manager)). |
+| quay.io/rhoai pull secret file | Log in: `podman login quay.io` with a `quay.io/rhoai` robot token ([OpenShift AI prerequisites](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
+| object storage | Expected with `apps/object-storage/s4` or `odf` selected: it appears when you [install the hub components](04-hub-components.md). If you bring your own bucket, create the Secret now ([object storage](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/01-acm.md#object-storage)). |
+
+## `bootstrap-hub.sh` refuses a general `quay.io` login
+
+**Cause:** the auth file holds a login for all of `quay.io`, which the hub would copy to every site.
+
+**Fix:** use a robot token scoped to `quay.io/rhoai`, or accept the risk with `RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1`.
+
 ## The root reports `missing input: NAME` or `invalid input: NAME`
 
 **Cause:** your root's `values` don't set input `NAME`, or set it empty or with `"`, `'`, `\` or `@`.
 
-**Fix:** set it in `root/kustomization.yaml` ([repositories, part 4](02-repositories.md#4-set-every-input)), run
+**Fix:** set it in `root/kustomization.yaml` ([inputs](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/appendix-a-inputs.md#inputs)), run
 `../library/scripts/check-deployment.sh .`, and push. Read the message with
 `oc get applicationset apps -n openshift-gitops -o jsonpath='{.status.conditions}'`.
 
@@ -14,7 +39,7 @@ Each entry gives the symptom, the cause and the fix. The [hub](https://github.co
 
 **Cause:** an ingress or combined site has no `values/clusters/SITE/rhoai.yaml` with its MaaS hostname prefix.
 
-**Fix:** add it ([join each site to the grid, part 1](06-join-grid.md#1-add-the-sites-values)) and push.
+**Fix:** add it ([join the site to the grid, part 1](06-join-grid.md#1-add-the-sites-values)) and push.
 
 ## Organization create fails with Bad Request
 
@@ -29,7 +54,7 @@ Each entry gives the symptom, the cause and the fix. The [hub](https://github.co
 **Cause:** the MaaS gateway presents its in-cluster service certificate on the public hostname.
 
 **Fix:** give the gateway a trusted certificate through the site's values file
-([join each site to the grid, part 1](06-join-grid.md#1-add-the-sites-values); [MaaS gateway certificate](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/spokes/maas-certificate.md)).
+([join the site to the grid, part 1](06-join-grid.md#1-add-the-sites-values); [MaaS gateway certificate](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/spokes/maas-certificate.md)).
 
 ## Every model call returns `403`, "access denied to requested subscription"
 
@@ -59,7 +84,7 @@ header for keys, by design. A key reaches exactly the models its subscription co
 gets `403` for any other model. A revoked key also gets `403`, not `401`.
 
 **Fix:** to limit what a key reaches, create it under a subscription that covers only those models
-([first use, part 6](08-first-use.md#6-call-the-model-as-a-tenant)). For a `403`, check the key's `subscription` and
+([tenant access](tenant-access.md#create-an-api-key-and-call-with-it)). For a `403`, check the key's `subscription` and
 `status` with `GET https://MAAS_HOST/v1/api-keys/KEY_ID`.
 
 ## The Org UI can't load models or API keys
@@ -76,7 +101,7 @@ tenant's token only as `x-forwarded-id-token`, and the portal reads `x-forwarded
 **Fix:** pin FBC `d0ee30a` or later, such as the library's `add544e`;
 ai-gateway-controller [PR 246](https://github.com/opendatahub-io/ai-gateway-controller/pull/246) restores the header.
 Until then, tenants create API keys through the MaaS API
-([first use, part 6](08-first-use.md#6-call-the-model-as-a-tenant)). Don't edit the AuthPolicy or the `maas-portal`
+([tenant access](tenant-access.md#create-an-api-key-and-call-with-it)). Don't edit the AuthPolicy or the `maas-portal`
 Deployment by hand: their controllers revert the change.
 
 ## Calls fail with `401` or `503` after the IdP was down
@@ -125,7 +150,7 @@ doesn't exist.
 ## A deleted model stays on the site for several minutes
 
 **Cause:** the model's ExternalModel keeps its finalizer `inference.opendatahub.io/external-model-cleanup` until the
-model's pods end. On the tested site every object was gone about 9 minutes after the delete.
+model's pods end, about 9 minutes after the delete.
 
 **Fix:** none needed; wait. Check with `oc --context SITE_CONTEXT get externalmodels,llminferenceservices -A`.
 
@@ -140,4 +165,4 @@ it.
 
 **Cause:** they wait for the first site to join.
 
-**Fix:** none needed before the first site joins the grid. After a site joins, check the site's Submariner gateways ([Submariner](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/01-acm.md#submariner)).
+**Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#1-watch-the-components-install)). After a site joins, check the site's Submariner gateways ([Submariner](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/01-acm.md#submariner)).
