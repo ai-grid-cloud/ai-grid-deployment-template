@@ -41,20 +41,19 @@ GridSite stays `Connecting` ([site networking](https://github.com/ai-grid-cloud/
 
 ## 4. Tools on your workstation
 
-`oc`, `kubectl`, `kustomize` (5.x), `jq`, `git`, `curl`, `openssl`, `base64`, `python3` with PyYAML, `htpasswd`
-(from `httpd-tools`) and `clusteradm`.
+- `oc`, the OpenShift CLI, and `kubectl`, which comes with it: every page.
+- `kustomize` 5 or later: renders your deployment repository's root.
+- `git`: clones and pushes your repositories.
+- `jq`, `curl`, `openssl` and `base64`: used by the setup scripts and in first use.
+- `python3`: reads cluster state in the setup scripts.
+- `htpasswd`, from `httpd-tools`: creates the break-glass admin login.
+- `clusteradm`: imports the site into ACM.
 
-Check them:
-
-```sh
-for c in oc kubectl kustomize jq git curl openssl base64 python3 htpasswd clusteradm; do command -v "$c" >/dev/null || echo "missing: $c"; done
-python3 -c "import yaml" || echo "missing: PyYAML"
-```
-
-You should see no output.
+You check them with a script after you clone your repository, in
+[set up your deployment repository](02-repositories.md#1-clone-your-repository-and-the-library).
 
 ## Checkpoint
 
 - You have kubeconfig contexts with `cluster-admin` for the hub and the site.
-- Your tools check prints nothing.
+- You have the tools in part 4.
 - You have the registry logins and a DNS-01 ClusterIssuer on the site.

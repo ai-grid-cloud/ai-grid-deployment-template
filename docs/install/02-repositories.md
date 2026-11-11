@@ -17,6 +17,15 @@ git -C ../library checkout -q "$(sed -n 's/^ *libraryRevision: *//p' root/kustom
 Replace `DEPLOYMENT_REPO_URL` with your deployment repository's clone URL. Run every command in this guide from the
 `deployment` directory.
 
+Check your tools:
+
+```sh
+scripts/check-tools.sh
+```
+
+Each tool prints `ok`, and the last line is `All tools found.` Install any tool marked `MISSING` or `OLD`, then run it
+again.
+
 ## 2. Create your catalog repository and its token
 
 The catalog repository holds your models and subscriptions: the hub delivers them to your sites, and the provider
