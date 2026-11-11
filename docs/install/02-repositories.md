@@ -1,39 +1,43 @@
 # Create your deployment and catalog repositories
 
 Your hub installs from two repositories you own: a **deployment repository** with your choices and inputs, and a
-**catalog repository** that the provider console writes models and subscriptions to. Start from the
-[example deployment](appendix-b-example.md); this section changes it into yours.
+**catalog repository** that the provider console writes models and subscriptions to. You create both from templates on
+GitHub. The deployment template is this repository, and it carries the example deployment's own values
+([Appendix B](appendix-b-example.md)); this section changes them into yours.
 
 ## 1. Create the repositories
 
-1. Create two empty repositories on your git host, for example `my-org/ai-grid-deployment` and
-   `my-org/ai-grid-catalog`. Make them readable by the hub's Argo CD.
+1. Create your deployment repository from the deployment template: on GitHub, open
+   [`cfchase/ai-grid-deployment-proto`](https://github.com/cfchase/ai-grid-deployment-proto), click
+   **Use this template** > **Create a new repository**, and name it, for example `my-org/ai-grid-deployment`. Make it
+   private or public, as you choose; the hub's Argo CD must be able to read it. *(Unverified.)*
 
-2. Add a README to the catalog repository, so it has a `main` branch. The console's git writer adds everything else.
+2. Create your catalog repository the same way from the catalog template,
+   [`cfchase/ai-grid-catalog-proto`](https://github.com/cfchase/ai-grid-catalog-proto), for example
+   `my-org/ai-grid-catalog`. It holds only a README on `main`; the console's git writer adds everything else. Give the
+   console's token write access to this repository only
+   ([provider console](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/05-console-and-model-delivery.md#provider-console)). *(Unverified.)*
+
+3. Clone your deployment repository:
 
    ```sh
-   git clone CATALOG_REPO_URL catalog && cd catalog
-   echo "# AI Grid catalog: written by the provider console" > README.md
-   git add README.md && git commit -m "catalog: start" && git push origin HEAD:main && cd ..
-   ```
-
-3. Copy the example deployment into your deployment repository:
-
-   ```sh
-   git clone https://github.com/cfchase/ai-grid-deployment-proto.git example
    git clone DEPLOYMENT_REPO_URL deployment
-   cp -R example/root example/values example/apps deployment/
-   rm -rf deployment/values/clusters/* deployment/apps/*
    ```
 
-   Replace the following:
+   Replace `DEPLOYMENT_REPO_URL` with your deployment repository's clone URL.
 
-   - `CATALOG_REPO_URL`: your catalog repository's clone URL.
-   - `DEPLOYMENT_REPO_URL`: your deployment repository's clone URL.
+4. Review the example's files. Your repository starts with the example deployment's values, and you change these:
 
-   You removed the example's per-site values and its own apps (its tenant IdP and one site's certificate); you add
-   your own in later steps. If you'll run your own Keycloak the way the example does, also copy `example/idp` and
-   `example/apps/tenant-idp.yaml` ([tenant identity provider](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/04-tenant-identity.md#tenant-identity-provider)).
+   | File | What to do | Where |
+   |---|---|---|
+   | `root/kustomization.yaml` | Set the library pin, your component selection and every input. | Parts 2 to 4 |
+   | `root/self.yaml` | Point `spec.source.repoURL` at your deployment repository. | Part 6 |
+   | `values/cluster-admins.yaml`, `values/grid-bootstrap.yaml` | Set your cluster admins and grid CA mode. | Part 5 |
+   | `values/clusters/site-b/` | The example site's values. Delete them, and add a folder per ingress or combined site. | [Join each site to the grid](06-join-grid.md#1-add-the-sites-values) |
+   | `apps/site-b-maas-tls.yaml`, `sites/site-b/` | The example site's MaaS certificate. Delete them, or change them for your site. | [MaaS gateway certificate](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/spokes/maas-certificate.md) |
+   | `apps/tenant-idp.yaml`, `idp/`, `scripts/create-test-tenant.sh` | The example's own Keycloak. Keep them only if you run your own Keycloak the way the example does, and then set its hostnames in `idp/`; otherwise delete them. | [Tenant identity provider](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/04-tenant-identity.md#tenant-identity-provider) |
+
+   Keep `docs/`: it's this guide.
 
 ## 2. Pin the library commit
 

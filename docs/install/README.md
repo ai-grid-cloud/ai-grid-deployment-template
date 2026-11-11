@@ -50,7 +50,7 @@ to the sites.
 | Page | What happens | Time |
 |---|---|---|
 | [Before you start](01-before-you-start.md) | Clusters, network, credentials and tools you need | 15 minutes |
-| [Create your deployment and catalog repositories](02-repositories.md) | Your hub choices and inputs, the library pinned | 30 minutes |
+| [Create your deployment and catalog repositories](02-repositories.md) | Both from GitHub templates; your hub choices and inputs, the library pinned | 30 minutes |
 | [Prepare the hub](03-prepare-hub.md) | Infrastructure checks, OpenShift GitOps, your root applied | 15 minutes |
 | [Install the hub components](04-hub-components.md) | Argo CD installs ACM, the grid bootstrap, the MaaS database, the console | 30 minutes |
 | [Prepare each site and join it to ACM](05-prepare-site.md) | Infrastructure checks, import into ACM | 15 minutes per site |
