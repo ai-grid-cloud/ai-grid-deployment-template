@@ -2,8 +2,7 @@
 
 This directory is the deployment's own tenant identity provider: community
 Keycloak 26.8.0 in namespace `tenant-idp`, with realm `tenants` and client
-`ai-grid-tenants`. It's the prototype's Keycloak skip test. The deployment
-doesn't select the library's `keycloak` component, installs this one as its own
+`ai-grid-tenants`. The deployment doesn't select the library's `keycloak` component, installs this one as its own
 app (`apps/tenant-idp.yaml`), and connects it to the library only through the
 declared inputs below.
 
@@ -34,8 +33,7 @@ library's hub-templating service account gets read access to the input Secret's
 namespace. That namespace holds only Secret `tenant-idp-client` plus the objects
 that make it (a `Password` generator, an `ExternalSecret`, and the Role and
 RoleBinding that let Keycloak's `SecretStore` read it), none of which hold a
-secret value. The plan's Inputs table lists `tenant-idp` as
-`idpClientSecretNamespace`; use `tenant-idp-client`.
+secret value.
 
 For the provider console, run `apps/console/create-secrets.sh` with
 `KEYCLOAK_NAMESPACE=tenant-idp` and `KEYCLOAK_REALM=tenants`. It reads Route
@@ -46,9 +44,9 @@ For the provider console, run `apps/console/create-secrets.sh` with
 
 ConfigMap `tenant-idp-settings` (`manifests/settings.yaml`), key
 `portalRedirectURI`, is the tenant portal's redirect URI pattern for client
-`ai-grid-tenants`. It is set to `site-b`'s MaaS host
-(`https://maas.apps.ocp.865h4.sandbox5343.opentlc.com/*`); another deployment sets it to its ingress site's
-MaaS gateway host, `https://MAAS_HOST/*`.
+`ai-grid-tenants`: your ingress or combined site's MaaS gateway host,
+`https://maas.APPS_DOMAIN/*`. The template leaves it as `REQUIRED-portalRedirectURI`,
+which `check-deployment.sh` reports until you set it.
 
 The realm is imported only when it doesn't exist (`kc.sh import --override
 false`), so editing the ConfigMap after Keycloak's first start doesn't change the
@@ -120,7 +118,7 @@ the audience (now `ai-grid-tenants`, the client's own ID) and `token_use: access
 ## Test
 
 ```sh
-bash idp/tests/render-test.sh
+bash tenant-idp/tests/render-test.sh
 ```
 
 It builds the kustomization, renders the realm with dummy values, and checks the

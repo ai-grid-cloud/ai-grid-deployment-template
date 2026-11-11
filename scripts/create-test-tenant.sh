@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Create a test tenant user in our tenant Keycloak (idp/), a member of an
+# Create a test tenant user in our tenant Keycloak (tenant-idp/), a member of an
 # organization the console created, with the attributes the realm's mappers turn
 # into MaaS claims: org_id, org_name, groups and roles. Groups are plain names
 # (such as ai-grid-users): MaaS prefixes them with org_id itself and drops any
@@ -56,7 +56,7 @@ base="https://$host/admin/realms/$realm"
 # The maas_* attributes are unmanaged: the user profile must let an admin set
 # them, or Keycloak drops them silently and tokens carry no org claims. The
 # realm import's user-profile component isn't applied by Keycloak 26.8, and the
-# library sets this in its realm-sync step, which idp/ leaves out.
+# library sets this in its realm-sync step, which tenant-idp/ leaves out.
 profile="$(api "$base/users/profile")"
 if [ "$(printf '%s' "$profile" | jq -r '.unmanagedAttributePolicy // ""')" != ADMIN_EDIT ]; then
   printf '%s' "$profile" | jq '.unmanagedAttributePolicy = "ADMIN_EDIT"' | api -X PUT "$base/users/profile" -d @- >/dev/null

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Checks idp/ offline: kustomize builds it, and the realm renders to valid JSON
+# Checks tenant-idp/ offline: kustomize builds it, and the realm renders to valid JSON
 # with realm tenants and client ai-grid-tenants carrying the six claim mappers
-# MaaS reads. Run from anywhere: bash idp/tests/render-test.sh
+# MaaS reads. Run from anywhere: bash tenant-idp/tests/render-test.sh
 set -Eeuo pipefail
 
 idp_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-echo "kustomize build idp/"
+echo "kustomize build tenant-idp/"
 kustomize build "$idp_dir" > "$work/idp.yaml"
 
 echo "render the realm with dummy values"

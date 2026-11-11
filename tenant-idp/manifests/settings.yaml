@@ -1,8 +1,8 @@
 # Deployment settings for the tenant IdP.
 #
 # portalRedirectURI: the tenant portal's redirect URI pattern for client
-# ai-grid-tenants. Set it to the MaaS gateway host of the ingress site
-# (prototype Task 12: site-b), for example https://maas.apps.example.com/*.
+# ai-grid-tenants: https://maas.APPS_DOMAIN/*, with APPS_DOMAIN your ingress or
+# combined site's apps domain, for example https://maas.apps.east.example.com/*.
 # The realm is imported only when it doesn't exist, so a change after the
 # first start must also be made in Keycloak (see README.md).
 apiVersion: v1
@@ -13,4 +13,4 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 data:
-  portalRedirectURI: https://maas.apps.ocp.865h4.sandbox5343.opentlc.com/*
+  portalRedirectURI: REQUIRED-portalRedirectURI

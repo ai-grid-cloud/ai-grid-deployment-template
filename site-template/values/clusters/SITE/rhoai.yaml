@@ -1,5 +1,5 @@
-# site-b is combined, so it runs the MaaS gateway: its tenants call
-# https://maas.<site-b apps domain>.
+# Site SITE runs the MaaS gateway (role ingress or combined): its tenants call
+# https://maas.APPS_DOMAIN.
 components:
   aigateway:
     modelsAsAService:
@@ -8,7 +8,7 @@ components:
           ai-grid/maas-gateway-hostname-prefix: maas
         spec:
           # The chart's listeners, with the HTTPS listener's certificate from
-          # sites/site-b/maas-tls (publicly trusted) instead of the in-cluster
+          # sites/SITE/maas-tls (publicly trusted) instead of the in-cluster
           # service certificate. Helm replaces lists whole, so both listeners
           # are here. Hostnames come from the library's gateway-hostname Policy.
           listeners:
