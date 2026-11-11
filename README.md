@@ -3,8 +3,13 @@
 
 # AI Grid deployment template
 
-A GitHub template for an AI Grid **deployment repository**: what one hub and its sites chose. Create yours with
-**Use this template**, then **start at the [install guide](docs/install/README.md)**.
+A GitHub template for an AI Grid **deployment repository**: what one hub and its sites chose.
+
+## Start here
+
+1. Create your deployment repository from this template, and an empty catalog repository: two commands in
+   [create the repositories](docs/install/02-repositories.md#1-create-the-repositories).
+2. Follow the [install guide](docs/install/README.md) in your new repository.
 
 It carries the example deployment's own values. It installs from the component library
 [`cfchase/ai-grid-cluster-gitops`](https://github.com/cfchase/ai-grid-cluster-gitops), pinned at one commit, with
