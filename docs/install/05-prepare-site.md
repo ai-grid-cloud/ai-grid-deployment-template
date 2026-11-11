@@ -12,7 +12,31 @@ Replace the following:
 - `SITE_KUBECONFIG_FILE`: a kubeconfig file whose current context is the site.
 - `SITE_NAME`: the site's ACM cluster name, a stable DNS-1123 name such as `site-east-1`.
 
-If the cluster was a site of another hub, first [clean it](operate.md#reuse-a-cluster-from-another-hub).
+If the cluster was a site of another hub, first [reuse it](#reuse-a-cluster-from-another-hub).
+
+## Reuse a cluster from another hub
+
+Skip this section for a cluster that was never an AI Grid site.
+
+1. On the old hub, remove the site's labels, wait for its Applications to go, then delete its ManagedCluster. Delete
+   its Argo CD cluster Secret and grid identity Secret (`redhat-ai-grid/grid-site-SITE`) if they stay behind.
+2. Preview the wipe of the old install:
+
+   ```sh
+   ../library/scripts/wipe-site.sh --kubeconfig "$SITE_KUBECONFIG" --dry-run
+   ```
+
+   Read the list. It must not name your platform's identity provider, cert-manager, NFD, the GPU operator or your
+   ACME ClusterIssuers; the script protects those by name. If your platform uses other names, set them,
+   space-separated, in `WIPE_PROTECT_NAMESPACES` and `WIPE_PROTECT_PACKAGES` (operator package names) for both runs.
+3. Run the same command without `--dry-run`. It leaves the cluster pull secret and image mirror, which the new hub
+   delivers again.
+
+You should then see no DataScienceCluster, GridNetwork, GridSite or LLMInferenceService:
+
+```sh
+oc --context "$SITE_CONTEXT" get datasciencecluster,gridnetworks,gridsites,llminferenceservices -A
+```
 
 ## 1. Add a break-glass admin
 

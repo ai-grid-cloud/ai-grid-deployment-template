@@ -12,6 +12,9 @@ export HUB_CONTEXT=HUB_CONTEXT_NAME HUB_KUBECONFIG=HUB_KUBECONFIG_FILE
 Replace `HUB_CONTEXT_NAME` with the hub's kubeconfig context, and `HUB_KUBECONFIG_FILE` with a kubeconfig file whose
 current context is the hub.
 
+If the cluster ran an AI Grid hub before, uninstall that hub first
+([uninstall](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/operate.md#uninstall)).
+
 ## 1. Add a break-glass admin
 
 Add an htpasswd admin before anything else. If the hub's external sign-in breaks later, it's the only way back in:
