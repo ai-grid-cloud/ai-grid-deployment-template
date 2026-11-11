@@ -42,5 +42,18 @@ The hub's Argo CD reads all three. Your deployment repository points at the libr
 
 2. Follow the [install guide](docs/install/README.md) in your new repository.
 
-To follow the template's later updates, fork it instead of using it as a template, if a public repository is fine for
-you: a fork can't be private.
+## Update from the template
+
+Your repository doesn't follow the template by itself. To pick up the template's later fixes, merge it in from your
+repository's directory:
+
+```sh
+git remote add template https://github.com/ai-grid-cloud/ai-grid-deployment-template.git
+git fetch template
+git merge --allow-unrelated-histories template/main
+```
+
+Repositories made from a template share no history with it, so the first merge needs `--allow-unrelated-histories` and
+shows a conflict in each file the template changed since you created yours: keep your values, take the rest. If you
+haven't changed anything yet, add `-X theirs` to take the template's version of every conflict. After that, update
+with `git fetch template && git merge template/main`, then push.
