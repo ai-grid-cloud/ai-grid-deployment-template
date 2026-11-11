@@ -10,16 +10,26 @@ to end on 2026-11-10 ([the example deployment](docs/install/appendix-b-example.m
 
 ## Start here
 
-1. Create your deployment repository from this template, and an empty catalog repository for the models and
-   subscriptions that the provider console writes:
+1. Create two repositories on GitHub, both public:
+
+   - **Your deployment repository,** from this template: click **Use this template** > **Create a new repository**,
+     choose the owner, and name it, such as `ai-grid-deployment`.
+
+     <img src="docs/install/images/use-this-template.png" width="300" alt="The Use this template menu">
+     <img src="docs/install/images/new-deployment-repository.png" width="420" alt="The new repository form with this template selected">
+
+   - **Your catalog repository,** empty: [create a new repository](https://github.com/new), name it, such as
+     `ai-grid-catalog`, and turn on **Add README**. The hub delivers the models and subscriptions in it to your sites,
+     and the provider console writes them there.
+
+     <img src="docs/install/images/new-catalog-repository.png" width="420" alt="The new repository form with Add README on">
+
+   The hub's Argo CD reads both. This guide was tested with public repositories and doesn't cover the credentials
+   that private ones need. With the GitHub CLI, the same two repositories are:
 
    ```sh
    gh repo create OWNER/DEPLOYMENT_REPO --template ai-grid-cloud/ai-grid-deployment-template --public
    gh repo create OWNER/CATALOG_REPO --add-readme --public
    ```
-
-   Replace `OWNER` with your GitHub user or organization, and `DEPLOYMENT_REPO` and `CATALOG_REPO` with the names,
-   such as `ai-grid-deployment` and `ai-grid-catalog`. The hub's Argo CD reads both; this guide was tested with
-   public repositories, and doesn't cover the Argo CD credentials that private ones need.
 
 2. Follow the [install guide](docs/install/README.md) in your new repository.

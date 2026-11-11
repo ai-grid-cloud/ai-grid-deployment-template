@@ -42,13 +42,13 @@ GridSite stays `Connecting` ([site networking](https://github.com/cfchase/ai-gri
 
 ## 4. Tools on your workstation
 
-`oc`, `kubectl`, `kustomize` (5.x), `jq`, `git`, `gh`, `curl`, `openssl`, `base64`, `python3` with PyYAML, `htpasswd`
+`oc`, `kubectl`, `kustomize` (5.x), `jq`, `git`, `curl`, `openssl`, `base64`, `python3` with PyYAML, `htpasswd`
 (from `httpd-tools`) and `clusteradm`.
 
 Check them:
 
 ```sh
-for c in oc kubectl kustomize jq git gh curl openssl base64 python3 htpasswd clusteradm; do command -v "$c" >/dev/null || echo "missing: $c"; done
+for c in oc kubectl kustomize jq git curl openssl base64 python3 htpasswd clusteradm; do command -v "$c" >/dev/null || echo "missing: $c"; done
 python3 -c "import yaml" || echo "missing: PyYAML"
 ```
 
