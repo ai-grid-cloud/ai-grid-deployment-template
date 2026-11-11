@@ -41,7 +41,7 @@ repository** (models and subscriptions, written only by the provider console).
 | Page | What happens | Time |
 |---|---|---|
 | [1. Before you start](01-before-you-start.md) | Clusters, network, credentials and tools | 15 minutes |
-| [2. Set up your deployment repository](02-repositories.md) | Your names in the inputs, checked and pushed | 15 minutes |
+| [2. Set up your deployment repository](02-repositories.md) | Your catalog repository and its token, your names in the inputs, checked and pushed | 20 minutes |
 | [3. Prepare the hub](03-prepare-hub.md) | Infrastructure check, OpenShift GitOps, your root applied | 15 minutes |
 | [4. Install the hub components](04-hub-components.md) | Argo CD installs ACM, the grid, the MaaS database, Keycloak, the console | 30 minutes |
 | [5. Prepare the site](05-prepare-site.md) | Infrastructure check, import into ACM | 15 minutes |
