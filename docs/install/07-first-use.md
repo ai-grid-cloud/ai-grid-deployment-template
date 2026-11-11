@@ -109,8 +109,8 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
    should see a short reply and `x-grid-site: SITE`.
 
 Tenants normally call with an API key, and create keys in the Org UI at `https://maas.SITE_APPS_DOMAIN/maas-portal`.
-For API keys, refusal checks and revoking a key, see [tenant access](tenant-access.md). To remove what you created,
-see [operate](operate.md#remove-a-subscription-model-or-organization).
+For API keys, refusal checks and revoking a key, see [tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/tenant-access.md). To remove what you created,
+see [operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/operate.md#remove-a-subscription-model-or-organization).
 
 ## Checkpoint
 

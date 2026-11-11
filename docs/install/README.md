@@ -4,7 +4,9 @@ This guide takes you from OpenShift clusters to a working AI Grid: a hub, one si
 provider console, and a tenant calling it. It installs the template's tested choices; you change only the names that
 must be yours. Follow the pages in order; each ends with a checkpoint that must be true before you move on.
 
-For what AI Grid is and how its parts fit together, see [How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/README.md).
+Tested on 2026-11-10: a hub on OpenShift 4.22 with ACM 2.17, and one combined site on OpenShift 4.21, on AWS.
+
+For what AI Grid is and how its parts fit together, see [How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/README.md#how-ai-grid-works).
 
 ## Follow these in order
 
@@ -22,10 +24,9 @@ To add more sites, repeat pages 5 and 6 for each.
 
 ## Reference
 
-- [Operate](operate.md): upgrade, add and remove sites, reuse a cluster, rotate credentials, uninstall.
-- [Tenant access](tenant-access.md): API keys, refusal checks, revoking a key.
-- [Troubleshooting](troubleshooting.md).
-- The component reference, in the library at your pin: [How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/README.md), [Hub](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/README.md),
+- [Troubleshooting](troubleshooting.md): problems while following this guide.
+- In the library at your pin: [How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/README.md#how-ai-grid-works),
+  [Operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/operate.md) (upgrade, add and remove sites, rotate credentials, uninstall),
+  [Tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/tenant-access.md), [Known gaps](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/known-gaps.md), [Hub](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/hub/README.md),
   [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/spokes/README.md),
   [Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/af39e2d92420931c1865d5d28a646030fbea8cf9/docs/install/appendix-a-inputs.md).
-- [Appendix B: the example deployment](appendix-b-example.md) · [Appendix C: known gaps](appendix-c-gaps.md)

@@ -6,7 +6,7 @@
 A GitHub template for an AI Grid **deployment repository**: the components one hub runs, its inputs, and its sites'
 files. It installs from the component library
 [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) at one pinned commit. Tested end
-to end on 2026-11-10 ([the example deployment](docs/install/appendix-b-example.md)).
+to end on 2026-11-10 ([install guide](docs/install/README.md)).
 
 ## Start here
 
