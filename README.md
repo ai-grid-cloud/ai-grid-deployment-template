@@ -1,13 +1,14 @@
 # ai-grid-deployment-proto
 
-An example AI Grid **deployment repository**: what one hub and its sites chose. It installs from the component library
-[`cfchase/ai-grid-cluster-gitops`](https://github.com/cfchase/ai-grid-cluster-gitops/tree/proto/library) (branch
-`proto/library`), pinned at one commit, with models and subscriptions in
-[`cfchase/ai-grid-catalog-proto`](https://github.com/cfchase/ai-grid-catalog-proto), which only the console's git
-writer changes.
+A GitHub template for an AI Grid **deployment repository**: what one hub and its sites chose. Create yours with
+**Use this template**, then **start at the [install guide](docs/install/README.md)**.
 
-**To install your own, follow the [install guide](https://github.com/cfchase/ai-grid-cluster-gitops/blob/proto/library/docs/install/README.md).** This README records only this deployment's
-choices; the guide's [Appendix B](https://github.com/cfchase/ai-grid-cluster-gitops/blob/proto/library/docs/install/appendix-b-example.md) annotates every file here.
+It carries the example deployment's own values. It installs from the component library
+[`cfchase/ai-grid-cluster-gitops`](https://github.com/cfchase/ai-grid-cluster-gitops), pinned at one commit, with
+models and subscriptions in [`cfchase/ai-grid-catalog-proto`](https://github.com/cfchase/ai-grid-catalog-proto) (also
+a template), which only the console's git writer changes. This README records only this deployment's choices;
+[Appendix B](docs/install/appendix-b-example.md) annotates every file, and
+[create your repositories](docs/install/02-repositories.md#1-create-the-repositories) says which ones you change.
 
 Tested 2026-11-10: a hub on OpenShift 4.22 with ACM 2.17 and one combined site, `site-b`, on OpenShift 4.21, on AWS.
 
