@@ -1,12 +1,14 @@
-# ai-grid-deployment-proto
+> **Prototype:** this template pins [`cfchase/ai-grid-cluster-gitops`](https://github.com/cfchase/ai-grid-cluster-gitops)
+> branch `proto/library-v2` until the library lands upstream.
+
+# AI Grid deployment template
 
 A GitHub template for an AI Grid **deployment repository**: what one hub and its sites chose. Create yours with
 **Use this template**, then **start at the [install guide](docs/install/README.md)**.
 
 It carries the example deployment's own values. It installs from the component library
 [`cfchase/ai-grid-cluster-gitops`](https://github.com/cfchase/ai-grid-cluster-gitops), pinned at one commit, with
-models and subscriptions in [`cfchase/ai-grid-catalog-proto`](https://github.com/cfchase/ai-grid-catalog-proto) (also
-a template), which only the console's git writer changes. This README records only this deployment's choices;
+models and subscriptions in a catalog repository, which only the console's git writer changes. This README records only this deployment's choices;
 [Appendix B](docs/install/appendix-b-example.md) annotates every file, and
 [create your repositories](docs/install/02-repositories.md#1-create-the-repositories) says which ones you change.
 
