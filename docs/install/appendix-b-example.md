@@ -1,6 +1,6 @@
 # Appendix B: the example deployment
 
-This template, [`cfchase/ai-grid-deployment-proto`](https://github.com/cfchase/ai-grid-deployment-proto), is the
+This template is a copy of [`cfchase/ai-grid-deployment-proto`](https://github.com/cfchase/ai-grid-deployment-proto), the
 deployment this guide was tested with, on 2026-11-10: one hub (OpenShift 4.22, ACM 2.17) and one combined site
 (OpenShift 4.21) on AWS. Its catalog is [`cfchase/ai-grid-catalog-proto`](https://github.com/cfchase/ai-grid-catalog-proto).
 A repository you make from the template starts with these files, and

@@ -156,7 +156,7 @@ appear after the catalog's first commits, refresh the ApplicationSets once
 
 You need a tenant user: a member of the organization, in group `ai-grid-users`. In your own IdP, the tenant's admin
 creates users. To make a test user in the example's Keycloak, use
-[`scripts/create-test-tenant.sh`](https://github.com/cfchase/ai-grid-deployment-proto/blob/main/scripts/create-test-tenant.sh),
+[`scripts/create-test-tenant.sh`](../../scripts/create-test-tenant.sh),
 which generates the password into a file.
 
 1. Get the user's access token from the issuer and write it into a header file. The client secret and password are

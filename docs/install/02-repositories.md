@@ -2,21 +2,32 @@
 
 Your hub installs from two repositories you own: a **deployment repository** with your choices and inputs, and a
 **catalog repository** that the provider console writes models and subscriptions to. You create both from templates on
-GitHub. The deployment template is this repository, and it carries the example deployment's own values
+GitHub: the deployment repository from a template, and the catalog repository empty. The deployment template is
+[`ai-grid-cloud/ai-grid-deployment-template`](https://github.com/ai-grid-cloud/ai-grid-deployment-template), and it carries the example deployment's own values
 ([Appendix B](appendix-b-example.md)); this section changes them into yours.
 
 ## 1. Create the repositories
 
-1. Create your deployment repository from the deployment template: on GitHub, open
-   [`cfchase/ai-grid-deployment-proto`](https://github.com/cfchase/ai-grid-deployment-proto), click
-   **Use this template** > **Create a new repository**, and name it, for example `my-org/ai-grid-deployment`. Make it
-   private or public, as you choose; the hub's Argo CD must be able to read it. *(Unverified.)*
+1. Create both repositories. The deployment repository comes from the template; the catalog repository starts with
+   only a README on `main`, and the console's git writer adds everything else:
 
-2. Create your catalog repository the same way from the catalog template,
-   [`cfchase/ai-grid-catalog-proto`](https://github.com/cfchase/ai-grid-catalog-proto), for example
-   `my-org/ai-grid-catalog`. It holds only a README on `main`; the console's git writer adds everything else. Give the
-   console's token write access to this repository only
-   ([provider console](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/05-console-and-model-delivery.md#provider-console)). *(Unverified.)*
+   ```sh
+   gh repo create OWNER/DEPLOYMENT_REPO --template ai-grid-cloud/ai-grid-deployment-template --private
+   gh repo create OWNER/CATALOG_REPO --add-readme --private
+   ```
+
+   Replace the following:
+
+   - `OWNER`: your GitHub user or organization.
+   - `DEPLOYMENT_REPO` and `CATALOG_REPO`: the names, for example `ai-grid-deployment` and `ai-grid-catalog`.
+
+   Use `--public` instead of `--private` if you prefer; the hub's Argo CD must be able to read both. On the GitHub
+   website, **Use this template** > **Create a new repository** on the template does the same as the first command.
+   *(Unverified.)*
+
+2. Give the console's token write access to the catalog repository only
+   ([provider console](https://github.com/cfchase/ai-grid-cluster-gitops/blob/edf8e09fb0de642ff739e0ecbb99605a297035b5/docs/install/hub/05-console-and-model-delivery.md#provider-console)).
+   You create the token in [install the hub components](04-hub-components.md).
 
 3. Clone your deployment repository:
 
