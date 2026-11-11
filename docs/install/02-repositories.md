@@ -17,14 +17,36 @@ git -C ../library checkout -q "$(sed -n 's/^ *libraryRevision: *//p' root/kustom
 Replace `DEPLOYMENT_REPO_URL` with your deployment repository's clone URL. Run every command in this guide from the
 `deployment` directory.
 
-Check your tools:
+Check your prerequisites:
 
 ```sh
-scripts/check-tools.sh
+make prereqs
 ```
 
-Each tool prints `ok`, and the last line is `All tools found.` Install any tool marked `MISSING` or `OLD`, then run it
-again.
+It checks your tools and that `../library` is at your pin. It changes nothing and never blocks. Checks whose input
+you haven't set yet print `skipped`; set them as you reach them, such as
+`make prereqs HUB_CONTEXT=hub QUAY_AUTH_FILE=~/.config/containers/auth.json`:
+
+- `HUB_CONTEXT` and `SITE_CONTEXT`: each cluster's kubeconfig context.
+- `QUAY_AUTH_FILE`: your container auth file with the pre-release registry logins.
+- `CATALOG_TOKEN_FILE`: your catalog token file, from part 2.
+
+The output is similar to the following:
+
+```text
+Tools
+ok       oc                               4.22.17
+ok       kustomize                        5.8.3
+MISSING  clusteradm                       imports the site into ACM
+...
+Hub cluster
+skipped  hub checks                       set HUB_CONTEXT to the hub's kubeconfig context
+...
+12 ok, 1 missing, 4 skipped
+Nothing was changed; fix these before the page that needs them.
+```
+
+Install any tool marked `MISSING` or `OLD` before you continue.
 
 ## 2. Create your catalog repository and its token
 

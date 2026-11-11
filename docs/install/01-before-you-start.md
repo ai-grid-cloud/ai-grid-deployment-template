@@ -48,8 +48,9 @@ GridSite stays `Connecting` ([site networking](https://github.com/ai-grid-cloud/
 - `python3`: reads cluster state in the setup scripts.
 - `htpasswd`, from `httpd-tools`: creates the break-glass admin login.
 - `clusteradm`: imports the site into ACM.
+- `make`: runs `make prereqs`.
 
-You check them with a script after you clone your repository, in
+You check them with `make prereqs` after you clone your repository, in
 [set up your deployment repository](02-repositories.md#1-clone-your-repository-and-the-library).
 
 ## Checkpoint
