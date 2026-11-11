@@ -13,7 +13,7 @@ Replace `HUB_CONTEXT_NAME` with the hub's kubeconfig context, and `HUB_KUBECONFI
 current context is the hub.
 
 If the cluster ran an AI Grid hub before, uninstall that hub first
-([uninstall](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f0449f154708ee9ba2eac50a1a921d8c5718dd9b/docs/install/operate.md#uninstall)).
+([uninstall](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/operate.md#uninstall)).
 
 ## 1. Add a break-glass admin
 
@@ -29,7 +29,7 @@ generates a password into that file if it doesn't exist and never prints it.
 
 You should see the script confirm the sign-in. Sign in once in the web console as `admin` with the `htpasswd`
 provider. Never delete an identity provider, or the namespace that runs it, that your platform's sign-in depends on
-([cluster sign-in and admins](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f0449f154708ee9ba2eac50a1a921d8c5718dd9b/docs/install/hub/00-platform-services.md#cluster-sign-in-and-admins)).
+([cluster sign-in and admins](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/hub/00-platform-services.md#cluster-sign-in-and-admins)).
 
 ## 2. Check the infrastructure
 
