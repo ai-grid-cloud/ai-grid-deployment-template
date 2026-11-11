@@ -42,6 +42,9 @@ The hub's Argo CD reads all three. Your deployment repository points at the libr
 
 2. Follow the [install guide](docs/install/README.md) in your new repository.
 
+To follow the template's later updates, fork it instead of using it as a template, if a public repository is fine for
+you: a fork can't be private.
+
 ## Update from the template
 
 Your repository doesn't follow the template by itself. To pick up the template's later fixes, merge it in from your
