@@ -14,13 +14,13 @@ to end on 2026-11-10 ([the example deployment](docs/install/appendix-b-example.m
 
    1. Click **Use this template** > **Create a new repository**.
 
-      ![The Use this template menu](docs/install/images/use-this-template.png)
+      <img src="docs/install/images/use-this-template.png" width="300" alt="The Use this template menu">
 
    2. Choose the owner, name it, such as `ai-grid-deployment`, keep **Public**, and click **Create repository**. The
       hub's Argo CD reads it; this guide was tested with public repositories and doesn't cover the credentials that
       private ones need.
 
-      ![The new repository form with this template selected](docs/install/images/new-deployment-repository.png)
+      <img src="docs/install/images/new-deployment-repository.png" width="480" alt="The new repository form with this template selected">
 
    With the GitHub CLI instead:
    `gh repo create OWNER/DEPLOYMENT_REPO --template ai-grid-cloud/ai-grid-deployment-template --public`.
