@@ -1,7 +1,7 @@
 # Install AI Grid
 
 This guide takes you from OpenShift clusters to a working AI Grid: a hub, one site, a model deployed from the
-provider console, and a tenant calling it. Start after you've created your deployment and catalog repositories
+provider console, and a tenant calling it. Start after you've created your deployment repository
 ([start here](../../README.md#start-here)), and follow the pages in order. Each page ends with a checkpoint that must
 be true before you move on.
 

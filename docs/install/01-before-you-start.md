@@ -36,7 +36,6 @@ GridSite stays `Connecting` ([site networking](https://github.com/cfchase/ai-gri
 | What | Used in |
 |---|---|
 | A container auth file with a `quay.io/rhoai` login (a robot token scoped to `quay.io/rhoai`) and a `registry.stage.redhat.io` login | [Prepare the hub](03-prepare-hub.md) |
-| A GitHub fine-grained token with **Contents: Read and write** on your catalog repository only, saved to a file | [Install the hub components](04-hub-components.md) |
 | A cert-manager ClusterIssuer on each ingress or combined site that issues publicly trusted certificates by **DNS-01** | [Join the site to the grid](06-join-grid.md) |
 | `cluster-admin` on every cluster | Every page |
 
@@ -58,4 +57,4 @@ You should see no output.
 
 - You have kubeconfig contexts with `cluster-admin` for the hub and the site.
 - Your tools check prints nothing.
-- You have the registry logins, the catalog token, and a DNS-01 ClusterIssuer on the site.
+- You have the registry logins and a DNS-01 ClusterIssuer on the site.

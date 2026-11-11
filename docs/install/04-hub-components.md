@@ -43,7 +43,8 @@ AI_GRID_GIT_TOKEN_FILE=CATALOG_TOKEN_FILE KEYCLOAK_NAMESPACE=tenant-idp KEYCLOAK
   bash ../library/apps/console/create-secrets.sh
 ```
 
-Replace `CATALOG_TOKEN_FILE` with the file that holds your catalog token. The script prints no secret value, and
+Replace `CATALOG_TOKEN_FILE` with the file that holds your catalog token, such as `~/.ai-grid/catalog-token`
+([set up your deployment repository](02-repositories.md#2-create-your-catalog-repository-and-its-token)). The script prints no secret value, and
 restarts the console to read the new Secrets. For every variable, and for a hub whose ingress certificate isn't
 publicly trusted, see
 [provider console](https://github.com/cfchase/ai-grid-cluster-gitops/blob/3ccbe609b841affcd02ce9d4f132f48baa5b27bc/docs/install/hub/05-console-and-model-delivery.md#provider-console).
