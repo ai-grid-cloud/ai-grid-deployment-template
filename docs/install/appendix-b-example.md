@@ -2,9 +2,7 @@
 
 This template is the deployment this guide was tested with on 2026-11-10, with its own names replaced by `REQUIRED-`
 placeholders and its site's files moved to `site-template/`: a hub on OpenShift 4.22.18 with ACM 2.17.4, and one
-combined site, `site-b`, on OpenShift 4.21.37 (6 nodes, CPU model only), on AWS. The full worked example, with its
-names in place, is [`cfchase/ai-grid-deployment-proto`](https://github.com/cfchase/ai-grid-deployment-proto); its
-catalog is [`cfchase/ai-grid-catalog-proto`](https://github.com/cfchase/ai-grid-catalog-proto).
+combined site, `site-b`, on OpenShift 4.21.37 (6 nodes, CPU model only), on AWS.
 
 ## What it chose
 
