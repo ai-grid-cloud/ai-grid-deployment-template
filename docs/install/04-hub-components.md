@@ -44,7 +44,7 @@ Replace `CATALOG_TOKEN_FILE` with the file that holds your catalog token, such a
 ([set up your deployment repository](02-repositories.md#2-create-your-catalog-repository-and-its-token)). The script prints no secret value, and
 restarts the console to read the new Secrets. For every variable, and for a hub whose ingress certificate isn't
 publicly trusted, see
-[provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/4aa1c997d86e88955e3e4ea3017e74bdaa100988/docs/install/hub/05-console-and-model-delivery.md#provider-console).
+[provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/hub/05-console-and-model-delivery.md#provider-console).
 
 ## 3. Verify
 

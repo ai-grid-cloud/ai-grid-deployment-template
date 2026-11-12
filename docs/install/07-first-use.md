@@ -3,7 +3,7 @@
 In this section you create an organization, deploy a model to the site, subscribe the organization's users to it,
 and call it as a tenant. The provider console writes the model and subscription to your catalog repository, and Argo
 CD delivers them to the site. To script these steps instead, see
-[call the console's API](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/4aa1c997d86e88955e3e4ea3017e74bdaa100988/docs/install/hub/05-console-and-model-delivery.md#call-the-consoles-api).
+[call the console's API](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/hub/05-console-and-model-delivery.md#call-the-consoles-api).
 
 ## 1. Sign in to the console
 
@@ -109,8 +109,8 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
    should see a short reply and `x-grid-site: SITE`.
 
 Tenants normally call with an API key, and create keys in the Org UI at `https://maas.SITE_APPS_DOMAIN/maas-portal`.
-For API keys, refusal checks and revoking a key, see [tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/4aa1c997d86e88955e3e4ea3017e74bdaa100988/docs/install/tenant-access.md). To remove what you created,
-see [operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/4aa1c997d86e88955e3e4ea3017e74bdaa100988/docs/install/operate.md#remove-a-subscription-model-or-organization).
+For API keys, refusal checks and revoking a key, see [tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/tenant-access.md). To remove what you created,
+see [operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/operate.md#remove-a-subscription-model-or-organization).
 
 ## Checkpoint
 
