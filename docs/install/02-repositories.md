@@ -3,6 +3,11 @@
 Your deployment repository starts with the template's tested choices. On this page you create your catalog
 repository, set the names that must be yours, check the result, and push it.
 
+If you're reinstalling with your existing repositories, skip cloning, naming your clusters and
+[creating your catalog repository and its token](#2-create-your-catalog-repository-and-its-token). From your
+`deployment` directory, run `make login` and `make prereqs`, then parts 4 and 5. Every command in them is safe to run
+again.
+
 ## 1. Clone your repository and log in to your clusters
 
 1. Clone your deployment repository:
@@ -173,7 +178,12 @@ Commit your clusters file and the files `scripts/set-inputs.sh` changed, and pus
 git add clusters.yaml root tenant-idp && git commit -m "deployment: set our names" && git push origin HEAD:main
 ```
 
-Run `git status` first if you changed anything else.
+Run `git status` first if you changed anything else. If git says there's nothing to commit, your repository is
+already set; push it:
+
+```sh
+git push origin HEAD:main
+```
 
 ## Checkpoint
 
