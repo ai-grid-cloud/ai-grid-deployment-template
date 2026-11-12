@@ -56,7 +56,7 @@ Use a chat model: a model without a chat template, such as OPT-125m, answers `40
 4. In **Clusters**, pick your site. Click **Next**.
 5. In **Review**, click **Deploy**.
 
-You should see the model in the **Models** list with status **Saved to Git**, and about 5 to 7 minutes later
+You should see the model in the **Models** list with status **Saved to Git**, and about 5 minutes later
 **Ready** and **Available**.
 
 ## 4. Subscribe the organization
@@ -68,7 +68,7 @@ You should see the model in the **Models** list with status **Saved to Git**, an
 5. Click **Add token limit**, keep the defaults (`1000` per `1` `hour`), and click **Save**.
 6. Click **Create subscription**.
 
-You should see the subscription with status **Pending**, and **Active** about 5 minutes later.
+You should see the subscription with status **Pending**, and **Active** about 2 minutes later.
 
 ## 5. Check the delivery
 
