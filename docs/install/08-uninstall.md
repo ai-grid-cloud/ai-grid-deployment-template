@@ -149,8 +149,9 @@ The site step does the following:
    console plugins whose backend is gone.
 7. Checks that your login still works and is `cluster-admin`.
 
-A site takes about 15 minutes, most of it removing the DataScienceCluster and the operators. The output ends with
-`== done`.
+A site takes 15 to 25 minutes, most of it removing the DataScienceCluster and the operators. The output ends with
+`== done`. Item 2 can print `warning: Submariner on SITE still present after 600s`; the run goes on, and item 5
+deletes Submariner's namespace.
 
 ## 4. Uninstall the hub
 
