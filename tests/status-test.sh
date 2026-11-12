@@ -118,10 +118,14 @@ appop() { # name sync health task-json...
   local n=$1 sy=$2 h=$3; shift 3; local IFS=,
   printf '{"metadata":{"name":"%s"},"status":{"sync":{"status":"%s"},"health":{"status":"%s"},"operationState":{"phase":"Running","message":"one or more synchronization tasks completed unsuccessfully. Retrying attempt #3","syncResult":{"resources":[%s]}}}}' "$n" "$sy" "$h" "$*"
 }
-task() { printf '{"group":"%s","kind":"%s","namespace":"x","name":"%s","status":"%s","message":"%s"}' "$@"; }
+task() { # group kind name status hookPhase message, as Argo CD records a sync task
+  printf '{"group":"%s","kind":"%s","namespace":"x","name":"%s","status":"%s","hookPhase":"%s","message":"%s"}' "$@"; }
 nomatch="No ManagedCluster matches any of the cluster predicate"
 pl=cluster.open-cluster-management.io
-echo "{\"items\":[$(appop rhoai OutOfSync Degraded "$(task $pl Placement p1 SyncFailed "$nomatch")" "$(task apps Deployment d1 Synced ok)"),$(appop odd OutOfSync Degraded "$(task $pl Placement p1 SyncFailed "$nomatch")" "$(task apps Deployment d2 SyncFailed boom)")]}" > "$W/apps.json"
+echo "{\"items\":[$(appop rhoai OutOfSync Degraded "$(task $pl Placement p1 Synced Failed "$nomatch")" \
+  "$(task $pl Placement p2 Synced Succeeded "placement created")" "$(task apps Deployment d1 Synced Succeeded ok)"),$(appop \
+  odd OutOfSync Degraded "$(task $pl Placement p1 Synced Failed "$nomatch")" "$(task apps Deployment d2 SyncFailed Failed boom)")]}" \
+  > "$W/apps.json"
 t "a sync retrying only on no-match Placements waits for a site" "^Waiting for a site to join \(expected until page 6\): rhoai$" "^  rhoai "
 t "  ... another failed task is a problem" "^  odd +OutOfSync +Degraded$"
 

@@ -52,7 +52,7 @@ apps=$(oc get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null |
       ([.status.resources[]? | select(.kind == "Placement") | "\(.namespace)/\(.name)" | select(IN($u[]))] as $waiting
        | [.status.resources[]? | select(.health != null and .health.status != "Healthy")
           | select((.kind == "Placement" and ("\(.namespace)/\(.name)" | IN($u[]))) | not)] as $other
-       | [.status.operationState.syncResult.resources[]? | select(.status == "SyncFailed")] as $failed
+       | [.status.operationState.syncResult.resources[]? | select(.hookPhase == "Failed" or .status == "SyncFailed")] as $failed
        | if .status.sync.status == "Synced" and ($waiting | length > 0) and ($other | length == 0)
          then "site"
          elif ($failed | length > 0) and all($failed[]; .kind == "Placement"
