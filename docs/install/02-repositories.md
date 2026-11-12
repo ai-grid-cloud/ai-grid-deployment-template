@@ -5,7 +5,8 @@ repository, set the names that must be yours, check the result, and push it.
 
 If you're reinstalling with your existing repositories, skip cloning, naming your clusters and
 [creating your catalog repository and its token](#2-create-your-catalog-repository-and-its-token). From your
-`deployment` directory, run `make login` and `make prereqs`, then parts 4 and 5. Every command in them is safe to run
+`deployment` directory, log in ([part 1, step 3](#1-clone-your-repository-and-log-in-to-your-clusters)), check your
+prerequisites ([part 3](#3-check-your-prerequisites)), then do parts 4 and 5. Every command in them is safe to run
 again.
 
 ## 1. Clone your repository and log in to your clusters
