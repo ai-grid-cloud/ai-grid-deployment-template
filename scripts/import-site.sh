@@ -3,7 +3,8 @@
 # import script at your pin (docs/acm/cluster-onboarding/import-managed-cluster.sh).
 # It prints the library script's summary, then, in a terminal, asks whether to
 # import, and on y runs it again with --yes. Without a terminal it only prints
-# the summary. With --yes it imports without asking.
+# the summary. With --yes it imports without asking. A site already joined and
+# available on the hub is left alone.
 #
 #   scripts/import-site.sh [NAME] [--yes] [other flags of the library script]
 #
@@ -17,6 +18,9 @@ if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then name=$(site_name "$1"); shift; else
 [ "$(cluster_field "$name" role)" != hub ] || { echo "error: $name is the hub" >&2; exit 1; }
 hub=$(hub_name)
 cluster_login_ok "$hub"; cluster_login_ok "$name"
+# Already joined and available on this hub: nothing for the import to do.
+state=$(KUBECONFIG=$(cluster_kubeconfig "$hub") oc get managedcluster "$name" -o jsonpath='{.status.conditions[?(@.type=="ManagedClusterJoined")].status} {.status.conditions[?(@.type=="ManagedClusterConditionAvailable")].status}' 2>/dev/null || true)
+if [ "$state" = "True True" ]; then echo "$name is already imported; nothing to do."; exit 0; fi
 library_dir "$here/.."
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 merge_kubeconfigs "$hub" "$name" "$tmp/kubeconfig"

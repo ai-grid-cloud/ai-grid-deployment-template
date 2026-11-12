@@ -29,7 +29,12 @@ git -c init.defaultBranch=main -C "$T/lib" init -q && git -C "$T/lib" add -A &&
 # The stub oc: logins work; config goes to the real oc (merge_kubeconfigs).
 cat > "$T/bin/oc" <<STUB
 #!/bin/bash
-case "\$1" in whoami) echo admin ;; config) exec "$REAL_OC" "\$@" ;; *) echo "stub oc: \$*" >&2; exit 2 ;; esac
+case "\$1" in
+  whoami) echo admin ;;
+  config) exec "$REAL_OC" "\$@" ;;
+  get) [ -f "$T/mc-state" ] || exit 1; cat "$T/mc-state" ;;
+  *) echo "stub oc: \$*" >&2; exit 2 ;;
+esac
 STUB
 chmod +x "$T/bin/oc"
 
@@ -49,5 +54,11 @@ PROMPT=1 t "prompt: anything else doesn't import" 0 "Not imported" "IMPORTED" $'
 PROMPT=1 t "prompt: no answer doesn't import" 0 "Not imported" "IMPORTED" ""
 t "--yes skips the prompt" 0 "IMPORTED" "Import site-b now" "" --yes
 t "a name and --yes" 0 "--cluster-name site-b --yes" "Import site-b now" "" site-b --yes
+
+printf 'True True' > "$T/mc-state"
+t "already joined and available: nothing to do" 0 "site-b is already imported; nothing to do" "summary for" "" --yes
+printf 'True False' > "$T/mc-state"
+t "joined but not available: runs the import" 0 "IMPORTED" "nothing to do" "" --yes
+rm "$T/mc-state"
 
 echo "import-site tests: $((total-fails)) ok, $fails failed"; exit "$fails"

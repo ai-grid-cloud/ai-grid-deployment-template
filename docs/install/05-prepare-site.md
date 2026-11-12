@@ -61,7 +61,8 @@ scripts/import-site.sh
 ```
 
 It runs the library's import script, which runs `clusteradm` against both clusters. It prints a summary of what it
-will do and asks `Import SITE now? [y/N]`; read the summary and answer `y`. Any other answer changes nothing.
+will do and asks `Import SITE now? [y/N]`; read the summary and answer `y`. Any other answer changes nothing. Run
+again for a site that's already joined and available, it says `already imported; nothing to do`.
 
 The site joins ACM, and the hub's Argo CD registers it. The hub then prepares the site: it creates empty namespaces
 for OpenShift AI and the grid, delivers the registry logins, labels the Submariner gateway nodes and starts
