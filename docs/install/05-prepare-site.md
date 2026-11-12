@@ -38,17 +38,7 @@ You should then see no DataScienceCluster, GridNetwork, GridSite or LLMInference
 oc --context "$SITE_CONTEXT" get datasciencecluster,gridnetworks,gridsites,llminferenceservices -A
 ```
 
-## 1. Add a break-glass admin
-
-```sh
-oc config use-context "$SITE_CONTEXT"
-scripts/add-htpasswd-admin.sh --kubeconfig "$SITE_KUBECONFIG" --password-file SITE_ADMIN_PASSWORD_FILE
-```
-
-Replace `SITE_ADMIN_PASSWORD_FILE` with a path outside any repository. Sign in once as `admin` with the `htpasswd`
-provider to confirm it.
-
-## 2. Check the site's infrastructure
+## 1. Check the site's infrastructure
 
 ```sh
 scripts/check-prerequisites.sh --step spoke --context "$SITE_CONTEXT"
@@ -59,7 +49,7 @@ You should see `OK` for `OpenShift 4.21 or later` and `default StorageClass`, an
 `NXDOMAIN`. The hub delivers the registry logins and image mirror once the site is imported. For GPU sites, see
 [GPU operator and NFD](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/spokes/openshift-ai.md#nvidia-gpu-operator-and-node-feature-discovery).
 
-## 3. Import the site into ACM
+## 2. Import the site into ACM
 
 `scripts/import-site.sh` runs the library's import script, which runs `clusteradm` against both clusters. It prints a
 summary and changes nothing without `--yes`:
@@ -74,7 +64,7 @@ Read the summary, then run the same command with `--yes` added.
 The site joins ACM, and the hub's Argo CD registers it. Nothing AI Grid installs yet: that waits for the labels you
 add on the next page.
 
-## 4. Check the import
+## 3. Check the import
 
 ```sh
 oc --context "$HUB_CONTEXT" get managedcluster "$SITE"
@@ -87,4 +77,3 @@ site, within a few minutes.
 ## Checkpoint
 
 - The site's ManagedCluster is joined and available, and its Argo CD cluster Secret exists on the hub.
-- You can sign in to the site as the break-glass admin.

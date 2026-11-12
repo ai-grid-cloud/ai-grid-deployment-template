@@ -18,7 +18,7 @@ mkbin() { # dir: a bin dir with every tool stubbed
   local b=$1; mkdir -p "$b"; ln -sf "$PY" "$b/python3"
   # git answers --version itself and passes rev-parse on to the real git.
   printf '#!/bin/bash\n[ "$1" = --version ] && { echo "git version 1.2.3"; exit; }\nexec %s "$@"\n' "$GIT" > "$b/git"
-  for t in kubectl jq curl openssl base64 htpasswd clusteradm make; do
+  for t in kubectl jq curl openssl base64 clusteradm make; do
     printf '#!/bin/bash\necho "%s 1.2.3"\n' "$t" > "$b/$t"
   done
   printf '#!/bin/bash\necho v5.8.3\n' > "$b/kustomize"

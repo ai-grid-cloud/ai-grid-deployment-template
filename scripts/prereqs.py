@@ -41,7 +41,6 @@ TOOLS = [
     ("openssl", ["openssl", "version"], "used by the setup scripts and in first use"),
     ("base64", None, "used by the setup scripts and in first use"),
     ("python3", ["python3", "--version"], "reads cluster state in the setup scripts"),
-    ("htpasswd", None, "from httpd-tools: creates the break-glass admin login"),
     ("clusteradm", ["clusteradm", "version"], "imports the site into ACM"),
     ("make", ["make", "--version"], "runs make prereqs"),
 ]

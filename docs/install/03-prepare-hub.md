@@ -15,23 +15,7 @@ current context is the hub.
 If the cluster ran an AI Grid hub before, uninstall that hub first
 ([uninstall](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/operate.md#uninstall)).
 
-## 1. Add a break-glass admin
-
-Add an htpasswd admin before anything else. If the hub's external sign-in breaks later, it's the only way back in:
-
-```sh
-oc config use-context "$HUB_CONTEXT"
-scripts/add-htpasswd-admin.sh --kubeconfig "$HUB_KUBECONFIG" --password-file HUB_ADMIN_PASSWORD_FILE
-```
-
-Replace `HUB_ADMIN_PASSWORD_FILE` with a path outside any repository, such as `~/.ai-grid/hub-admin`. The script
-generates a password into that file if it doesn't exist and never prints it.
-
-You should see the script confirm the sign-in. Sign in once in the web console as `admin` with the `htpasswd`
-provider. Never delete an identity provider, or the namespace that runs it, that your platform's sign-in depends on
-([cluster sign-in and admins](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/hub/00-platform-services.md#cluster-sign-in-and-admins)).
-
-## 2. Check the infrastructure
+## 1. Check the infrastructure
 
 ```sh
 RHOAI_QUAY_PULL_SECRET_FILE=QUAY_AUTH_FILE scripts/check-prerequisites.sh --step hub --context "$HUB_CONTEXT"
@@ -54,7 +38,7 @@ MISSING  object storage                           Secret open-cluster-management
 `MISSING object storage` is expected: S4 installs it on the next page. For any other `MISSING` line, see
 [troubleshooting](troubleshooting.md#the-hub-check-prints-missing).
 
-## 3. Install OpenShift GitOps and apply your root
+## 2. Install OpenShift GitOps and apply your root
 
 `scripts/bootstrap-hub.sh` checks your deployment, installs OpenShift GitOps, applies `root/` once, and seeds
 the registry logins that a Policy copies to every site. It reads them from the auth file and never prints them.
@@ -66,7 +50,7 @@ KUBECONFIG="$HUB_KUBECONFIG" RHOAI_QUAY_AUTH_FILE=QUAY_AUTH_FILE scripts/bootstr
 You should see `Bootstrapped.` at the end. The prerequisites check it runs first reports the items that the hub
 components install as missing; that's expected.
 
-## 4. Check that Argo CD follows your repository
+## 3. Check that Argo CD follows your repository
 
 ```sh
 oc --context "$HUB_CONTEXT" get applications.argoproj.io -n openshift-gitops deployment-root
@@ -82,6 +66,5 @@ You should see `deployment-root` `Synced`, and the ApplicationSet conditions wit
 
 ## Checkpoint
 
-- You can sign in to the hub as the break-glass admin.
 - The hub check shows `OK` for everything except object storage.
 - `deployment-root` is `Synced`, and the root ApplicationSet `apps` reports no error.

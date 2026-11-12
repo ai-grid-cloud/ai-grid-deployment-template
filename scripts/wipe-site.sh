@@ -3,8 +3,7 @@
 # operators) so the cluster can join a new hub from scratch.
 #
 # Run it only after the site has left its old hub (labels removed, ManagedCluster
-# deleted), and only after add-htpasswd-admin.sh has given the cluster a sign-in
-# that doesn't depend on the platform's Keycloak.
+# deleted).
 #
 # Order: models while KServe still
 # runs; MaaS tenant objects before anything they need; the DSC, then
@@ -57,9 +56,6 @@ contains() { case " $1 " in *" $2 "*) return 0 ;; esac; return 1; }
 for ns in $NAMESPACES; do contains "$PROTECTED_NAMESPACES" "$ns" && die "namespace $ns is protected"; done
 for p in $OPERATOR_PACKAGES; do contains "$PROTECTED_PACKAGES" "$p" && die "package $p is protected"; done
 
-# The htpasswd sign-in must exist before anything is removed.
-k get oauth cluster -o jsonpath='{range .spec.identityProviders[*]}{.type}{"\n"}{end}' | grep -qx HTPasswd ||
-  die "no HTPasswd identity provider: run add-htpasswd-admin.sh first"
 k get managedcluster >/dev/null 2>&1 && die "this cluster is an ACM hub; wipe-site.sh is for sites"
 $assume_detached || { k get ns open-cluster-management-agent >/dev/null 2>&1 && die "the cluster is still managed by a hub: detach it first"; }
 

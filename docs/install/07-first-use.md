@@ -7,10 +7,10 @@ CD delivers them to the site. To script these steps instead, see
 
 ## 1. Sign in to the console
 
-1. Open `https://CONSOLE_HOST` (from [install the hub components](04-hub-components.md#3-verify)), choose `htpasswd`,
-   and sign in as `admin`.
+1. Open `https://CONSOLE_HOST` (from [install the hub components](04-hub-components.md#3-verify)) and sign in as a
+   user with `cluster-admin` on the hub.
 
-   You should see the **AI Grid** page, with your user shown as `admin (provider admin)`.
+   You should see the **AI Grid** page, with your user name followed by `(provider admin)`.
 
 2. Click **Clusters**. You should see your site with AI Grid status **Provisioned**, its role and its location. The
    hub (`local-cluster`) shows **Not added**, which is expected.

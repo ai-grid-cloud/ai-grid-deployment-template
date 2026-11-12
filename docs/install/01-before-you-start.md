@@ -46,7 +46,6 @@ GridSite stays `Connecting` ([site networking](https://github.com/ai-grid-cloud/
 - `git`: clones and pushes your repositories.
 - `jq`, `curl`, `openssl` and `base64`: used by the setup scripts and in first use.
 - `python3`: reads cluster state in the setup scripts.
-- `htpasswd`, from `httpd-tools`: creates the break-glass admin login.
 - `clusteradm`: imports the site into ACM.
 - `make`: runs the prerequisites check.
 
