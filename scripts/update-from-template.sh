@@ -5,15 +5,26 @@
 # template commit, with no shared history. The first update finds that commit
 # (the template commit whose files equal your first commit's) and records it as
 # merged, so the merge sees only the template's changes since then and yours.
-# It changes nothing until your working tree is clean, and never pushes. After
-# the merge it runs check-deployment.sh, and if the check fails it says not to
-# push.
+# When the template's copy of this script differs from yours, it runs the
+# template's instead, so a fix to the updater applies on the update that
+# brings it. It changes nothing until your working tree is clean, and never
+# pushes. After the merge it runs check-deployment.sh, and if the check fails
+# it says not to push.
 set -euo pipefail
 url=${TEMPLATE_URL:-https://github.com/ai-grid-cloud/ai-grid-deployment-template.git}
-cd "$(dirname "$0")/.."
+self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+if [ -n "${UPDATE_FROM_TEMPLATE_LATEST:-}" ]; then rm -f "$0"; cd "$UPDATE_FROM_TEMPLATE_LATEST"; else cd "$(dirname "$0")/.."; fi
 [ -z "$(git status --porcelain)" ] || { echo "error: commit or stash your changes first" >&2; exit 1; }
 if git remote get-url template >/dev/null 2>&1; then git remote set-url template "$url"; else git remote add template "$url"; fi
 git fetch -q template main
+if [ -z "${UPDATE_FROM_TEMPLATE_LATEST:-}" ]; then
+  latest=$(mktemp)
+  if git show template/main:scripts/update-from-template.sh > "$latest" 2>/dev/null && ! cmp -s "$latest" "$self"; then
+    echo "Running the template's latest update script."
+    UPDATE_FROM_TEMPLATE_LATEST=$(pwd) exec bash "$latest" "$@"
+  fi
+  rm -f "$latest"
+fi
 if ! git merge-base HEAD template/main >/dev/null; then
   root=$(git rev-list --max-parents=0 HEAD | tail -n1)
   tree=$(git rev-parse "$root^{tree}")

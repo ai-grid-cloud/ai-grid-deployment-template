@@ -39,6 +39,17 @@ t "later update" 0 "Merged the template" run
 t "later update takes the change" 0 "^v3$" cat "$mine/guide.md"
 echo "mine too" > "$mine/guide.md"; g -C "$mine" commit -qam "my edit"; echo v4 > "$tpl/guide.md"; g -C "$tpl" commit -qam v4
 t "a conflict stops with the fix" 1 "conflict.*guide.md" run
+(cd "$mine" && git merge --abort)
+
+# A fix to the updater reaches you on this update: make update runs the
+# template's latest scripts/update-from-template.sh, not your older copy.
+sed -i.bak 's#^set -euo pipefail$#&\necho "template updater marker"#' "$tpl/scripts/update-from-template.sh"
+rm "$tpl/scripts/update-from-template.sh.bak"; echo v5 > "$tpl/guide.md"; g -C "$tpl" commit -qam "a newer updater"
+g -C "$mine" checkout -q -- . ; echo "mine" > "$mine/guide.md"; g -C "$mine" commit -qam "mine"
+t "runs the template's latest updater" 1 "Running the template's latest update script" run
+t "  ... which is the template's" 0 "^template updater marker$" cat "$T/last"
+t "  ... once" 0 "^1$" grep -c "Running the template's latest" "$T/last"
+(cd "$mine" && git merge --abort)
 
 # With the real root/, rendered against a local copy of the library (lib2) so
 # check-deployment.sh runs offline. Both repositories sit at the same depth, so
