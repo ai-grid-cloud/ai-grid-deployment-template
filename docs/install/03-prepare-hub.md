@@ -13,7 +13,7 @@ Replace `HUB_CONTEXT_NAME` with the hub's kubeconfig context, and `HUB_KUBECONFI
 current context is the hub.
 
 If the cluster ran an AI Grid hub before, uninstall that hub first
-([uninstall](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/operate.md#uninstall)).
+([uninstall](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/operate.md#uninstall)).
 
 ## 1. Check the infrastructure
 
