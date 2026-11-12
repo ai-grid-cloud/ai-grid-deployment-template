@@ -49,40 +49,29 @@ localize() { # root dir: the library from lib2 at its HEAD
   sed -i.bak -E -e "s#^  - https://github.com/[^ ]+//bootstrap/hub\?ref=[0-9a-f]+#  - ../../lib2/bootstrap/hub#" \
     -e "s/[0-9a-f]{40}/$(pin)/g" "$1/kustomization.yaml"; rm "$1/kustomization.yaml.bak"
 }
-fill() { # file...: your values in place of the REQUIRED- placeholders
-  sed -i.bak -e 's#REQUIRED-deploymentRepoURL$#https://github.com/acme/deploy.git#' \
-    -e 's#REQUIRED-catalogRepoURL$#https://github.com/acme/catalog.git#' \
-    -e 's#REQUIRED-idpIssuerURL$#https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants#' "$@"
-  for f in "$@"; do rm "$f.bak"; done
-}
 runl() { (cd "$mine" && TEMPLATE_URL="$tpl" LIBRARY="$lib2" bash scripts/update-from-template.sh); }
 
-# (a) A repository from before root/inputs.yaml (fb69280), its values in
-# kustomization.yaml, takes the template's move to inputs.yaml.
-tpl="$T/tpl-old"; mkdir -p "$tpl/root"; cp -R "$SRC/scripts" "$tpl/"
-for f in kustomization.yaml self.yaml; do git -C "$SRC" show "fb69280^:root/$f" > "$tpl/root/$f"; done
-localize "$tpl/root"; g -C "$tpl" init -q && g -C "$tpl" add -A && g -C "$tpl" commit -qm "before inputs.yaml"
-mine="$T/mine-old"; mkdir -p "$mine"; cp -R "$tpl/scripts" "$tpl/root" "$mine/"
+# A repository from the template with its inputs set: root/inputs.env is its
+# own file, which the template doesn't have.
+tpl="$T/tpl-root"; mkdir -p "$tpl"; cp -R "$SRC/scripts" "$SRC/root" "$tpl/"
+localize "$tpl/root"; g -C "$tpl" init -q && g -C "$tpl" add -A && g -C "$tpl" commit -qm "root"
+mine="$T/mine-root"; mkdir -p "$mine"; cp -R "$tpl/scripts" "$tpl/root" "$mine/"
 g -C "$mine" init -q && g -C "$mine" add -A && g -C "$mine" commit -qm "Initial commit"
-fill "$mine/root/kustomization.yaml" "$mine/root/self.yaml"; g -C "$mine" commit -qam "set our names"
-rm -rf "$tpl/root"; cp -R "$SRC/root" "$tpl/"; localize "$tpl/root"; g -C "$tpl" add -A && g -C "$tpl" commit -qm "inputs.yaml"
-t "old layout: the merge has no conflict and the check passes" 0 "every repository is an input" runl
-t "  ... carries your values into inputs.yaml" 0 "&catalogRepoURL https://github.com/acme/catalog.git$" cat "$mine/root/inputs.yaml"
-t "  ... and the deployment URL" 0 "&deploymentRepoURL https://github.com/acme/deploy.git$" cat "$mine/root/inputs.yaml"
-t "  ... in its own commit" 0 "^root: move your inputs to inputs.yaml$" g -C "$mine" log -1 --format=%s
-t "  ... resets kustomization.yaml to the template's" 0 "^same$" \
-  bash -c 'cmp -s "$0" "$1" && echo same' "$tpl/root/kustomization.yaml" "$mine/root/kustomization.yaml"
+printf '%s\n' deploymentRepoURL=https://github.com/acme/deploy.git deploymentRevision=main \
+  catalogRepoURL=https://github.com/acme/catalog.git catalogRevision=main \
+  idpIssuerURL=https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants > "$mine/root/inputs.env"
+g -C "$mine" add -A && g -C "$mine" commit -qm "set our names"
 
-# (b) After that, a template commit that moves the library pin merges cleanly.
+# A template commit that moves the library pin merges cleanly.
 g -C "$lib2" commit -q --allow-empty -m "new pin"
 localize "$tpl/root"; g -C "$tpl" commit -qam "move the pin"
 t "a pin move merges with your inputs set, and checks" 0 "every repository is an input" runl
 t "  ... takes the new pin" 0 "libraryRevision: $(pin)" cat "$mine/root/kustomization.yaml"
-t "  ... keeps your inputs" 0 "&catalogRepoURL https://github.com/acme/catalog.git$" cat "$mine/root/inputs.yaml"
-t "  ... with no second move" 0 "^Merge the template's main$" g -C "$mine" log -1 --format=%s
+t "  ... keeps your inputs" 0 "^catalogRepoURL=https://github.com/acme/catalog.git$" cat "$mine/root/inputs.env"
+t "  ... in the merge commit only" 0 "^Merge the template's main$" g -C "$mine" log -1 --format=%s
 
-# A merge that leaves a placeholder says not to push.
-sed -i.bak 's/^  value: &idpIssuerURL .*/  value: \&idpIssuerURL REQUIRED-idpIssuerURL/' "$mine/root/inputs.yaml"; rm "$mine/root/inputs.yaml.bak"
+# A merge that leaves an input unset says not to push.
+sed -i.bak 's#^idpIssuerURL=.*#idpIssuerURL=#' "$mine/root/inputs.env"; rm "$mine/root/inputs.env.bak"
 g -C "$mine" commit -qam "unset the issuer"; echo "# note" >> "$tpl/root/self.yaml"; g -C "$tpl" commit -qam "a template change"
 t "a failing check says don't push" 1 "DON'T PUSH" runl
 

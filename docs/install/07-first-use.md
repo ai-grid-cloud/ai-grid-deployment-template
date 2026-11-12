@@ -134,7 +134,7 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
    ```
 
    Replace `SUBSCRIPTION_ID` with the subscription you created, and `MODEL_NAME` with the model's resource name. It
-   gets the user's token from your tenant Keycloak (the `idpIssuerURL` in `root/inputs.yaml`), calls the site's MaaS
+   gets the user's token from your tenant Keycloak (the `idpIssuerURL` in `root/inputs.env`), calls the site's MaaS
    hostname, and prints no password or token. You should see a short reply, `HTTP 200` and `x-grid-site: SITE`.
 
 Tenants normally call with an API key, and create keys in the Org UI at `https://maas.SITE_APPS_DOMAIN/maas-portal`.

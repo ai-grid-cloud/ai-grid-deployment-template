@@ -50,8 +50,8 @@ esac
 STUB
 chmod +x "$T/bin/oc" "$T/bin/curl"
 
-D="$T/repo"; mkdir -p "$D/root"; cp -R "$SRC/scripts" "$D/"; cp "$SRC/root/kustomization.yaml" "$SRC/root/inputs.yaml" "$D/root/"
-sed -i.bak 's#REQUIRED-idpIssuerURL#https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants#' "$D/root/inputs.yaml"
+D="$T/repo"; mkdir -p "$D/root"; cp -R "$SRC/scripts" "$D/"; cp "$SRC/root/kustomization.yaml" "$D/root/"
+printf 'catalogRevision=main\nidpIssuerURL=https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants\n' > "$D/root/inputs.env"
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
 for n in hub site-b; do mkdir -p "$D/.config/$n"; : > "$D/.config/$n/kubeconfig"; done
 printf 'FAKE_password' > "$T/pw"
@@ -61,14 +61,14 @@ t "prints the reply" 0 "^Hello there, nice to meet.$" "${ARGS[@]}"
 t "  ... the HTTP status" 0 "^HTTP 200$" "${ARGS[@]}"
 t "  ... and the site that served it" 0 "^x-grid-site: site-b$" "${ARGS[@]}"
 env PATH="$T/bin:$PATH" STUB_DIR="$T" "$D/scripts/tenant-call.sh" "${ARGS[@]}" >/dev/null 2>&1; cp "$T/curl.log" "$T/calls"
-c "token from the issuer in inputs.yaml" 0 "curl .*https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants/protocol/openid-connect/token" cat "$T/calls"
+c "token from the issuer in inputs.env" 0 "curl .*https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants/protocol/openid-connect/token" cat "$T/calls"
 c "call to the site's MaaS host" 0 "https://maas.apps.site-b.example.com/v1/chat/completions" cat "$T/calls"
 c "no secret on curl's command line" 0 "^clean$" bash -c 'grep -q FAKE_ "$0" && echo leaked || echo clean' "$T/calls"
 touch "$T/bad-login"
 t "a refused login says why" 1 "the IdP gave no token for alice: Invalid user credentials" "${ARGS[@]}"
 rm "$T/bad-login"
 t "missing arguments: usage" 2 "usage: tenant-call.sh" --user alice
-sed -i.bak 's#^  value: &idpIssuerURL .*#  value: \&idpIssuerURL REQUIRED-idpIssuerURL#' "$D/root/inputs.yaml"
-t "an unset issuer points to set-inputs.sh" 1 "idpIssuerURL isn't set in root/inputs.yaml" "${ARGS[@]}"
+sed -i.bak 's#^idpIssuerURL=.*#idpIssuerURL=#' "$D/root/inputs.env"
+t "an unset issuer points to set-inputs.sh" 1 "idpIssuerURL isn't set in root/inputs.env" "${ARGS[@]}"
 
 echo "tenant-call tests: $((total-fails)) ok, $fails failed"; exit "$fails"

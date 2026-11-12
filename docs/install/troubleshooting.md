@@ -5,7 +5,7 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 
 ## `check-deployment.sh` reports `unset inputs` or `placeholders left in your files`
 
-**Cause:** an input in `root/inputs.yaml`, or a value in another file, is still a `REQUIRED-NAME` placeholder.
+**Cause:** an input in `root/inputs.env` is empty, or a value in another file is still a `REQUIRED-NAME` placeholder.
 
 **Fix:** set each one it names ([set your names](02-repositories.md#4-set-your-names);
 [inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/appendix-a-inputs.md#inputs)), and run the check again.
@@ -42,7 +42,7 @@ make bootstrap ALLOW_GENERIC_LOGIN=1
 
 **Cause:** your root's `values` don't set input `NAME`, or set it empty or with `"`, `'`, `\` or `@`.
 
-**Fix:** set it in `root/inputs.yaml` if it's one of yours, or in `root/kustomization.yaml` ([inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/appendix-a-inputs.md#inputs)), check it, and push:
+**Fix:** set it in `root/inputs.env` if it's one of yours, or in `root/kustomization.yaml` ([inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/appendix-a-inputs.md#inputs)), check it, and push:
 
 ```sh
 scripts/check-deployment.sh

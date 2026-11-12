@@ -1,5 +1,6 @@
 # deployment-root: syncs root/ from this repository, so the root ApplicationSet
-# follows git after the library's bootstrap-hub.sh applies it once. No pruning:
+# follows git after bootstrap-hub.sh applies it once. Its repoURL and
+# targetRevision come from inputs.env (kustomization.yaml). No pruning:
 # removing the root must never cascade to the hub's components.
 apiVersion: argoproj.io/v1alpha1
 kind: Application

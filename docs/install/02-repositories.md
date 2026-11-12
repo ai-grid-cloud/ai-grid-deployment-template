@@ -143,19 +143,20 @@ scripts/set-inputs.sh CATALOG_REPO_URL
 ```
 
 Replace `CATALOG_REPO_URL` with your catalog repository's URL, such as
-`https://github.com/my-org/ai-grid-catalog.git`. The script replaces only these `REQUIRED-` placeholders, reads the
-apps domains through your cluster logins, prints each value it sets, and then runs `scripts/check-deployment.sh`:
+`https://github.com/my-org/ai-grid-catalog.git`. The script reads the apps domains through your cluster logins,
+prints each value it sets, and then runs `scripts/check-deployment.sh`:
 
 | File | Value | Set to |
 |---|---|---|
-| `root/inputs.yaml` | `deploymentRepoURL` | Your deployment repository's URL, from `git remote get-url origin` |
-| `root/inputs.yaml` | `catalogRepoURL` | `CATALOG_REPO_URL` |
-| `root/inputs.yaml` | `idpIssuerURL` | `https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants`, with the hub's apps domain |
-| `root/self.yaml` | `repoURL` | Your deployment repository's URL |
+| `root/inputs.env` | `deploymentRepoURL` | Your deployment repository's URL, from `git remote get-url origin` |
+| `root/inputs.env` | `deploymentRevision`, `catalogRevision` | `main` |
+| `root/inputs.env` | `catalogRepoURL` | `CATALOG_REPO_URL` |
+| `root/inputs.env` | `idpIssuerURL` | `https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants`, with the hub's apps domain |
 | `tenant-idp/manifests/settings.yaml` | `portalRedirectURI` | `https://maas.SITE_APPS_DOMAIN/*`, with the apps domain of the first `combined` or `ingress` site |
 
-The `REQUIRED-libraryRepoURL` and `REQUIRED-libraryRevision` in the root's `op: test` lines stay: they check the
-library's files, not yours. A value that's already set is kept, so you can run the script again.
+`root/inputs.env` is yours: the template doesn't have it, so `make update` never changes it.
+`root/kustomization.yaml` copies its values over the root's `REQUIRED-` placeholders; leave those. A value that's
+already set is kept, so you can run the script again.
 
 You should see `root renders; every input is set; every repository is an input.` at the end. If you see
 `unset inputs:` or `placeholders left in your files:`, set the values it names and run `scripts/check-deployment.sh`.

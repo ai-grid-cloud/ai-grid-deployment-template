@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for scripts/set-inputs.sh against a copy of this repository's root/ and
+# Tests for scripts/set-inputs.sh and root/inputs.env against a copy of this repository's root/ and
 # tenant-idp/, a stub oc for the apps domains, and the library at the pin (the
 # copy's root takes it from the local checkout, so nothing is fetched).
 set -Eeuo pipefail
@@ -56,40 +56,54 @@ YAML
 }
 
 d=$(repo ssh git@github.com:acme/deploy.git)
-cp "$d/root/kustomization.yaml" "$T/kustomization-before"
+cp "$d/root/kustomization.yaml" "$T/kustomization-before"; cp "$d/root/self.yaml" "$T/self-before"
+t "without inputs.env the check names set-inputs.sh" 1 "root/inputs.env is missing: run scripts/set-inputs.sh" \
+  env PATH="$T/bin:$PATH" "$d/scripts/check-deployment.sh"
 t "sets the values and checks" 0 "every repository is an input" \
   env PATH="$T/bin:$PATH" "$d/scripts/set-inputs.sh" git@github.com:acme/catalog.git
-k="$d/root/inputs.yaml"
-check "deploymentRepoURL from origin, as https" grep -q '&deploymentRepoURL https://github.com/acme/deploy.git$' "$k"
-check "catalogRepoURL from the argument, as https" grep -q '&catalogRepoURL https://github.com/acme/catalog.git$' "$k"
-check "idpIssuerURL from the hub" grep -q '&idpIssuerURL https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants$' "$k"
-check "self.yaml repoURL" grep -q 'repoURL: https://github.com/acme/deploy.git$' "$d/root/self.yaml"
+k="$d/root/inputs.env"
+check "deploymentRepoURL from origin, as https" grep -qx 'deploymentRepoURL=https://github.com/acme/deploy.git' "$k"
+check "deploymentRevision main" grep -qx 'deploymentRevision=main' "$k"
+check "catalogRepoURL from the argument, as https" grep -qx 'catalogRepoURL=https://github.com/acme/catalog.git' "$k"
+check "catalogRevision main" grep -qx 'catalogRevision=main' "$k"
+check "idpIssuerURL from the hub" grep -qx 'idpIssuerURL=https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants' "$k"
 check "portalRedirectURI from the first combined or ingress site" \
   grep -q 'portalRedirectURI: https://maas.apps.site-c.example.com/\*$' "$d/tenant-idp/manifests/settings.yaml"
-check "kustomization.yaml and its op: test lines untouched" cmp -s "$T/kustomization-before" "$d/root/kustomization.yaml"
+check "kustomization.yaml untouched" cmp -s "$T/kustomization-before" "$d/root/kustomization.yaml"
+check "self.yaml untouched" cmp -s "$T/self-before" "$d/root/self.yaml"
 
-# inputs.yaml renders the same root as the values written straight into
-# kustomization.yaml's placeholders (the layout before inputs.yaml).
-old="$T/old-root"; cp -R "$d/root" "$old"
-python3 - "$old/kustomization.yaml" <<'PY'
-import sys
-f = sys.argv[1]; s = open(f).read()
-s = s[:s.index("  # Your inputs, replacing")]
+# inputs.env renders the same root as the values written straight into the
+# placeholders of kustomization.yaml and self.yaml (the layout before inputs).
+old="$T/old-root"; cp -R "$d/root" "$old"; rm "$old/inputs.env"
+python3 - "$old" <<'PY2'
+import os, sys
+d = sys.argv[1]
 vals = {"deploymentRepoURL": "https://github.com/acme/deploy.git", "catalogRepoURL": "https://github.com/acme/catalog.git",
         "idpIssuerURL": "https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants"}
-out = []
-for line in s.split("\n"):
-    if "op: test" not in line:
-        for n, v in vals.items():
-            line = line.replace("REQUIRED-" + n, v)
-    out.append(line)
-open(f, "w").write("\n".join(out))
-PY
-rm "$old/inputs.yaml"
-check "inputs.yaml renders byte for byte as values in kustomization.yaml" cmp -s <(oc kustomize "$d/root" || echo "new root failed") <(oc kustomize "$old" || echo "old root failed")
-t "a second run keeps the values" 0 "kept +root/inputs.yaml: catalogRepoURL is already set" \
+for name in ("kustomization.yaml", "self.yaml"):
+    f = os.path.join(d, name); s = open(f).read()
+    if "configMapGenerator:" in s:
+        s = s[:s.index("configMapGenerator:")]
+    out = []
+    for line in s.split("\n"):
+        if "op: test" not in line:
+            for n, v in vals.items():
+                line = line.replace("REQUIRED-" + n, v)
+        out.append(line)
+    open(f, "w").write("\n".join(out))
+PY2
+check "inputs.env renders byte for byte as values in the root's files" cmp -s <(oc kustomize "$d/root" || echo "new root failed") <(oc kustomize "$old" || echo "old root failed")
+t "a second run keeps the values" 0 "kept +root/inputs.env: catalogRepoURL is already set" \
   env PATH="$T/bin:$PATH" "$d/scripts/set-inputs.sh" https://github.com/acme/other.git
-check "a second run changes nothing" grep -q '&catalogRepoURL https://github.com/acme/catalog.git$' "$k"
+check "a second run changes nothing" grep -qx 'catalogRepoURL=https://github.com/acme/catalog.git' "$k"
+sed -i.bak 's#^catalogRevision=.*#catalogRevision=release#' "$k"; rm "$k.bak"
+t "a third run keeps a revision you changed" 0 "kept +root/inputs.env: catalogRevision is already set" \
+  env PATH="$T/bin:$PATH" "$d/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+check "  ... and renders it" grep -q 'catalogRevision: release' <(oc kustomize "$d/root")
+sed -i.bak 's#^idpIssuerURL=.*#idpIssuerURL=#' "$k"; rm "$k.bak"
+t "an empty value is unset" 1 "unset inputs: idpIssuerURL" env PATH="$T/bin:$PATH" "$d/scripts/check-deployment.sh"
+sed -i.bak '/^idpIssuerURL=/d' "$k"; rm "$k.bak"
+t "a missing value fails the render" 1 "idpIssuerURL" env PATH="$T/bin:$PATH" "$d/scripts/check-deployment.sh"
 
 d=$(repo https https://user@github.com/acme/deploy)
 t "https origin: credentials dropped, .git added" 0 "deploymentRepoURL = https://github.com/acme/deploy.git$" \

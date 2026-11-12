@@ -5,7 +5,7 @@
 #   scripts/tenant-call.sh --user USER --password-file FILE --subscription SUB --model MODEL
 #                          [--prompt TEXT] [--site NAME]
 #
-# The IdP issuer and client come from root/inputs.yaml and root/kustomization.yaml,
+# The IdP issuer and client come from root/inputs.env and root/kustomization.yaml,
 # the client secret from the hub (through its login), and the MaaS host,
 # maas.APPS_DOMAIN, from the site (the only site unless --site names one). The
 # password, client secret and token stay in files; nothing prints them. It
@@ -30,8 +30,8 @@ done
 [ -n "$user" ] && [ -n "$pwfile" ] && [ -n "$sub" ] && [ -n "$model" ] || { echo "$usage" >&2; exit 2; }
 [ -s "$pwfile" ] || die "no password in $pwfile"
 
-issuer=$(sed -n -E 's/^[[:space:]]*value:[[:space:]]*&idpIssuerURL[[:space:]]+([^[:space:]]+).*/\1/p' "$dir/root/inputs.yaml" | head -1)
-[ -n "$issuer" ] && [ "${issuer#REQUIRED-}" = "$issuer" ] || die "idpIssuerURL isn't set in root/inputs.yaml (scripts/set-inputs.sh)"
+issuer=$(sed -n -E 's/^[[:space:]]*idpIssuerURL[[:space:]]*=[[:space:]]*([^[:space:]]+).*/\1/p' "$dir/root/inputs.env" 2>/dev/null | head -1)
+[ -n "$issuer" ] && [ "${issuer#REQUIRED-}" = "$issuer" ] || die "idpIssuerURL isn't set in root/inputs.env (scripts/set-inputs.sh)"
 kv() { sed -n -E "s/^[[:space:]]*$1:[[:space:]]*([^[:space:]]+).*/\\1/p" "$dir/root/kustomization.yaml" | head -1; }
 client_id=$(kv idpClientID) secret_ns=$(kv idpClientSecretNamespace) secret_name=$(kv idpClientSecretName) secret_key=$(kv idpClientSecretKey)
 

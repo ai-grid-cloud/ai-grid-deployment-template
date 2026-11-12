@@ -22,8 +22,8 @@ The template carries choices tested end to end on 2026-11-10, so you change only
 | Your catalog repository, created in the install guide | Models and subscriptions | The provider console |
 
 The hub's Argo CD reads all three. Your deployment repository pins the library in `root/kustomization.yaml`, which
-comes from the template, and names your repositories, the catalog among them, in `root/inputs.yaml`, which is yours;
-to upgrade, you move the library pin. For more, see
+comes from the template, and names your repositories, the catalog among them, in `root/inputs.env`, which is yours
+and which the template doesn't have; to upgrade, you move the library pin. For more, see
 [How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/README.md#how-ai-grid-works).
 
 ## Start here
@@ -60,10 +60,6 @@ make update
 It refuses to run while you have uncommitted changes. The first time, it finds the template commit your repository
 started from, so git merges only what changed on each side since then. It never pushes. After the merge it runs
 `scripts/check-deployment.sh`; if the check fails, it says `DON'T PUSH` and you fix what the check names first.
-
-If your repository is older than `root/inputs.yaml`, the update also moves your values there from
-`root/kustomization.yaml`, resets those lines to the template's, and commits that as
-`root: move your inputs to inputs.yaml`, printing each value it moved.
 
 Review the merge and push:
 

@@ -3,9 +3,11 @@
 # directory, so a commit here (a selection change, a new pin) reaches the hub.
 # Reference: the library's docs/install/appendix-a-inputs.md ("Your root").
 #
-# Your inputs (your repositories and tenant IdP) are in inputs.yaml, not here:
-# the REQUIRED- placeholders below are replaced by that file's patch, so leave
-# them. This file comes from the template, and make update brings its changes.
+# Your inputs (your repositories and tenant IdP) are in inputs.env, not here:
+# scripts/set-inputs.sh writes that file (install guide, page 2), and the
+# replacements at the end copy its values over the REQUIRED- placeholders below,
+# so leave them. This file comes from the template, and make update brings its
+# changes; the template has no inputs.env, so an update never touches yours.
 # To upgrade the library, change the SHA in all three places (the remote base,
 # the generator revision and values.libraryRevision) in one commit.
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -87,6 +89,53 @@ patches:
             files:
               - path: apps/*.yaml
             values: *inputs
-  # Your inputs, replacing the REQUIRED- placeholders above. Keep it last.
-  - target: { group: argoproj.io, kind: ApplicationSet, name: apps }
-    path: inputs.yaml
+# Your inputs, from inputs.env. local-config keeps the ConfigMap out of the
+# render; a missing inputs.env, or a name missing from it, fails the render.
+configMapGenerator:
+  - name: deployment-inputs
+    envs: [inputs.env]
+    options:
+      disableNameSuffixHash: true
+      annotations:
+        config.kubernetes.io/local-config: "true"
+# Each input into both generators' values; the deployment repository and its
+# revision also into the own-apps generator and deployment-root (self.yaml).
+replacements:
+  - source: { kind: ConfigMap, name: deployment-inputs, fieldPath: data.deploymentRepoURL }
+    targets:
+      - select: { group: argoproj.io, kind: ApplicationSet, name: apps }
+        fieldPaths:
+          - spec.generators.0.git.values.deploymentRepoURL
+          - spec.generators.1.git.values.deploymentRepoURL
+          - spec.generators.1.git.repoURL
+      - select: { group: argoproj.io, kind: Application, name: deployment-root }
+        fieldPaths:
+          - spec.source.repoURL
+  - source: { kind: ConfigMap, name: deployment-inputs, fieldPath: data.deploymentRevision }
+    targets:
+      - select: { group: argoproj.io, kind: ApplicationSet, name: apps }
+        fieldPaths:
+          - spec.generators.0.git.values.deploymentRevision
+          - spec.generators.1.git.values.deploymentRevision
+          - spec.generators.1.git.revision
+      - select: { group: argoproj.io, kind: Application, name: deployment-root }
+        fieldPaths:
+          - spec.source.targetRevision
+  - source: { kind: ConfigMap, name: deployment-inputs, fieldPath: data.catalogRepoURL }
+    targets:
+      - select: { group: argoproj.io, kind: ApplicationSet, name: apps }
+        fieldPaths:
+          - spec.generators.0.git.values.catalogRepoURL
+          - spec.generators.1.git.values.catalogRepoURL
+  - source: { kind: ConfigMap, name: deployment-inputs, fieldPath: data.catalogRevision }
+    targets:
+      - select: { group: argoproj.io, kind: ApplicationSet, name: apps }
+        fieldPaths:
+          - spec.generators.0.git.values.catalogRevision
+          - spec.generators.1.git.values.catalogRevision
+  - source: { kind: ConfigMap, name: deployment-inputs, fieldPath: data.idpIssuerURL }
+    targets:
+      - select: { group: argoproj.io, kind: ApplicationSet, name: apps }
+        fieldPaths:
+          - spec.generators.0.git.values.idpIssuerURL
+          - spec.generators.1.git.values.idpIssuerURL

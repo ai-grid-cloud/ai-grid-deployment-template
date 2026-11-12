@@ -2,17 +2,17 @@
 # Set the values that name your repositories and hosts (install guide, page 2),
 # then check the repository:
 #
-#   root/inputs.yaml                    deploymentRepoURL, catalogRepoURL, idpIssuerURL
-#   root/self.yaml                      repoURL (deploymentRepoURL)
+#   root/inputs.env                     deploymentRepoURL, deploymentRevision,
+#                                       catalogRepoURL, catalogRevision, idpIssuerURL
 #   tenant-idp/manifests/settings.yaml  portalRedirectURI
 #
 # deploymentRepoURL is this repository's origin, catalogRepoURL the argument,
 # idpIssuerURL https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants, and
 # portalRedirectURI https://maas.SITE_APPS_DOMAIN/*, with the apps domains read
 # from the hub and the first combined or ingress site in clusters.yaml through
-# their logins. Only those REQUIRED-<name> placeholders are replaced; a value
-# that's already set is left alone. root/kustomization.yaml, the template's, is
-# never touched.
+# their logins; both revisions are main. root/inputs.env is yours: the
+# template has none, and root/kustomization.yaml copies its values into the
+# root. A value that's already set, in either file, is left alone.
 #
 # Usage: scripts/set-inputs.sh CATALOG_REPO_URL
 set -euo pipefail
@@ -54,25 +54,44 @@ DIR=$dir python3 - "$deployment" "$catalog" "https://keycloak-tenant-idp.$hub_do
 import os, sys
 deployment, catalog, issuer, redirect = sys.argv[1:]
 d = os.environ["DIR"]
-sets = [
-    ("root/inputs.yaml", "deploymentRepoURL", deployment),
-    ("root/inputs.yaml", "catalogRepoURL", catalog),
-    ("root/inputs.yaml", "idpIssuerURL", issuer),
-    ("root/self.yaml", "deploymentRepoURL", deployment),
-    ("tenant-idp/manifests/settings.yaml", "portalRedirectURI", redirect),
+
+# root/inputs.env: keep each value that's set, add the rest.
+path = "root/inputs.env"
+f = os.path.join(d, path)
+want = [("deploymentRepoURL", deployment), ("deploymentRevision", "main"), ("catalogRepoURL", catalog),
+        ("catalogRevision", "main"), ("idpIssuerURL", issuer)]
+lines = open(f).read().splitlines() if os.path.exists(f) else [
+    "# Your deployment's inputs (install guide, page 2), written by scripts/set-inputs.sh.",
+    "# root/kustomization.yaml copies them into the root. This file is yours: the",
+    "# template has none. Reference: the library's docs/install/appendix-a-inputs.md.",
 ]
-for path, name, value in sets:
+have = {}
+for i, line in enumerate(lines):
+    if "=" in line and not line.lstrip().startswith("#"):
+        have[line.split("=", 1)[0].strip()] = i
+for name, value in want:
+    i = have.get(name)
+    old = lines[i].split("=", 1)[1].strip() if i is not None else ""
+    if old and not old.startswith("REQUIRED-"):
+        print(f"kept     {path}: {name} is already set")
+        continue
+    if i is None:
+        lines.append(f"{name}={value}")
+    else:
+        lines[i] = f"{name}={value}"
+    print(f"set      {path}: {name} = {value}")
+tmp = f + ".tmp"
+open(tmp, "w").write("\n".join(lines) + "\n")
+os.replace(tmp, f)
+
+# Placeholders in your other files.
+for path, name, value in [("tenant-idp/manifests/settings.yaml", "portalRedirectURI", redirect)]:
     f = os.path.join(d, path)
-    lines = open(f).read().split("\n")
+    text = open(f).read()
     token = "REQUIRED-" + name
-    hit = False
-    for i, line in enumerate(lines):
-        if token in line and "op: test" not in line:
-            lines[i] = line.replace(token, value)
-            hit = True
-    if hit:
+    if token in text:
         tmp = f + ".tmp"
-        open(tmp, "w").write("\n".join(lines))
+        open(tmp, "w").write(text.replace(token, value))
         os.replace(tmp, f)
         print(f"set      {path}: {name} = {value}")
     else:
