@@ -12,7 +12,7 @@ export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NA
 
 .PHONY: help login prereqs bootstrap status console-secrets test update \
   site-check site-wipe site-import site-add site-join site-status tenant-user tenant-call \
-  uninstall-site uninstall-hub uninstall-check
+  empty-catalog uninstall-site uninstall-hub uninstall-check
 
 # The site targets work on the only site in clusters.yaml; with several, set
 # SITE=NAME. Targets that change a cluster without asking preview by default;
@@ -73,6 +73,9 @@ tenant-call: ## Call a model as that user: TENANT_USER, PASSWORD_FILE, SUBSCRIPT
 	@$(call need,SUBSCRIPTION,SUBSCRIPTION_ID)$(call need,MODEL,MODEL_NAME)
 	@scripts/tenant-call.sh --user "$(TENANT_USER)" --password-file "$(PASSWORD_FILE)" --subscription "$(SUBSCRIPTION)" \
 	  --model "$(MODEL)" $(if $(SITE),--site $(SITE))
+
+empty-catalog: ## Preview emptying your catalog repository; CONFIRM=1 commits and pushes (page 8)
+	@scripts/empty-catalog.sh $(if $(CONFIRM),--confirm)
 
 uninstall-site: ## Preview a site's uninstall; CONFIRM=1 runs it (page 8)
 	@n=$$(scripts/clusters.sh --site $(SITE)) && mkdir -p .uninstall && \

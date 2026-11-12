@@ -64,15 +64,19 @@ step deletes last. If your own apps leave something behind, add a line for it th
 So a reinstall starts with no models or subscriptions, remove them from your catalog repository. In the provider
 console, delete each subscription, then each model
 ([remove a subscription, model or organization](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/operate.md#remove-a-subscription-model-or-organization)).
-Or empty it in git:
+Or empty it in git. Preview what that removes from the catalog repository named in `root/inputs.env`: every file
+but `README.md`. It changes nothing:
 
 ```sh
-git clone CATALOG_REPO_URL catalog && cd catalog
-git rm -r -q -- $(git ls-files | grep -vx README.md)
-git commit -m "catalog: empty for uninstall" && git push origin HEAD:main && cd ..
+make empty-catalog
 ```
 
-Replace `CATALOG_REPO_URL` with your catalog repository's clone URL.
+Remove them. This commits `catalog: empty for uninstall` in a temporary clone and pushes it with your git
+credentials:
+
+```sh
+make empty-catalog CONFIRM=1
+```
 
 Within a few minutes the hub deletes the catalog's Applications, and with them the subscriptions, auth policies and
 MaaS model entries, so no access outlives them. The models themselves keep running: the models ApplicationSet keeps
