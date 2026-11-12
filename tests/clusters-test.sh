@@ -139,4 +139,26 @@ if command -v oc >/dev/null; then
     oc --kubeconfig "$m" config view --raw --context site --minify -o jsonpath='{.clusters[0].cluster.server} {.users[0].user.token}'
 fi
 
+# console-call.sh signs in with the hub login's token: a stub oc answers the
+# token and the Route, a stub curl logs its arguments and the header file.
+mkdir -p "$T/cbin"; : > "$d/.config/hub/kubeconfig"
+cat > "$T/cbin/oc" <<'STUB'
+#!/bin/bash
+case "$*" in whoami) echo admin ;; "whoami -t") [ -f "$STUB_DIR/no-token" ] && exit 1; echo sha256~FAKE_console_token ;; *"get route"*) echo console.apps.hub.example.com ;; esac
+STUB
+cat > "$T/cbin/curl" <<'STUB'
+#!/bin/bash
+echo "curl $*" >> "$STUB_DIR/curl.log"
+for a in "$@"; do case "$a" in @*) cat "${a#@}" >> "$STUB_DIR/curl.log" ;; esac; done
+echo '{"items":[]}'; echo "HTTP 200"
+STUB
+chmod +x "$T/cbin/oc" "$T/cbin/curl"; : > "$T/curl.log"
+t "console-call calls the console's Route" 0 "HTTP 200" env PATH="$T/cbin:$PATH" "$d/scripts/console-call.sh" ai_grid.v1.Clusters/List
+t "  ... with the hub login's token in a header file" 0 "Authorization: Bearer sha256~FAKE_console_token" cat "$T/curl.log"
+t "  ... never on the command line" 1 "^0$" bash -c 'grep "^curl " "$0" | grep -c FAKE_console_token' "$T/curl.log"
+t "  ... at the console's host and method" 0 "https://console.apps.hub.example.com/ai_grid.v1.Clusters/List" cat "$T/curl.log"
+touch "$T/no-token"
+t "console-call without a token says how to get one" 1 "make login NAME=hub" env PATH="$T/cbin:$PATH" "$d/scripts/console-call.sh" ai_grid.v1.Clusters/List
+rm "$T/no-token"
+
 echo "clusters tests: $((total-fails)) ok, $fails failed"; exit "$fails"
