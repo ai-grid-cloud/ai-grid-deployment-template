@@ -9,25 +9,20 @@ give the site's name where a command says `site`, or add it after the script's n
 
 A site that runs the MaaS gateway (role `combined` or `ingress`) needs three files in your deployment repository
 **before** you label it: its values, and a publicly trusted certificate for its MaaS hostname,
-`maas.SITE_APPS_DOMAIN`. Without the values file, the site's `rhoai` Application doesn't render. `site-template/`
-holds the three files; copy them for your site:
+`maas.SITE_APPS_DOMAIN`. Without the values file, the site's `rhoai` Application doesn't render. Write them from
+`site-template/`:
 
 ```sh
-SITE=$(scripts/clusters.sh --site)
-APPS_DOMAIN=$(scripts/with-cluster.sh "$SITE" oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
-DNS01_ISSUER=ISSUER_NAME
-for f in apps/SITE-maas-tls.yaml sites/SITE/maas-tls/certificate.yaml values/clusters/SITE/rhoai.yaml; do
-  mkdir -p "$(dirname "${f//SITE/$SITE}")"
-  sed -e "s/SITE/$SITE/g" -e "s/APPS_DOMAIN/$APPS_DOMAIN/g" -e "s/DNS01_ISSUER/$DNS01_ISSUER/g" \
-    "site-template/$f" > "${f//SITE/$SITE}"
-done
-scripts/check-deployment.sh
-git add -A && git commit -m "site $SITE: values and MaaS certificate" && git push origin HEAD:main
+scripts/add-site.sh
 ```
 
-Replace `ISSUER_NAME` with your DNS-01 ClusterIssuer on the site. With several sites, use
-`SITE=$(scripts/clusters.sh --site SITE_NAME)`. You should see `root renders; every input is set;
-every repository is an input.` before the commit. What the files do, and other ways to get the certificate:
+It reads the site's apps domain, uses the site's DNS-01 ClusterIssuer, writes the three files, runs
+`scripts/check-deployment.sh`, and prints the commands to commit and push them. If the site has several DNS-01
+ClusterIssuers, it lists them: run it again with the one that issues publicly trusted certificates for the site's
+apps domain, such as `scripts/add-site.sh site ISSUER_NAME`. An `inference` site needs no files.
+
+You should see `root renders; every input is set; every repository is an input.` Then run the `git add`,
+`git commit` and `git push` commands it printed. What the files do, and other ways to get the certificate:
 [MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/spokes/maas-certificate.md).
 
 ## 2. Label the site
