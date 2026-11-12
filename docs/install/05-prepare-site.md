@@ -12,7 +12,15 @@ If the cluster was a site of another hub, first [reuse it](#reuse-a-cluster-from
 
 ## Reuse a cluster from another hub
 
-Skip this section for a cluster that was never an AI Grid site.
+Let the site check tell you whether you need this section:
+
+```sh
+scripts/check-prerequisites.sh --step spoke --cluster "$SITE"
+```
+
+If its `previous AI Grid install` line is `OK` (`none`, or `leftover CRDs only; safe`), skip to part 1. If it's
+`FOUND`, it names what it found, such as a klusterlet (another hub manages the cluster) or a DataScienceCluster;
+follow these steps first:
 
 1. On the old hub, remove the site's labels, wait for its Applications to go, then delete its ManagedCluster. Delete
    its Argo CD cluster Secret and grid identity Secret (`redhat-ai-grid/grid-site-SITE`) if they stay behind.
@@ -41,7 +49,8 @@ scripts/check-prerequisites.sh --step spoke --cluster "$SITE"
 dig AAAA router-default.$(scripts/with-cluster.sh "$SITE" oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
 ```
 
-You should see `OK` for `OpenShift 4.21 or later` and `default StorageClass`, and a `dig` status other than
+You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass` and `previous AI Grid install`, and a
+`dig` status other than
 `NXDOMAIN`. The hub delivers the registry logins and image mirror once the site is imported. For GPU sites, see
 [GPU operator and NFD](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/spokes/openshift-ai.md#nvidia-gpu-operator-and-node-feature-discovery).
 

@@ -18,6 +18,13 @@ d=$STUB_DIR
 case "$args" in
   *" get clusterversion version "*) cat "$d/version" 2>/dev/null ;;
   *" get storageclass "*) cat "$d/storageclasses" 2>/dev/null ;;
+  *" get namespace "*)
+    name=${args##* get namespace }; name=${name%% *}
+    grep -qx "$name" "$d/namespaces" 2>/dev/null || exit 1; echo "namespace/$name" ;;
+  *" get datascienceclusters "*) [ -f "$d/dsc" ] || exit 1; cat "$d/dsc" ;;
+  *" get subscriptions.operators.coreos.com "*) [ -f "$d/subs" ] || exit 1; cat "$d/subs" ;;
+  *" get gridnetworks,gridsites "*) [ -f "$d/grid" ] || exit 1; cat "$d/grid" ;;
+  *" get crds -o name "*) sed 's#^#customresourcedefinition.apiextensions.k8s.io/#' "$d/crds" 2>/dev/null ;;
   *" get crd "*)
     name=${args##* get crd }; name=${name%% *}
     grep -qx "$name" "$d/crds" 2>/dev/null || exit 1; echo "$name" ;;
@@ -71,6 +78,17 @@ w=$(world no-sc); : > "$w/storageclasses"
 t "spoke without a default StorageClass" 1 "^MISSING +default StorageClass" "$w" --step spoke
 w=$(world spoke-ok)
 t "spoke ready" 0 "^OK +default StorageClass" "$w" --step spoke
+t "spoke never used: no previous install" 0 "^OK +previous AI Grid install +none" "$w" --step spoke
+w=$(world crds-only); printf '%s\n' "$CM_CRDS" datascienceclusters.datasciencecluster.opendatahub.io gridsites.grid.praxis.fast > "$w/crds"
+t "leftover CRDs only: safe" 0 "^OK +previous AI Grid install +leftover CRDs only; safe" "$w" --step spoke
+w=$(world old-install); echo open-cluster-management-agent > "$w/namespaces"
+echo "datasciencecluster.datasciencecluster.opendatahub.io/default-dsc" > "$w/dsc"
+echo "subscription.operators.coreos.com/rhods-operator" > "$w/subs"
+echo "gridsite.grid.praxis.fast/site-b" > "$w/grid"
+t "previous install found" 1 "^FOUND +previous AI Grid install +.*Reuse a cluster from another hub" "$w" --step spoke
+t "  ... names what it found" 1 "klusterlet.*DataScienceCluster.*rhods-operator.*GridNetwork or GridSite" "$w" --step spoke
+w=$(world klusterlet); echo open-cluster-management-agent > "$w/namespaces"
+t "a klusterlet alone is a previous install" 1 "^FOUND +previous AI Grid install +klusterlet" "$w" --step spoke
 w=$(world no-cm); : > "$w/crds"
 t "hub without cert-manager" 1 "^MISSING +cert-manager CRDs" "$w" --step hub
 IDP=(--idp-secret tenant-idp/tenant-idp-client:client-secret --idp-ca openshift-config-managed/default-ingress-cert:ca-bundle.crt)
