@@ -65,18 +65,19 @@ The site joins ACM, and the hub's Argo CD registers it. The hub then prepares th
 for OpenShift AI and the grid, delivers the registry logins, labels the Submariner gateway nodes and starts
 Submariner. OpenShift AI and the grid wait for the labels you add on the next page.
 
-## 3. Check the import
+The import ends with `Import complete.` once the ManagedCluster has joined and the hub's Argo CD has its cluster
+Secret for the site; the script waits for both.
+
+To check the site's ManagedCluster again later:
 
 ```sh
 scripts/with-cluster.sh hub oc get managedcluster "$(scripts/clusters.sh --site)"
-scripts/with-cluster.sh hub oc get secret -n openshift-gitops -l argocd.argoproj.io/secret-type=cluster
 ```
 
-You should see the ManagedCluster with `JOINED` and `AVAILABLE` both `True`, and an Argo CD cluster Secret for the
-site, within a few minutes.
+You should see `JOINED` and `AVAILABLE` both `True`.
 
 ## Checkpoint
 
-- The site's ManagedCluster is joined and available, and its Argo CD cluster Secret exists on the hub.
+- The import printed `Import complete.`
 
 Next: [6. Join the site to the grid](06-join-grid.md)
