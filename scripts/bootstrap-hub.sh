@@ -25,7 +25,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -d "$dir/root" ] || die "--deployment must be a checkout with root/"
-for c in oc kustomize jq git; do command -v "$c" >/dev/null || die "required command not found: $c"; done
+for c in oc jq git; do command -v "$c" >/dev/null || die "required command not found: $c"; done
 auth_file="${RHOAI_QUAY_AUTH_FILE:-}"
 [ -f "$auth_file" ] || die "set RHOAI_QUAY_AUTH_FILE to a container auth file (such as ~/.config/containers/auth.json) with a quay.io/rhoai login"
 

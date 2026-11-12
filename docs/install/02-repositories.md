@@ -82,7 +82,7 @@ repository, set the names that must be yours, check the result, and push it.
    Nothing was changed; fix these before the page that needs them.
    ```
 
-   Install any tool marked `MISSING` or `OLD` before you continue.
+   Install any tool marked `MISSING` before you continue.
 
 ## 2. Create your catalog repository and its token
 

@@ -17,7 +17,7 @@ Submariner gateway nodes: check those yourself.
   auth file with `quay.io/rhoai` and `registry.stage.redhat.io` logins. Red Hat gives them to early-access partners;
   ask your Red Hat contact. A general `quay.io` login also works for `quay.io/rhoai`
   ([general `quay.io` login](troubleshooting.md#bootstrap-hubsh-refuses-a-general-quayio-login)).
-- **Tools:** `oc`, `kustomize` 5 or later, `git`, `jq`, `curl`, `openssl`, `python3`, `clusteradm` and `make`.
+- **Tools:** `oc`, `git`, `jq`, `curl`, `openssl`, `python3`, `clusteradm` and `make`.
 
 ## Checkpoint
 

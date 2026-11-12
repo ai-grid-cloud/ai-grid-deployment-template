@@ -33,9 +33,8 @@ OC_TIMEOUT = "--request-timeout=10s"
 
 # name, version command (None: no cheap version), what it's used for
 TOOLS = [
-    ("oc", ["oc", "version", "--client"], "the OpenShift CLI: every page"),
+    ("oc", ["oc", "version", "--client"], "the OpenShift CLI, which also renders your root (oc kustomize): every page"),
     ("kubectl", ["kubectl", "version", "--client"], "comes with oc: every page"),
-    ("kustomize", ["kustomize", "version"], "renders your deployment repository's root (version 5 or later)"),
     ("git", ["git", "--version"], "clones and pushes your repositories"),
     ("jq", ["jq", "--version"], "used by the setup scripts and in first use"),
     ("curl", ["curl", "--version"], "used by the setup scripts and in first use"),
@@ -107,9 +106,7 @@ def check_tools():
             continue
         rc, out, err = run(cmd, timeout=5)
         m = version_of(out + err)
-        if name == "kustomize" and m and int(m.group(1)) < 5:
-            report("OLD", name, f"{m.group(0).lstrip('v')}; version 5 or later needed")
-        elif m:
+        if m:
             report("ok", name, m.group(0).lstrip("v"))
         else:
             report("ok", name, path)

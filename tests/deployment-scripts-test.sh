@@ -72,6 +72,10 @@ t() { # name want_rc expect_grep cmd...
 d=$(fixture good)
 t "a complete deployment passes" 0 "every repository is an input" bash scripts/check-deployment.sh "$d"
 
+# The scripts render with oc kustomize, not a separate kustomize: a broken one on PATH changes nothing.
+mkdir -p "$T/badk"; printf '#!/bin/sh\necho "stub kustomize must not run" >&2; exit 1\n' > "$T/badk/kustomize"; chmod 755 "$T/badk/kustomize"
+t "renders with oc kustomize, not kustomize" 0 "every repository is an input" env PATH="$T/badk:$PATH" bash scripts/check-deployment.sh "$d"
+
 d=$(fixture own-app-token)
 printf 'spec:\n  source:\n    repoURL: '"'"'@deploymentRepoURL@'"'"'\n' > "$d/apps/idp.yaml"
 t "an own app using @deploymentRepoURL@ passes" 0 "every repository is an input" bash scripts/check-deployment.sh "$d"
@@ -110,6 +114,6 @@ t "a library checkout off the pin fails" 1 "isn't at your pin 0123456789abcdef" 
 d=$(fixture pin)
 sed -i.bak "s/$SHA/0123456789abcdef0123456789abcdef01234567/g" "$d/root/kustomization.yaml"
 t "bootstrap-hub refuses a library checkout off the pin" 1 "isn't at your pin 0123456789abcdef" \
-  bash -c 'f=$(mktemp); echo {} > "$f"; RHOAI_QUAY_AUTH_FILE=$f KUBECONFIG=$f bash scripts/bootstrap-hub.sh --deployment "$0"' "$d"
+  env PATH="$T/badk:$PATH" bash -c 'f=$(mktemp); echo {} > "$f"; RHOAI_QUAY_AUTH_FILE=$f KUBECONFIG=$f bash scripts/bootstrap-hub.sh --deployment "$0"' "$d"
 
 echo "deployment-scripts tests: $((total-fails)) ok, $fails failed"; exit "$fails"

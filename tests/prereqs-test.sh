@@ -25,7 +25,6 @@ mkbin() { # dir: a bin dir with every tool stubbed
   for t in curl openssl base64 clusteradm make; do
     printf '#!/bin/bash\necho "%s 1.2.3"\n' "$t" > "$b/$t"
   done
-  printf '#!/bin/bash\necho v5.8.3\n' > "$b/kustomize"
   # The stub oc logs its arguments and answers from files in $STUB_DIR; a
   # missing file is an empty answer. A file "fail-<verb>" makes that call fail.
   cat > "$b/oc" <<'END_STUB'
@@ -88,7 +87,6 @@ mkdep() { # name clusters-body: a deployment at the pin with that clusters.yaml 
 D=$(mkdep deployment "hub: {name: hub, api: 'https://api.hub:6443'}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: 'https://api.site-b:6443'}")
 ALL=(--deployment "$D" --quay-auth-file "$A" --catalog-token-file "$TOK")
 t "all ok: no problem lines" '^[0-9]+ ok$' "$T/bin" "$w" "${ALL[@]}"
-t "all ok: kustomize version" '^ok +kustomize +5\.8\.3' "$T/bin" "$w" "${ALL[@]}"
 t "all ok: site ClusterIssuer with DNS-01" '^ok +ClusterIssuer +le-dns \(DNS-01\)' "$T/bin" "$w" "${ALL[@]}"
 t "all ok: catalog pulls" '^ok +pull the pinned catalog +quay.io/rhoai/rhoai-fbc-fragment' "$T/bin" "$w" "${ALL[@]}"
 if grep -qE "$TOKEN|$PASSWORD" "$w/argv.log"; then echo "   FAIL a secret reached oc's argv"; fails=$((fails+1)); else echo "   ok   no secret on oc's argv"; fi
@@ -106,8 +104,6 @@ LIBD=$keep
 mkbin "$T/nojq"; rm "$T/nojq/jq"
 t "missing tool" '^MISSING +jq ' "$T/nojq" "$w"
 t "missing tool: summary and note" 'Nothing was changed' "$T/nojq" "$w"
-mkbin "$T/oldk"; printf '#!/bin/bash\necho "{Version:kustomize/v4.5.7 GitCommit:abc}"\n' > "$T/oldk/kustomize"; chmod 755 "$T/oldk/kustomize"
-t "kustomize v4 is OLD" '^OLD +kustomize +4\.5\.7; version 5 or later needed' "$T/oldk" "$w"
 
 t "nothing set: registry skipped" '^skipped +registry logins +set QUAY_AUTH_FILE' "$T/bin" "$w"
 t "no clusters.yaml: skipped" '^skipped +cluster checks +no clusters.yaml: copy clusters-example.yaml' "$T/bin" "$w" --deployment "$T/other"

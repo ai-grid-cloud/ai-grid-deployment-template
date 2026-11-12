@@ -28,7 +28,7 @@ if [ -f "$dir/clusters.yaml" ]; then . "$(dirname "$0")/clusters.sh"; clusters_l
 # Every input the library declares (its bootstrap/hub generator values) must
 # be set: replacing the values map can drop one without leaving a marker.
 library_dir "$dir"
-declared="$(kustomize build "$LIB/bootstrap/hub" | sed -n 's/^ *\([a-zA-Z]*\): REQUIRED-\1$/\1/p' | sort -u)"
+declared="$(oc kustomize "$LIB/bootstrap/hub" | sed -n 's/^ *\([a-zA-Z]*\): REQUIRED-\1$/\1/p' | sort -u)"
 unset_inputs=""
 for n in $declared; do
   v="$(deployment_input "$n")"
