@@ -4,8 +4,10 @@ In this section you create an organization, deploy a model to the site, subscrib
 and call it as a tenant. The provider console writes the model and subscription to your catalog repository, and Argo
 CD delivers them to the site.
 
-Steps 2 to 4 use the console. To script them instead, see
-[call the console's API](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/hub/05-console-and-model-delivery.md#call-the-consoles-api).
+Steps 2 to 4 use the console. To script them instead, take the JSON bodies from
+[call the console's API](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/hub/05-console-and-model-delivery.md#call-the-consoles-api)
+and send them with this repository's `scripts/console-call.sh METHOD 'JSON'`, which signs in with your hub login; its
+flags differ from the library script's of the same name.
 
 ## 1. Sign in to the console
 
@@ -59,7 +61,9 @@ You should see the model in the **Models** list with status **Saved to Git**, an
 5. Click **Add token limit**, keep the defaults (`1000` per `1` `hour`), and click **Save**.
 6. Click **Create subscription**.
 
-You should see the subscription with status **Pending**, and **Active** about 2 minutes later.
+You should see the subscription with status **Pending**, and **Active** within about 5 minutes. For the first few
+minutes, while the site's ExtProc starts, the subscription can show **Failed** and the model a message that it's
+waiting for the tenant ExtProc Deployment; both clear by themselves.
 
 ## 5. Check the delivery
 
