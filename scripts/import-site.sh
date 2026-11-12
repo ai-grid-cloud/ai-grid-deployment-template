@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Import a site from clusters.yaml into the hub's ACM, with the library's
 # import script at your pin (docs/acm/cluster-onboarding/import-managed-cluster.sh).
-# It prints the library script's summary, then, in a terminal, asks whether to
-# import, and on y runs it again with --yes. Without a terminal it only prints
-# the summary. With --yes it imports without asking. A site already joined and
-# available on the hub is left alone.
+# A preview by default: it prints the library script's summary and changes
+# nothing. With --yes (make site-import CONFIRM=1) it imports. A site already
+# joined and available on the hub is left alone.
 #
 #   scripts/import-site.sh [NAME] [--yes] [other flags of the library script]
 #
@@ -29,12 +28,4 @@ run_import() {
     --hub-context hub --spoke-context site --cluster-name "$name" "$@"
 }
 case " $* " in *" --yes "*) run_import "$@"; exit ;; esac
-run_import "$@"
-# IMPORT_SITE_PROMPT=1 asks without a terminal (the tests use it).
-[ -t 0 ] || [ "${IMPORT_SITE_PROMPT:-}" = 1 ] || exit 0
-printf '\nImport %s now? [y/N] ' "$name"
-read -r answer || answer=""
-case "$answer" in
-  y|Y|yes|YES) echo; run_import "$@" --yes ;;
-  *) echo; echo "Not imported." ;;
-esac
+run_import "$@" | sed 's/^No changes were made\. Rerun with --yes to import the cluster\.$/No changes were made. To import, run: make site-import CONFIRM=1/'

@@ -50,15 +50,22 @@ You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass`, `prev
 
 ## 2. Import the site into ACM
 
-Import the site:
+Preview the import. It prints a summary of what the library's import script will do, and changes nothing:
 
 ```sh
 make site-import
 ```
 
-It runs the library's import script, which runs `clusteradm` against both clusters. It prints a summary of what it
-will do and asks `Import SITE now? [y/N]`; read the summary and answer `y`. Any other answer changes nothing. Run
-again for a site that's already joined and available, it says `already imported; nothing to do`.
+In the summary, check that `Hub API server` is your hub's API URL and `Cluster name` is your site's name, and see
+whether `Action` is `new import` or `resume registration`.
+
+Import the site. This runs the library's import script, which runs `clusteradm` against both clusters:
+
+```sh
+make site-import CONFIRM=1
+```
+
+Run again for a site that's already joined and available, it says `already imported; nothing to do`.
 
 The site joins ACM, and the hub's Argo CD registers it. The hub then prepares the site: it creates empty namespaces
 for OpenShift AI and the grid, delivers the registry logins, labels the Submariner gateway nodes and starts

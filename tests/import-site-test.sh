@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for scripts/import-site.sh's one-command flow, with a stub oc and a stub
+# Tests for scripts/import-site.sh's preview and import, with a stub oc and a stub
 # library import script that prints its arguments.
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
@@ -11,7 +11,7 @@ REAL_OC=$(command -v oc)
 t() { # name want_rc expect_grep reject_grep input [args...]: runs import-site.sh with stdin from input
   local name=$1 want=$2 expect=$3 reject=$4 input=$5; shift 5; local rc out
   total=$((total+1))
-  out=$(printf '%s' "$input" | env PATH="$T/bin:$PATH" LIBRARY="$T/lib" IMPORT_SITE_PROMPT="${PROMPT:-}" \
+  out=$(printf '%s' "$input" | env PATH="$T/bin:$PATH" LIBRARY="$T/lib" \
     "$D/scripts/import-site.sh" "$@" 2>&1) && rc=0 || rc=$?
   if [ "$rc" = "$want" ] && grep -qE -- "$expect" <<<"$out" && { [ -z "$reject" ] || ! grep -qE -- "$reject" <<<"$out"; }; then
     echo "   ok   $name"
@@ -46,14 +46,11 @@ for n in hub site-b; do
   printf 'apiVersion: v1\nkind: Config\nclusters: [{name: c, cluster: {server: "https://api.%s.example.com:6443"}}]\nusers: [{name: u, user: {token: x}}]\ncontexts: [{name: x, context: {cluster: c, user: u}}]\ncurrent-context: x\n' "$n" > "$D/.config/$n/kubeconfig"
 done
 
-t "no TTY: previews only" 0 "Rerun with --yes" "IMPORTED|Import site-b now" ""
-t "no name: the only site" 0 "summary for --hub-context hub --spoke-context site --cluster-name site-b" "" ""
-PROMPT=1 t "prompt: y imports" 0 "Import site-b now\? \[y/N\].*IMPORTED|IMPORTED" "" $'y\n'
-PROMPT=1 t "prompt: y runs the import with --yes" 0 "summary for .*--cluster-name site-b --yes" "" $'y\n'
-PROMPT=1 t "prompt: anything else doesn't import" 0 "Not imported" "IMPORTED" $'n\n'
-PROMPT=1 t "prompt: no answer doesn't import" 0 "Not imported" "IMPORTED" ""
-t "--yes skips the prompt" 0 "IMPORTED" "Import site-b now" "" --yes
-t "a name and --yes" 0 "--cluster-name site-b --yes" "Import site-b now" "" site-b --yes
+t "previews by default" 0 "summary for --hub-context hub --spoke-context site --cluster-name site-b$" "IMPORTED|--yes" ""
+t "  ... and names the make target that imports" 0 "^No changes were made. To import, run: make site-import CONFIRM=1$" "Rerun with --yes" ""
+t "  ... without asking" 0 "summary for" "\[y/N\]" $'y\n'
+t "--yes imports" 0 "IMPORTED" "To import, run" "" --yes
+t "a name and --yes" 0 "--cluster-name site-b --yes" "" "" site-b --yes
 
 printf 'True True' > "$T/mc-state"
 t "already joined and available: nothing to do" 0 "site-b is already imported; nothing to do" "summary for" "" --yes

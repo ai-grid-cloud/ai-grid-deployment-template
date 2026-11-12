@@ -51,8 +51,8 @@ site-check: ## Check a site before you import it; read-only (page 5)
 site-wipe: ## Preview removing a site's old install; CONFIRM=1 removes it (page 5)
 	@scripts/wipe-site.sh $(if $(SITE),--site $(SITE)) $(if $(CONFIRM),,--dry-run)
 
-site-import: ## Import a site into the hub's ACM, after a y/N prompt (page 5)
-	@scripts/import-site.sh $(SITE)
+site-import: ## Preview importing a site into the hub's ACM; CONFIRM=1 imports it (page 5)
+	@scripts/import-site.sh $(SITE) $(if $(CONFIRM),--yes)
 
 site-add: ## Write an ingress or combined site's files; ISSUER=... if it has several (page 6)
 	@n=$$(scripts/clusters.sh --site $(SITE)) && scripts/add-site.sh "$$n" $(ISSUER)

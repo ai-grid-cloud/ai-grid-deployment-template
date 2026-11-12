@@ -63,6 +63,8 @@ for target in site-check site-import site-join site-add uninstall-site; do
   t "$target with several sites lists them" 2 "name a site: site-b, site-c" m "$two" "$target"
 done
 
+t "site-import previews by default" 0 "^ok$" bash -c 'out=$(make -n -C "$0" site-import); grep -q import-site.sh <<<"$out" && ! grep -q -- --yes <<<"$out" && echo ok' "$one"
+t "site-import CONFIRM=1 imports" 0 "import-site.sh +--yes" make -n -C "$one" site-import CONFIRM=1
 t "site-wipe previews by default" 0 "wipe-site.sh +--dry-run" make -n -C "$one" site-wipe
 t "site-wipe CONFIRM=1 runs it" 0 "^ok$" bash -c 'out=$(make -n -C "$0" site-wipe CONFIRM=1); grep -q wipe-site.sh <<<"$out" && ! grep -q -- --dry-run <<<"$out" && echo ok' "$one"
 t "site-wipe SITE= passes the site" 0 "wipe-site.sh --site site-c --dry-run" make -n -C "$two" site-wipe SITE=site-c
