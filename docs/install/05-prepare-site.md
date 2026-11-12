@@ -1,9 +1,8 @@
 # Prepare the site and join it to ACM
 
 On this page you check the site and import it into ACM. The site's name in `clusters.yaml` becomes its ACM cluster
-name. These commands work on the only site in your `clusters.yaml`: the word `site`, as in
-`scripts/with-cluster.sh site`, stands for that site, and scripts given no name use it. With several sites, give the
-site's name in place of `site`, or after the script's name, such as `scripts/import-site.sh SITE_NAME`.
+name. The `make` targets on this page work on the only site in your `clusters.yaml`. With several sites, add the
+site's name, such as `make site-import SITE=SITE_NAME`.
 
 If the cluster was a site of another hub, first [reuse it](#reuse-a-cluster-from-another-hub).
 
@@ -12,7 +11,7 @@ If the cluster was a site of another hub, first [reuse it](#reuse-a-cluster-from
 Let the site check tell you whether you need this section:
 
 ```sh
-scripts/check-prerequisites.sh --step spoke
+make site-check
 ```
 
 If its `previous AI Grid install` line is `OK` (`none`, `leftover CRDs only; safe`, or `already a site of this hub`
@@ -22,34 +21,31 @@ follow these steps first:
 
 1. On the old hub, remove the site's labels, wait for its Applications to go, then delete its ManagedCluster. Delete
    its Argo CD cluster Secret and grid identity Secret (`redhat-ai-grid/grid-site-SITE`) if they stay behind.
-2. Preview the wipe of the old install:
+2. Preview the wipe of the old install. It deletes nothing:
 
    ```sh
-   scripts/wipe-site.sh --dry-run
+   make site-wipe
    ```
 
    Read the list. It must not name your platform's identity provider, cert-manager, NFD, the GPU operator or your
    ACME ClusterIssuers; the script protects those by name. If your platform uses other names, set them,
    space-separated, in `WIPE_PROTECT_NAMESPACES` and `WIPE_PROTECT_PACKAGES` (operator package names) for both runs.
-3. Run the same command without `--dry-run`. It leaves the cluster pull secret and image mirror, which the new hub
-   delivers again.
+3. Run the wipe. It leaves the cluster pull secret and image mirror, which the new hub delivers again:
 
-You should then see no DataScienceCluster, GridNetwork, GridSite or LLMInferenceService:
+   ```sh
+   make site-wipe CONFIRM=1
+   ```
 
-```sh
-scripts/with-cluster.sh site oc get datasciencecluster,gridnetworks,gridsites,llminferenceservices -A
-```
+Then run `make site-check` again. Its `previous AI Grid install` line should be `OK`.
 
 ## 1. Check the site's infrastructure
 
 ```sh
-scripts/check-prerequisites.sh --step spoke
-dig AAAA router-default.$(scripts/with-cluster.sh site oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
+make site-check
 ```
 
-You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass` and `previous AI Grid install`, and a
-`dig` status other than
-`NXDOMAIN`. The hub delivers the registry logins and image mirror once the site is imported. For GPU sites, see
+You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass`, `previous AI Grid install` and
+`apps domain DNS`. The hub delivers the registry logins and image mirror once the site is imported. For GPU sites, see
 [GPU operator and NFD](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/spokes/openshift-ai.md#nvidia-gpu-operator-and-node-feature-discovery).
 
 ## 2. Import the site into ACM
@@ -57,7 +53,7 @@ You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass` and `p
 Import the site:
 
 ```sh
-scripts/import-site.sh
+make site-import
 ```
 
 It runs the library's import script, which runs `clusteradm` against both clusters. It prints a summary of what it
@@ -71,13 +67,13 @@ Submariner. OpenShift AI and the grid wait for the labels you add on the next pa
 The import ends with `Import complete.` once the ManagedCluster has joined and the hub's Argo CD has its cluster
 Secret for the site; the script waits for both.
 
-To check the site's ManagedCluster again later:
+To check the site again later:
 
 ```sh
-scripts/with-cluster.sh hub oc get managedcluster "$(scripts/clusters.sh --site)"
+make site-status
 ```
 
-You should see `JOINED` and `AVAILABLE` both `True`.
+You should see `ManagedCluster: JOINED=True AVAILABLE=True`.
 
 ## Checkpoint
 

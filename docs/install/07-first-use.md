@@ -64,10 +64,11 @@ You should see the subscription with status **Pending**, and **Active** about 2 
 ## 5. Check the delivery
 
 ```sh
-scripts/with-cluster.sh site oc get llminferenceservices,maassubscriptions,maasauthpolicies -A
+make site-status
 ```
 
-You should see the model `Ready`, and the subscription and its auth policy. If they don't appear within a few
+Under `Models, subscriptions and auth policies` you should see the model `Ready`, and the subscription and its auth
+policy. With several sites, add `SITE=SITE_NAME`. If they don't appear within a few
 minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-dont-appear).
 
 ## 6. Call the model as a tenant
@@ -75,8 +76,7 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
 1. Create a test user in the organization, in group `ai-grid-users`. The script generates the password into a file:
 
    ```sh
-   scripts/create-test-tenant.sh --kubeconfig .config/hub/kubeconfig --org ORG_NAME --user TENANT_USER \
-     --password-file TENANT_PASSWORD_FILE
+   make tenant-user ORG=ORG_NAME TENANT_USER=TENANT_USER PASSWORD_FILE=TENANT_PASSWORD_FILE
    ```
 
    Replace `ORG_NAME` with the organization's name, `TENANT_USER` with a user name, and `TENANT_PASSWORD_FILE` with
@@ -85,8 +85,8 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
 2. Call the model as that user, and see which site served it:
 
    ```sh
-   scripts/tenant-call.sh --user TENANT_USER --password-file TENANT_PASSWORD_FILE --subscription SUBSCRIPTION_ID \
-     --model MODEL_NAME
+   make tenant-call TENANT_USER=TENANT_USER PASSWORD_FILE=TENANT_PASSWORD_FILE SUBSCRIPTION=SUBSCRIPTION_ID \
+     MODEL=MODEL_NAME
    ```
 
    Replace `SUBSCRIPTION_ID` with the subscription you created, and `MODEL_NAME` with the model's resource name. It

@@ -34,13 +34,14 @@ GATEWAYS="data-science-gateway openshift-ai-inference maas-default-gateway"
 NAMESPACES="ai-grid-internal-models kuadrant-system limitador-redis models-as-a-service odh-observability-webhook-probe redhat-ai-grid redhat-ods-applications redhat-ods-monitoring redhat-ods-operator openshift-cluster-observability-operator openshift-lws-operator openshift-opentelemetry-operator openshift-tempo-operator openshift-operators-redhat"
 WEBHOOK_PATTERN='kserve|opendatahub|odh-|llminferenceservice'
 
-usage() { echo "Usage: wipe-site.sh [--kubeconfig PATH] [--dry-run [--assume-detached]]  (default: the only site's login)"; }
+usage() { echo "Usage: wipe-site.sh [--site NAME | --kubeconfig PATH] [--dry-run [--assume-detached]]  (default: the only site's login)"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-kubeconfig="" dry_run=false assume_detached=false
+kubeconfig="" name="" dry_run=false assume_detached=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --kubeconfig) kubeconfig="$2"; shift 2 ;;
+    --site) name="$2"; shift 2 ;;
     --dry-run) dry_run=true; shift ;;
     # For uninstall.sh's dry run, which plans the detach before the wipe.
     --assume-detached) assume_detached=true; shift ;;
@@ -52,7 +53,7 @@ if [ -z "$kubeconfig" ]; then
   here="$(cd "$(dirname "$0")" && pwd)"
   . "$here/clusters.sh"
   clusters_load "$here/.." || exit 1
-  site=$(site_name) || exit 1
+  site=$(site_name "$name") || exit 1
   cluster_login_ok "$site" || exit 1
   kubeconfig=$(cluster_kubeconfig "$site")
 fi

@@ -12,7 +12,7 @@
 #                  and the object-storage Secret (apps/object-storage/README.md)
 #   --step spoke   a spoke (with no --cluster, the only site in clusters.yaml) before it joins ACM: OpenShift version, a default
 #                  StorageClass (the hub's policies deliver its pull secret),
-#                  and a previous install (a klusterlet, a DataScienceCluster,
+#                  and a previous install (a klusterlet, a DataScienceCluster, a model,
 #                  the OpenShift AI Subscription, grid objects)
 #   --expect-idp   the tenant IdP on this cluster: own (the deployment's own,
 #                  any OIDC provider) checks
@@ -43,11 +43,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 case "$step" in hub|spoke) ;; *) echo "--step must be hub or spoke" >&2; usage ;; esac
-if [ -z "$cluster" ] && [ -z "$kubeconfig" ] && [ "$step" = spoke ]; then cluster=site; fi
-if [ -n "$cluster" ]; then
+only_site=false; [ -z "$cluster" ] && [ -z "$kubeconfig" ] && [ "$step" = spoke ] && only_site=true
+if [ -n "$cluster" ] || $only_site; then
   . "$(dirname "$0")/clusters.sh"
   clusters_load "$(dirname "$0")/.." || exit 2
-  [ "$cluster" != site ] || cluster=$(site_name site) || exit 2
+  ! $only_site || cluster=$(site_name) || exit 2
   cluster_login_ok "$cluster" || exit 2
   kubeconfig=$(cluster_kubeconfig "$cluster")
 fi
@@ -126,6 +126,7 @@ if [ "$step" = spoke ]; then
   oc_ get subscriptions.operators.coreos.com rhods-operator -n redhat-ods-operator -o name >/dev/null 2>&1 &&
     found+=("Subscription redhat-ods-operator/rhods-operator")
   [ -n "$(oc_ get gridnetworks,gridsites -A -o name 2>/dev/null || true)" ] && found+=("GridNetwork or GridSite")
+  [ -n "$(oc_ get llminferenceservices -A -o name 2>/dev/null || true)" ] && found+=("LLMInferenceService")
   if $ours; then
     report OK "previous AI Grid install" "already a site of this hub"
   elif [ ${#found[@]} -gt 0 ]; then

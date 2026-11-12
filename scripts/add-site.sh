@@ -6,7 +6,7 @@
 #
 #   scripts/add-site.sh [NAME] [ISSUER]
 #
-# NAME defaults to the only site in clusters.yaml ("site" means the same).
+# NAME defaults to the only site in clusters.yaml.
 # ISSUER is the site's DNS-01 ClusterIssuer; without it, the site's only one.
 # Files that already exist are kept as they are; the apps domain and the issuer
 # are read only to write a missing one.
@@ -49,7 +49,7 @@ if [ ${#missing[@]} -gt 0 ]; then
       1) issuer=$issuers ;;
       *) echo "$name has several DNS-01 ClusterIssuers:"; sed 's/^/  /' <<<"$issuers"
          echo "Choose the one that issues publicly trusted certificates for *.$domain, and run:"
-         echo "  scripts/add-site.sh $name ISSUER"
+         echo "  make site-add SITE=$name ISSUER=ISSUER"
          exit 1 ;;
     esac
   fi

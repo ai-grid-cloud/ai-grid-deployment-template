@@ -40,7 +40,9 @@ $(site site-b combined us-east https://api.site-b.example.com:6443)")
 t "site_name defaults to the only site" 0 "^site-b$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name' "$d1"
 t "clusters.sh --site prints the only site" 0 "^site-b$" bash "$d1/scripts/clusters.sh" --site
 t "clusters.sh --site with several sites" 1 "name a site" bash "$d/scripts/clusters.sh" --site
-t "site_name: the word site is the only site" 0 "^site-b$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name site' "$d1"
+t "site_name: the word site is no longer special" 1 "site isn't a site in clusters.yaml: site-b" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name site' "$d1"
+t "site_name refuses a name that isn't a site" 1 "hub isn't a site in clusters.yaml: site-b, site-c" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name hub' "$d"
+t "clusters.sh --hub prints the hub" 0 "^hub$" bash "$d1/scripts/clusters.sh" --hub
 
 d=$(repo placeholder 'hub: {name: hub, api: REQUIRED-hubAPIURL}')
 t "placeholder named" 1 "set these in clusters.yaml: REQUIRED-hubAPIURL" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
@@ -102,12 +104,9 @@ t "join-site with several sites needs a name" 1 "name a site: site-b, site-c" en
 mkdir -p "$d1/.config/hub" "$d1/.config/site-b"; : > "$d1/.config/hub/kubeconfig"; : > "$d1/.config/site-b/kubeconfig"; : > "$STUB_LOG"
 t "join-site with one site needs no name" 0 "oc label managedcluster site-b ai-grid/enabled=true ai-grid/role=combined location=us-east" \
   bash -c 'PATH="$1:$PATH" JOIN_SITE_NO_WAIT=1 "$0/scripts/join-site.sh"; cat "$STUB_LOG"' "$d1" "$T/bin"
-t "with-cluster site is the only site" 0 "KUBECONFIG=$d1/.config/site-b/kubeconfig oc get nodes" \
-  bash -c 'PATH="$1:$PATH" "$0/scripts/with-cluster.sh" site oc get nodes; cat "$STUB_LOG"' "$d1" "$T/bin"
-t "with-cluster site with several sites" 1 "name a site: site-b, site-c" env PATH="$T/bin:$PATH" "$d/scripts/with-cluster.sh" site oc get nodes
-: > "$STUB_LOG"
-t "login NAME=site is the only site" 0 "oc login --server https://api.site-b.example.com:6443" \
-  bash -c 'PATH="$1:$PATH" "$0/scripts/login.sh" site; cat "$STUB_LOG"' "$d1" "$T/bin"
+t "with-cluster takes a site's name" 0 "KUBECONFIG=$d1/.config/site-b/kubeconfig oc get nodes" \
+  bash -c 'PATH="$1:$PATH" "$0/scripts/with-cluster.sh" site-b oc get nodes; cat "$STUB_LOG"' "$d1" "$T/bin"
+t "with-cluster has no word site" 1 "no cluster site in" env PATH="$T/bin:$PATH" "$d1/scripts/with-cluster.sh" site oc get nodes
 t "site check with several sites needs a name" 2 "name a site: site-b, site-c" env PATH="$T/bin:$PATH" "$d/scripts/check-prerequisites.sh" --step spoke
 : > "$STUB_LOG"
 t "site check with one site needs no name" 0 "KUBECONFIG=$d1/.config/site-b/kubeconfig oc whoami" \

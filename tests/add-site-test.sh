@@ -59,10 +59,10 @@ t "a missing file is written again" 0 "wrote +sites/site-b/maas-tls/certificate.
 W="$T/two"; mkdir -p "$W"; echo "{\"items\":[$(issuer le-dns dns01),$(issuer le-dns-staging dns01)]}" > "$W/issuers.json"
 D=$(repo two "$B")
 t "two DNS-01 issuers: lists them" 1 "^  le-dns-staging$"
-t "  ... and says how to choose one" 1 "scripts/add-site.sh site-b ISSUER"
-t "an issuer named" 0 "certificate from ClusterIssuer le-dns-staging" site le-dns-staging
+t "  ... and says how to choose one" 1 "make site-add SITE=site-b ISSUER=ISSUER"
+t "an issuer named" 0 "certificate from ClusterIssuer le-dns-staging" site-b le-dns-staging
 rm -rf "$D/apps" "$D/sites" "$D/values"
-t "an issuer that isn't DNS-01" 1 "le-http isn't a DNS-01 ClusterIssuer" site le-http
+t "an issuer that isn't DNS-01" 1 "le-http isn't a DNS-01 ClusterIssuer" site-b le-http
 
 W="$T/none"; mkdir -p "$W"; echo "{\"items\":[$(issuer le-http http01)]}" > "$W/issuers.json"
 D=$(repo none "$B")

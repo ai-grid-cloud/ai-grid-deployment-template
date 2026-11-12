@@ -26,7 +26,6 @@ login() { # NAME [oc login flags]
 
 if [ $# -ge 1 ]; then
   name=$1; shift
-  [ "$name" != site ] || name=$(site_name site)
   login "$name" "$@"; exit
 fi
 for name in $(hub_name) $(site_names); do

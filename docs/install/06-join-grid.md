@@ -1,9 +1,8 @@
 # Join the site to the grid
 
 Labels on the site's ManagedCluster make it a grid site. The hub then installs OpenShift AI, MaaS, the grid and the
-tenant settings in the site's role. These commands work on the only site in your `clusters.yaml`. With several sites,
-give the site's name where a command says `site`, or add it after the script's name, such as
-`scripts/join-site.sh SITE_NAME`.
+tenant settings in the site's role. The `make` targets on this page work on the only site in your `clusters.yaml`.
+With several sites, add the site's name, such as `make site-join SITE=SITE_NAME`.
 
 ## 1. Add the site's values
 
@@ -13,13 +12,13 @@ A site that runs the MaaS gateway (role `combined` or `ingress`) needs three fil
 `site-template/`:
 
 ```sh
-scripts/add-site.sh
+make site-add
 ```
 
 It reads the site's apps domain, uses the site's DNS-01 ClusterIssuer, writes the three files, runs
 `scripts/check-deployment.sh`, and prints the commands to commit and push them. If the site has several DNS-01
 ClusterIssuers, it lists them: run it again with the one that issues publicly trusted certificates for the site's
-apps domain, such as `scripts/add-site.sh site ISSUER_NAME`. It keeps files that already exist, and needs the
+apps domain, such as `make site-add ISSUER=ISSUER_NAME`. It keeps files that already exist, and needs the
 issuer only to write a missing one. An `inference` site needs no files.
 
 You should see `root renders; every input is set; every repository is an input.` Then run the `git add`,
@@ -31,7 +30,7 @@ You should see `root renders; every input is set; every repository is an input.`
 The site's labels on the hub make it a grid site, in the role and location from your `clusters.yaml`:
 
 ```sh
-scripts/join-site.sh
+make site-join
 ```
 
 It first checks that your commits are pushed, and waits until the hub's `deployment-root` has synced your latest
@@ -43,10 +42,11 @@ You should see `managedcluster.cluster.open-cluster-management.io/SITE labeled`.
 site's Applications:
 
 ```sh
-scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops | grep -- "-$(scripts/clusters.sh --site)"
+make site-status
 ```
 
-You should see `rhoai-SITE-…`, `cluster-config-SITE-…`, `acm-submariner-SITE`, `maas-db-SITE` and `SITE-maas-tls`.
+Under `Applications` you should see `rhoai-SITE-…`, `cluster-config-SITE-…`, `acm-submariner-SITE`, `maas-db-SITE`
+and `SITE-maas-tls`.
 OpenShift AI takes up to an hour on a new cluster, and less on one that ran OpenShift AI before.
 
 ## 3. Verify
@@ -58,19 +58,20 @@ OpenShift AI takes up to an hour on a new cluster, and less on one that ran Open
    ```
 
    Run it again every few minutes until you see, under the site, `OpenShift AI (DataScienceCluster): Ready` and its
-   GridSite `Available=True`, and on the hub no Application listed as not `Synced` and `Healthy`. If the phase flips between `Ready` and not, see
+   GridSite `Available=True`, and on the hub no Application listed as not `Synced` and `Healthy`. If the phase
+   flips between `Ready` and not, see
    [troubleshooting](troubleshooting.md#kserveready-flaps-false-on-a-site).
 
-   The site's GridNetwork, in `oc get gridnetworks -A`, shows `SITES` `0`: that column counts SWIM peers, and the
+   If you look at the site's GridNetwork, its `SITES` column shows `0`: that column counts SWIM peers, and the
    library's grid uses Local membership, which has none. Its `AVAILABLE` column is what to check.
 
 2. The MaaS hostname answers with a trusted certificate:
 
    ```sh
-   curl -sS -o /dev/null -w '%{http_code}\n' "https://maas.$(scripts/with-cluster.sh site oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')/v1/models"
+   make site-status
    ```
 
-   You should see `401` (no token yet) and no certificate error.
+   You should see `MaaS https://maas.SITE_APPS_DOMAIN/v1/models: 401`: no token yet, and no certificate error.
 
 ## Checkpoint
 

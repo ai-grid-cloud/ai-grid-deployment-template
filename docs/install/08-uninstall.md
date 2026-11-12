@@ -5,15 +5,16 @@ to how it was before you [prepared the hub](03-prepare-hub.md): OpenShift with y
 removes everything the install put there.
 
 Each command reads your hub and sites from `clusters.yaml` and signs in with each cluster's login in
-`.config/NAME/kubeconfig`, the same as the install. Sign in again first if a login has expired:
+`.config/NAME/kubeconfig`, the same as the install. Sign in again to any cluster whose login has expired:
 
 ```sh
-make login NAME=hub
-make login NAME=site
+make login
 ```
 
-These commands work on the only site in your `clusters.yaml`. With several sites, give each site's name in place of
-`site`, and after `uninstall.sh site`.
+The `make` targets on this page work on the only site in your `clusters.yaml`. With several sites, add the
+site's name, such as `make uninstall-site SITE=SITE_NAME`.
+
+The uninstall targets preview by default and delete nothing; `CONFIRM=1` runs them.
 
 ## What stays and what goes
 
@@ -82,7 +83,7 @@ its resources when a site's folder goes. The site step deletes them first, while
 Preview a site's uninstall. It deletes nothing:
 
 ```sh
-scripts/uninstall.sh site --dry-run
+make uninstall-site
 ```
 
 The output starts with the checks, then lists every step and every object it would delete, in order:
@@ -103,7 +104,7 @@ protect them as in [before you begin](#before-you-begin), and preview again.
 Preview the hub the same way:
 
 ```sh
-scripts/uninstall.sh hub --dry-run
+make uninstall-hub
 ```
 
 Until every site is uninstalled, the hub's preview warns `sites are still managed`.
@@ -118,14 +119,14 @@ The script refuses, and deletes nothing, in these cases:
 
 ## 3. Uninstall each site
 
-For each site, run the site step with a plan file:
+For each site, run the site step:
 
 ```sh
-scripts/uninstall.sh site --plan-file site-uninstall-plan.tsv
+make uninstall-site CONFIRM=1
 ```
 
-The plan comes from the site's Applications on the hub, which the first steps remove. If the run stops partway, run
-the same command again with the same plan file to resume.
+It saves its plan in `.uninstall/SITE-plan.tsv`, because the plan comes from the site's Applications on the hub,
+which the first steps remove. If the run stops partway, run the same command again to resume from that plan.
 
 The site step does the following:
 
@@ -152,11 +153,11 @@ A site takes about 15 minutes, most of it removing the DataScienceCluster and th
 After every site is uninstalled, run the hub step:
 
 ```sh
-scripts/uninstall.sh hub --plan-file hub-uninstall-plan.tsv
+make uninstall-hub CONFIRM=1
 ```
 
-As with a site, if the run stops partway, run the same command again with the same plan file. It refuses while any
-site is still managed.
+As with a site, if the run stops partway, run the same command again; its plan is in `.uninstall/hub-plan.tsv`.
+It refuses while any site is still managed.
 
 The hub step does the following:
 
@@ -178,17 +179,14 @@ A hub takes about 25 minutes, most of it removing MultiClusterHub, the multiclus
 
 ## 5. Verify
 
-On each cluster, check that the Argo CD Application kind, the install's namespaces and your sign-in are as expected.
-Run these for the hub, then for each site with `site` in place of `hub`:
+Check each cluster's Argo CD Application kind, the install's namespaces and your sign-in:
 
 ```sh
-scripts/with-cluster.sh hub oc get applications.argoproj.io -A 2>&1 | head -1
-scripts/with-cluster.sh hub oc get ns | grep -E 'open-cluster-management|multicluster-engine|redhat-ods|redhat-ai-grid|maas|ai-grid|gitops|kuadrant'
-scripts/with-cluster.sh hub oc get oauth cluster -o jsonpath='{.spec.identityProviders[*].name}{"\n"}'
+make uninstall-check
 ```
 
-You should see that the server doesn't have the resource type `applications`, no namespace from the list, and your
-platform's identity providers. Then sign in once to the cluster's web console.
+For each cluster you should see `Argo CD Application kind: gone`, `Install namespaces left: none`, and your platform's
+identity providers. Then sign in once to the cluster's web console.
 
 To reinstall, start again at [set up your deployment repository](02-repositories.md), with the same or new
 repositories.

@@ -7,8 +7,8 @@
 # Sourced by the other scripts:
 #   clusters_load DIR             reads and checks DIR/clusters.yaml
 #   hub_name, site_names          the hub's name; the sites' names
-#   site_name [NAME]              NAME, or the only site when NAME is empty or
-#                                 "site"; with several sites, asks you to name one
+#   site_name [NAME]              NAME, or the only site when NAME is empty;
+#                                 with several sites, asks you to name one
 #   cluster_field NAME FIELD      role, location or api
 #   cluster_kubeconfig NAME       the path of NAME's kubeconfig
 #   merge_kubeconfigs HUB SITE OUT  one kubeconfig with contexts hub and site
@@ -49,7 +49,10 @@ site_names() { awk '$2 != "hub" && NF {print $1}' <<<"$CLUSTERS_ROWS"; }
 site_name() { # [NAME]
   local n=${1:-} all count
   all=$(site_names)
-  if [ -n "$n" ] && { [ "$n" != site ] || grep -qx site <<<"$all"; }; then echo "$n"; return 0; fi
+  if [ -n "$n" ]; then
+    grep -qx -- "$n" <<<"$all" || { echo "error: $n isn't a site in clusters.yaml: $(echo $all | sed 's/ /, /g')" >&2; return 1; }
+    echo "$n"; return 0
+  fi
   count=$(grep -c . <<<"$all" || true)
   case "$count" in
     1) echo "$all" ;;
@@ -89,9 +92,12 @@ merge_kubeconfigs() { # HUB SITE OUT: renames each cluster, user and context, so
 
 # scripts/clusters.sh --rows DIR prints one line per cluster (name role location
 # api), or the error; prereqs.py uses it. scripts/clusters.sh --site [NAME]
-# prints site_name's answer for this repository.
+# prints site_name's answer for this repository (the Makefile's SITE=), and
+# scripts/clusters.sh --hub the hub's name.
 if [ "${BASH_SOURCE[0]}" = "$0" ] && [ "${1:-}" = --rows ]; then
   clusters_load "${2:-.}" && printf '%s' "$CLUSTERS_ROWS"
+elif [ "${BASH_SOURCE[0]}" = "$0" ] && [ "${1:-}" = --hub ]; then
+  clusters_load "$(dirname "$0")/.." && hub_name
 elif [ "${BASH_SOURCE[0]}" = "$0" ] && [ "${1:-}" = --site ]; then
   clusters_load "$(dirname "$0")/.." && site_name "${2:-}"
 fi

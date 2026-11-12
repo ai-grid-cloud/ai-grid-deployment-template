@@ -39,7 +39,7 @@ usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; }
 step="${1:-}"; [ $# -eq 0 ] || shift
 site="" plan_file="" dry_run=false
 case "$step" in
-  site) if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then site=$1; shift; else site=site; fi ;;
+  site) if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then site=$1; shift; fi ;;
   hub) ;;
   -h|--help) usage; exit 0 ;;
   *) die "usage: uninstall.sh site [NAME] | hub [--dry-run] [--plan-file PATH] (see --help)" ;;
@@ -57,9 +57,9 @@ for c in oc python3; do command -v "$c" >/dev/null || die "required command not 
 clusters_load "$here/.."
 hub=$(hub_name)
 if [ "$step" = site ]; then
-  site=$(site_name "$site") || exit 1
   [ "$site" != local-cluster ] || die "a hub that is also a site isn't supported yet: unlabel local-cluster, then run the hub step"
-  [ "$(cluster_field "$site" role)" != hub ] || die "$site is the hub: run uninstall.sh hub"
+  [ "$site" != "$hub" ] || die "$site is the hub: run uninstall.sh hub"
+  site=$(site_name "$site") || exit 1
 fi
 
 protect_ns="${WIPE_PROTECT_NAMESPACES:-}" protect_pkgs="${WIPE_PROTECT_PACKAGES:-}"

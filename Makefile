@@ -8,10 +8,17 @@
 # use a general quay.io login.
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN
 
-.PHONY: help login prereqs bootstrap status test update
+.PHONY: help login prereqs bootstrap status test update site-check site-wipe site-import site-add site-join \
+  site-status tenant-user tenant-call uninstall-site uninstall-hub uninstall-check
+
+# The site targets work on the only site in clusters.yaml; with several, set
+# SITE=NAME. Targets that change a cluster without asking preview by default;
+# CONFIRM=1 runs them.
+SITE ?=
+need = $(if $($(1)),,$(error set $(1), such as: make $@ $(1)=$(2)))
 
 help: ## Show the targets
-	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /: /'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /: /'
 
 login: ## Log in to each cluster in clusters.yaml that needs it; NAME=... for one
 	@scripts/login.sh $(NAME)
@@ -31,3 +38,41 @@ test: ## Run the scripts' tests
 
 update: ## Merge the template's latest main into this repository; never pushes
 	@scripts/update-from-template.sh
+
+site-check: ## Check a site before you import it; read-only (page 5)
+	@scripts/site-check.sh $(SITE)
+
+site-wipe: ## Preview removing a site's old install; CONFIRM=1 removes it (page 5)
+	@scripts/wipe-site.sh $(if $(SITE),--site $(SITE)) $(if $(CONFIRM),,--dry-run)
+
+site-import: ## Import a site into the hub's ACM, after a y/N prompt (page 5)
+	@scripts/import-site.sh $(SITE)
+
+site-add: ## Write an ingress or combined site's files; ISSUER=... if it has several (page 6)
+	@n=$$(scripts/clusters.sh --site $(SITE)) && scripts/add-site.sh "$$n" $(ISSUER)
+
+site-join: ## Label a site on the hub so the hub installs it (page 6)
+	@scripts/join-site.sh $(SITE)
+
+site-status: ## Show a site's ACM state, hub Applications, MaaS host and models; read-only
+	@scripts/site-status.sh $(SITE)
+
+tenant-user: ## Create a test tenant user: ORG=... TENANT_USER=... PASSWORD_FILE=... (page 7)
+	@$(call need,ORG,ORG_NAME)$(call need,TENANT_USER,TENANT_USER)$(call need,PASSWORD_FILE,PASSWORD_FILE)
+	@scripts/create-test-tenant.sh --kubeconfig ".config/$$(scripts/clusters.sh --hub)/kubeconfig" --org "$(ORG)" \
+	  --user "$(TENANT_USER)" --password-file "$(PASSWORD_FILE)"
+
+tenant-call: ## Call a model as that user: TENANT_USER, PASSWORD_FILE, SUBSCRIPTION, MODEL (page 7)
+	@$(call need,TENANT_USER,TENANT_USER)$(call need,PASSWORD_FILE,PASSWORD_FILE)$(call need,SUBSCRIPTION,SUBSCRIPTION_ID)$(call need,MODEL,MODEL_NAME)
+	@scripts/tenant-call.sh --user "$(TENANT_USER)" --password-file "$(PASSWORD_FILE)" --subscription "$(SUBSCRIPTION)" \
+	  --model "$(MODEL)" $(if $(SITE),--site $(SITE))
+
+uninstall-site: ## Preview a site's uninstall; CONFIRM=1 runs it (page 8)
+	@n=$$(scripts/clusters.sh --site $(SITE)) && mkdir -p .uninstall && \
+	  scripts/uninstall.sh site "$$n" $(if $(CONFIRM),--plan-file ".uninstall/$$n-plan.tsv",--dry-run)
+
+uninstall-hub: ## Preview the hub's uninstall; CONFIRM=1 runs it (page 8)
+	@mkdir -p .uninstall && scripts/uninstall.sh hub $(if $(CONFIRM),--plan-file .uninstall/hub-plan.tsv,--dry-run)
+
+uninstall-check: ## After an uninstall, show what is left on each cluster; read-only (page 8)
+	@scripts/uninstall-check.sh
