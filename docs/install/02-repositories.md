@@ -134,24 +134,26 @@ Install any tool marked `MISSING` before you continue.
 
 ## 4. Set your names
 
-Find each cluster's apps domain:
+Set the values that name your repositories and hosts:
 
 ```sh
-scripts/with-cluster.sh NAME oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}{"\n"}'
+scripts/set-inputs.sh CATALOG_REPO_URL
 ```
 
-Replace `NAME` with the cluster's name in `clusters.yaml`, such as `hub`. The output is similar to
-`apps.hub.example.com`.
+Replace `CATALOG_REPO_URL` with your catalog repository's URL, such as
+`https://github.com/my-org/ai-grid-catalog.git`. The script replaces only these `REQUIRED-` placeholders, reads the
+apps domains through your cluster logins, prints each value it sets, and then runs `scripts/check-deployment.sh`:
 
-Replace each `REQUIRED-` placeholder:
-
-| File | Placeholder | Set it to |
+| File | Value | Set to |
 |---|---|---|
-| `root/kustomization.yaml` | `REQUIRED-deploymentRepoURL` | Your deployment repository's URL, such as `https://github.com/my-org/ai-grid-deployment.git` |
-| `root/kustomization.yaml` | `REQUIRED-catalogRepoURL` | Your catalog repository's URL, such as `https://github.com/my-org/ai-grid-catalog.git` |
-| `root/kustomization.yaml` | `REQUIRED-idpIssuerURL` | `https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants`, with the hub's apps domain |
-| `root/self.yaml` | `REQUIRED-deploymentRepoURL` | Your deployment repository's URL, as in `root/kustomization.yaml` |
-| `tenant-idp/manifests/settings.yaml` | `REQUIRED-portalRedirectURI` | `https://maas.SITE_APPS_DOMAIN/*`, with the site's apps domain |
+| `root/kustomization.yaml` | `deploymentRepoURL` | Your deployment repository's URL, from `git remote get-url origin` |
+| `root/kustomization.yaml` | `catalogRepoURL` | `CATALOG_REPO_URL` |
+| `root/kustomization.yaml` | `idpIssuerURL` | `https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants`, with the hub's apps domain |
+| `root/self.yaml` | `repoURL` | Your deployment repository's URL |
+| `tenant-idp/manifests/settings.yaml` | `portalRedirectURI` | `https://maas.SITE_APPS_DOMAIN/*`, with the apps domain of the first `combined` or `ingress` site |
+
+The `REQUIRED-libraryRepoURL` and `REQUIRED-libraryRevision` in the root's `op: test` lines stay: they check the
+library's files, not yours. A value that's already set is kept, so you can run the script again.
 
 Keep every other value. Each one is a tested choice: for what it means and how to change it, see
 [Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9cb50e9afcc069669aff57d2bf25d0b759b85ece/docs/install/appendix-a-inputs.md) and
