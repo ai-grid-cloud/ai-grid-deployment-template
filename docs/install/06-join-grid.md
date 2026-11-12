@@ -59,6 +59,9 @@ OpenShift AI takes up to an hour on a new cluster, and less on one that ran Open
    GridSite `Available=True`, and on the hub no Application listed as not `Synced` and `Healthy`. If the phase flips between `Ready` and not, see
    [troubleshooting](troubleshooting.md#kserveready-flaps-false-on-a-site).
 
+   The site's GridNetwork, in `oc get gridnetworks -A`, shows `SITES` `0`: that column counts SWIM peers, and the
+   library's grid uses Local membership, which has none. Its `AVAILABLE` column is what to check.
+
 2. The MaaS hostname answers with a trusted certificate:
 
    ```sh
