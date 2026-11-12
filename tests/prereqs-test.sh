@@ -114,7 +114,7 @@ t "nothing set: token skipped" '^skipped +catalog token file' "$T/bin" "$w"
 
 t "quay.io/rhoai and stage" '^ok +registry.stage.redhat.io login' "$T/bin" "$w" --quay-auth-file "$A"
 G=$(authfile generic quay.io registry.stage.redhat.io)
-t "general quay.io login: ok with the note" '^ok +quay.io/rhoai login +general quay.io entry: page 3 needs RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1' "$T/bin" "$w" --quay-auth-file "$G"
+t "general quay.io login: ok with the note" '^ok +quay.io/rhoai login +general quay.io entry: page 3 needs make bootstrap ALLOW_GENERIC_LOGIN=1' "$T/bin" "$w" --quay-auth-file "$G"
 N=$(authfile nostage quay.io/rhoai)
 t "no stage login: ok, optional" '^ok +registry.stage.redhat.io login +none; optional: only nightly-only runtime images need it' "$T/bin" "$w" --quay-auth-file "$N"
 O=$(authfile other docker.io)

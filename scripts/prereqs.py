@@ -198,7 +198,7 @@ def check_registry(auth_file):
         report("ok", "quay.io/rhoai login", "quay.io/rhoai entry")
     elif has("quay.io"):
         report("ok", "quay.io/rhoai login",
-               "general quay.io entry: page 3 needs RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1, "
+               "general quay.io entry: page 3 needs make bootstrap ALLOW_GENERIC_LOGIN=1, "
                "or add a robot token for quay.io/rhoai")
     else:
         report("MISSING", "quay.io/rhoai login", "no quay.io/rhoai or quay.io entry with an auth value")
