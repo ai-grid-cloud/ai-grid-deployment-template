@@ -33,7 +33,7 @@ prereqs: ## Report what is installed and what isn't found; never blocks
 bootstrap: ## Install OpenShift GitOps on the hub and apply root/ (page 3)
 	@scripts/bootstrap-hub.sh
 
-status: ## Show how the hub's install is going; read-only (page 4)
+status: ## Show how the hub's install is going; read-only (pages 3 and 4)
 	@scripts/status.sh
 
 console-secrets: ## Create the console's secrets from your catalog token (page 4)

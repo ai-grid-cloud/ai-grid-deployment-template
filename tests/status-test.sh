@@ -26,6 +26,8 @@ case "$a" in
   *" whoami --show-server "*) echo https://api.hub.example.com:6443 ;;
   *" whoami "*) echo admin ;;
   *" get applications.argoproj.io tenant-idp "*) ans tenant-idp ;;
+  *" get applications.argoproj.io deployment-root "*) ans deployment-root ;;
+  *" get applicationsets.argoproj.io apps "*) ans appset.json ;;
   *" get applications.argoproj.io "*) ans apps.json ;;
   *" get multiclusterhub "*) ans mch ;;
   *" get pods "*) ans pods.json ;;
@@ -56,6 +58,7 @@ t "fresh: no MultiClusterHub" "^MultiClusterHub: not created yet$"
 t "fresh: no controller pod" "^Argo CD controller: no pod yet$"
 t "fresh: no tenant-idp" "^tenant-idp: not created yet$"
 t "fresh: no console" "^Console: no Route yet$"
+t "fresh: no deployment-root" "^deployment-root: not created yet$"
 
 # Installing: some Applications not ready, and the controller OOMKilled.
 W="$T/installing"; mkdir -p "$W"
@@ -72,6 +75,18 @@ t "OOMKilled called out with the fix" "^  !! The controller failed .*OOMKilled.*
 t "tenant-idp state" "^tenant-idp: Synced Progressing$"
 pods 2 Error CrashLoopBackOff > "$W/pods.json"
 t "CrashLoopBackOff called out" "^  !! The controller failed .*CrashLoopBackOff"
+printf 'OutOfSync Healthy' > "$W/deployment-root"
+t "deployment-root's state" "^deployment-root: OutOfSync Healthy$"
+total=$((total+1))
+if [ "$(env PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/status.sh" 2>&1 | sed -n 2p)" = "deployment-root: OutOfSync Healthy" ]
+then echo "   ok     ... right under the hub's name"; else fails=$((fails+1)); echo "   FAIL   ... right under the hub's name"; fi
+cat > "$W/appset.json" <<'JSON'
+{"status":{"conditions":[{"type":"ParametersGenerated","status":"True","message":"ok"},
+ {"type":"ErrorOccurred","status":"True","message":"missing input: catalogRepoURL"},
+ {"type":"ResourcesUpToDate","status":"False","message":"other"}]}}
+JSON
+t "the root ApplicationSet's error called out" "^  !! The root ApplicationSet apps: missing input: catalogRepoURL$"
+t "  ... and only that condition" "!! The root ApplicationSet" "other|ParametersGenerated"
 
 # Applications Degraded only by Placements that match no ManagedCluster wait
 # for a site; one with another unhealthy resource, or an unrelated Placement,
@@ -99,7 +114,9 @@ t "no Placements readable: nothing waits" "^  models +Synced +Degraded$"
 W="$T/done"; mkdir -p "$W"
 echo "{\"items\":[$(app acm Synced Healthy),$(app tenant-idp Synced Healthy)]}" > "$W/apps.json"
 printf 'Running' > "$W/mch"; pods 0 > "$W/pods.json"; printf 'Synced Healthy' > "$W/tenant-idp"
-printf 'console.apps.hub.example.com' > "$W/route"
+printf 'console.apps.hub.example.com' > "$W/route"; printf 'Synced Healthy' > "$W/deployment-root"
+echo '{"status":{"conditions":[{"type":"ErrorOccurred","status":"False","message":"Successfully generated parameters"}]}}' > "$W/appset.json"
+t "done: deployment-root Synced" "^deployment-root: Synced Healthy$"
 t "done: all Applications ready" "^Applications: all 2 Synced and Healthy$"
 t "done: no warning, no empty termination" "^Argo CD controller: openshift-gitops-application-controller-0, 0 restarts$" "!!"
 t "done: console URL" "^Console: https://console.apps.hub.example.com$"

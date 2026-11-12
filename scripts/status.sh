@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Show how the hub's install is going, in one go (install guide, page 4): the
-# Applications that aren't Synced and Healthy, the MultiClusterHub's phase,
-# Argo CD's application controller (restarts, and OOMKilled or
-# CrashLoopBackOff called out), the tenant Keycloak's Application, and the
+# Show how the hub's install is going, in one go (install guide, pages 3 and 4):
+# deployment-root's sync and health and any error the root ApplicationSet apps
+# reports, the Applications that aren't Synced and Healthy, the
+# MultiClusterHub's phase, Argo CD's application controller (restarts, and
+# OOMKilled or CrashLoopBackOff called out), the tenant Keycloak's Application, and the
 # provider console's Route; then, for each site in clusters.yaml, OpenShift
 # AI's DataScienceCluster phase and its GridSite. Read-only; always exits 0
 # once it reaches the hub.
@@ -24,6 +25,14 @@ waits_for_site=" acm-submariner-local-cluster limitador-redis maas-db-local-clus
 fix="see docs/install/troubleshooting.md, \"Nothing installs on the hub\""
 
 echo "Hub $hub ($(oc whoami --show-server 2>/dev/null))"
+# deployment-root syncs root/ (page 3); the root ApplicationSet apps reports
+# a bad input or destination as an ErrorOccurred condition.
+root=$(oc get applications.argoproj.io deployment-root -n openshift-gitops \
+  -o jsonpath='{.status.sync.status} {.status.health.status}' 2>/dev/null)
+echo "deployment-root: ${root:-not created yet}"
+oc get applicationsets.argoproj.io apps -n openshift-gitops -o json 2>/dev/null |
+  jq -r '.status.conditions[]? | select(.type == "ErrorOccurred" and .status == "True") | .message' 2>/dev/null |
+  while IFS= read -r msg; do echo "  !! The root ApplicationSet apps: $msg"; done
 
 echo
 # Placements that match no ManagedCluster yet, as "namespace/name". Argo CD may not

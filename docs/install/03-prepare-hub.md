@@ -42,25 +42,16 @@ MISSING  object storage                           Secret open-cluster-management
 
 ## 2. Check that Argo CD follows your repository
 
-Wait for `deployment-root`, the Application that syncs `root/`, to sync:
+Check that `deployment-root`, the Application that syncs `root/`, has synced, and that the root ApplicationSet `apps`
+reports no error:
 
 ```sh
-scripts/with-cluster.sh hub oc wait applications.argoproj.io/deployment-root -n openshift-gitops --for=jsonpath='{.status.sync.status}'=Synced --timeout=10m
+make status
 ```
 
-It can show `OutOfSync` for a few minutes after the bootstrap. You should see
-`application.argoproj.io/deployment-root condition met`. On an ACM hub, `oc get application` means ACM's kind; always
-write `applications.argoproj.io`.
-
-Check the root ApplicationSet's conditions:
-
-```sh
-scripts/with-cluster.sh hub oc get applicationset apps -n openshift-gitops \
-  -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.message}{"\n"}{end}'
-```
-
-You should see `ParametersGenerated=True` and no `ErrorOccurred=True`. For `missing input: NAME` or
-`invalid input: NAME`, see
+You should see `deployment-root: Synced`, followed by its health, under the hub's name, and no line starting with
+`!! The root ApplicationSet apps`. `deployment-root` can show `OutOfSync` for a few minutes after the bootstrap; run
+`make status` again until it's `Synced`. For `missing input: NAME` or `invalid input: NAME`, see
 [troubleshooting](troubleshooting.md#the-root-reports-missing-input-name-or-invalid-input-name).
 
 ## Checkpoint
