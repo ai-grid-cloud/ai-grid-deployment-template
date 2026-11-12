@@ -1,8 +1,9 @@
 # Prepare the site and join it to ACM
 
 On this page you check the site and import it into ACM. The site's name in `clusters.yaml` becomes its ACM cluster
-name. These commands work on the only site in your `clusters.yaml`. With several sites, give the site's name where
-a command says `site`, or add it after the script's name, such as `scripts/import-site.sh SITE_NAME`.
+name. These commands work on the only site in your `clusters.yaml`: the word `site`, as in
+`scripts/with-cluster.sh site`, stands for that site, and scripts given no name use it. With several sites, give the
+site's name in place of `site`, or after the script's name, such as `scripts/import-site.sh SITE_NAME`.
 
 If the cluster was a site of another hub, first [reuse it](#reuse-a-cluster-from-another-hub).
 
