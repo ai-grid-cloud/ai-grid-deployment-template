@@ -172,11 +172,13 @@ Keep every other value. Each one is a tested choice: for what it means and how t
    You should see `root renders; every input is set; every repository is an input.` If you see
    `unset inputs:` or `placeholders left in your files:`, set the values it names and run it again.
 
-2. Commit and push:
+2. Commit your clusters file and the files `scripts/set-inputs.sh` changed, and push:
 
    ```sh
-   git add -A && git commit -m "deployment: set our names" && git push origin HEAD:main
+   git add clusters.yaml root tenant-idp && git commit -m "deployment: set our names" && git push origin HEAD:main
    ```
+
+   Run `git status` first if you changed anything else.
 
 ## Checkpoint
 
