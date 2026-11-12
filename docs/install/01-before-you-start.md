@@ -1,43 +1,30 @@
 # Before you start
 
-Gather the following before you run anything.
-
-> **Note:** Pre-release builds only. This template installs a pre-release (nightly) OpenShift AI 3.6 build: every
-> cluster pulls it from `quay.io/rhoai`, and model runtime images from `registry.stage.redhat.io`. Those registries
-> need logins that Red Hat gives only to early-access partners; ask your Red Hat contact. A released OpenShift AI
-> build won't need them, but the library can't install one yet ([known gaps](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/known-gaps.md)).
+Gather the following before you run anything. On the next page, `make prereqs` checks most of it.
 
 ## 1. Clusters
 
-| Cluster | OpenShift | Needs |
-|---|---|---|
-| Hub | 4.21 or later | A default StorageClass; room for ACM, Argo CD, the MaaS database primary, Keycloak, Redis and the console |
-| Site (combined) | 4.21 or later | A default StorageClass; capacity for its models (the CPU sample model in [first use](07-first-use.md) requests 4 CPU and 8 GiB); GPU nodes for GPU models |
-
-Every cluster, the hub included, needs two worker nodes that Submariner can use as gateways
-([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/hub/01-acm.md#submariner)). On compact clusters and single-node OpenShift you label them by hand.
+- **A hub and a site,** each on OpenShift 4.21 or later with a default StorageClass. Size the site for its models;
+  GPU models need GPU nodes.
+- **Two worker nodes on each cluster** that Submariner can use as gateways. On compact clusters and single-node
+  OpenShift, you label them by hand ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/hub/01-acm.md#submariner)).
+- **A `cluster-admin` sign-in to each cluster,** and its API URL.
+- **On the site, a cert-manager ClusterIssuer** that issues publicly trusted certificates by DNS-01.
 
 ## 2. Network
 
-| From | To | Port | Why |
-|---|---|---|---|
-| Your workstation | Every cluster's API | 6443 | `oc`, the import script |
-| Hub's Argo CD | Your git host | 443 | Reads the library, deployment and catalog repositories |
-| Every site | Hub, through Submariner | UDP 4500 and 4490, through a LoadBalancer Service | Grid enrollment, the MaaS database primary, Redis |
-| Ingress sites | Inference sites' default router | 443 (TLS passthrough) | Grid requests over mTLS |
-| Tenants | Ingress site's MaaS gateway load balancer | 443 | Model calls |
-| Ingress sites | Tenant identity provider's issuer URL | 443 | Token validation |
+- Your workstation reaches each cluster's API on port 6443, and the hub reaches your git host on 443.
+- The site and the hub reach each other's Submariner gateways on UDP 4500 and 4490, through a load balancer.
+- The site reaches the hub's tenant identity provider on 443, and tenants reach the site on 443.
+- Every router name answers `AAAA` queries with an address or an empty answer, never `NXDOMAIN`.
 
-Every router name must answer `AAAA` queries with an address or an empty answer, never `NXDOMAIN`; otherwise every
-GridSite stays `Connecting` ([site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/spokes/networking.md#dns)).
+For separate ingress and inference sites, see [site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/spokes/networking.md).
 
-## 3. Accounts and credentials
+## 3. Registry logins
 
-| What | Used in |
-|---|---|
-| Pre-release builds only: a container auth file with a `quay.io/rhoai` login (a robot token scoped to `quay.io/rhoai`) and a `registry.stage.redhat.io` login | [Prepare the hub](03-prepare-hub.md) |
-| A cert-manager ClusterIssuer on each ingress or combined site that issues publicly trusted certificates by **DNS-01** | [Join the site to the grid](06-join-grid.md) |
-| A `cluster-admin` sign-in to every cluster, and each cluster's API URL | [Set up your deployment repository](02-repositories.md#1-clone-your-repository-and-log-in-to-your-clusters) and every page after it |
+Pre-release builds only: this template installs a nightly OpenShift AI 3.6 build, so you need a container auth file
+with logins to `quay.io/rhoai` and `registry.stage.redhat.io`. Red Hat gives them to early-access partners; ask your
+Red Hat contact.
 
 ## 4. Tools on your workstation
 

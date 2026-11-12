@@ -12,7 +12,7 @@ RHOAI_QUAY_PULL_SECRET_FILE=QUAY_AUTH_FILE scripts/check-prerequisites.sh --step
 ```
 
 Replace `QUAY_AUTH_FILE` with your container auth file with both pre-release registry logins
-([before you start](01-before-you-start.md#3-accounts-and-credentials)), such as
+([before you start](01-before-you-start.md#3-registry-logins)), such as
 `~/.config/containers/auth.json`. The check only checks that the file exists.
 
 The output is similar to the following:
