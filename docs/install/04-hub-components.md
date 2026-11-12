@@ -53,7 +53,9 @@ publicly trusted, see
    ```
 
    You should see no Application listed as not `Synced` and `Healthy` (the ones on the `Waiting for a site to join`
-   line are fine), `MultiClusterHub: Running`, no `!!` line, and `Console: https://CONSOLE_HOST`.
+   line are fine), `MultiClusterHub: Running`, no `!!` line, and `Console: https://CONSOLE_HOST`. For about
+   5 minutes after you create the secrets, `grid-bootstrap` can show `OutOfSync` while its root certificate is
+   issued; run `make status` again.
 
 2. Check that the console pod is up:
 
