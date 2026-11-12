@@ -99,7 +99,7 @@ console writes them there with a token that can write only this repository.
 
    It asks for the token without showing it, and writes it to `~/.ai-grid/catalog-token`, readable only by you. Paste
    the token and press Enter. You use it in
-   [install the hub components](04-hub-components.md#2-create-the-consoles-secrets).
+   [install the hub components](04-hub-components.md#1-create-the-consoles-secrets).
 
 ## 3. Check your prerequisites
 

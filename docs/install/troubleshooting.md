@@ -82,7 +82,7 @@ Then run `make status` again: the restarts stop and the Applications progress wi
 
 **Cause:** they wait for the first site to join.
 
-**Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#1-watch-the-components-install)). After a site joins, check the site's Submariner gateways ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/hub/01-acm.md#submariner)).
+**Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#2-verify)). After a site joins, check the site's Submariner gateways ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/hub/01-acm.md#submariner)).
 
 ## A site's `rhoai-SITE` Application doesn't appear or doesn't render
 

@@ -9,7 +9,7 @@ Steps 2 to 4 use the console. To script them instead, see
 
 ## 1. Sign in to the console
 
-1. Open `https://CONSOLE_HOST` (from [install the hub components](04-hub-components.md#3-verify)) and sign in as a
+1. Open `https://CONSOLE_HOST` (from [install the hub components](04-hub-components.md#2-verify)) and sign in as a
    user with `cluster-admin` on the hub.
 
    You should see the **AI Grid** page, with your user name followed by `(provider admin)`.
