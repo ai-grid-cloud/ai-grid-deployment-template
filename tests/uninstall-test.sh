@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests for scripts/uninstall.sh's safety checks and dry run, against a stub oc
-# and a repository copy with a clusters file. Nothing here reaches a cluster.
+# and a repository copy with a clusters.yaml. Nothing here reaches a cluster.
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 SRC=$(pwd -P)
@@ -8,11 +8,16 @@ T=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$T"' EXIT
 total=0 fails=0
 D="$T/deploy"; W="$T/world"; mkdir -p "$T/bin" "$D/.config/hub" "$D/.config/site-b" "$W"
 cp -R "$SRC/scripts" "$D/"; touch "$D/.config/hub/kubeconfig" "$D/.config/site-b/kubeconfig"
-cat > "$D/clusters" <<'EOF'
-hub      hub       -        https://api.hub.example.com:6443
-site-b   combined  us-east  https://api.site.example.com:6443
+cat > "$D/clusters.yaml" <<'EOF'
+apiVersion: ai-grid.dev/v1alpha1
+kind: Clusters
+hub: {name: hub, api: "https://api.hub.example.com:6443"}
+sites:
+  - {name: site-b, role: combined, location: us-east, api: "https://api.site.example.com:6443"}
 EOF
 cp tests/fixtures/uninstall-applications.json "$W/apps.json"
+# clusters.sh reads clusters.yaml with the real kubectl and jq.
+for t in kubectl jq; do ln -s "$(command -v "$t")" "$T/bin/$t"; done
 
 # Stub oc. Each cluster is named by its login's directory (.config/NAME/kubeconfig),
 # from --kubeconfig or KUBECONFIG; its world is $STUB/NAME.* files.
@@ -75,7 +80,7 @@ no_writes() { # name args...: the run succeeds, says it deleted nothing, and the
   else fails=$((fails+1)); echo "   FAIL $name: $(cat "$W/writes" 2>/dev/null)"; echo "$out" | tail -5; fi
 }
 
-# Arguments and the clusters file
+# Arguments and clusters.yaml
 world; t "no step is refused" 1 "usage: uninstall.sh" 
 world; t "a site step needs a name" 1 "usage: uninstall.sh site NAME" site --dry-run
 world; t "an unknown site is refused" 1 "no cluster site-z in" site site-z --dry-run

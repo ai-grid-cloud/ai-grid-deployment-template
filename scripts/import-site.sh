@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Import a site from the clusters file into the hub's ACM, with the library's
+# Import a site from clusters.yaml into the hub's ACM, with the library's
 # import script at your pin (docs/acm/cluster-onboarding/import-managed-cluster.sh).
 # It prints a summary and changes nothing until you add --yes.
 #

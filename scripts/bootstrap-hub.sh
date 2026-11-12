@@ -11,7 +11,7 @@
 #    login, when present) that the prerequisites Policy copies to every site.
 #    The credentials are read from a container auth file and never printed.
 #
-# Runs against the hub in the clusters file, with its login (.config/NAME/kubeconfig).
+# Runs against the hub in clusters.yaml, with its login (.config/NAME/kubeconfig).
 #
 # Usage: RHOAI_QUAY_AUTH_FILE=AUTH_JSON scripts/bootstrap-hub.sh [--deployment DIR]
 set -Eeuo pipefail

@@ -18,13 +18,13 @@ out=$DEPLOYMENT_ROOT
 left="$(printf '%s\n' "$out" | grep -v 'regexFind "REQUIRED-' | grep -oE 'REQUIRED-[a-zA-Z]+' | sed 's/^REQUIRED-//' | sort -u | tr '\n' ' ' || true)"
 # Placeholders in the repository's own files outside root/, such as a tenant
 # IdP's hostnames: path:line:REQUIRED-<name>.
-placeholders="$(cd "$dir" && grep -rnoE --include='*.yaml' --include='*.yml' --include='*.json' --include=clusters \
+placeholders="$(cd "$dir" && grep -rnoE --include='*.yaml' --include='*.yml' --include='*.json' --exclude=clusters-example.yaml \
   --exclude-dir=.git --exclude-dir=.library --exclude-dir=root 'REQUIRED-[a-zA-Z]+' . | sed 's#^\./##' || true)"
 [ -z "$left" ] || echo "unset inputs: ${left% }"
 [ -z "$placeholders" ] || { echo "placeholders left in your files:"; echo "$placeholders"; }
 [ -z "$left$placeholders" ] || exit 1
-# The clusters file, when there is one: four columns, one hub, known roles.
-if [ -f "$dir/clusters" ]; then . "$(dirname "$0")/clusters.sh"; clusters_load "$dir" || exit 1; fi
+# clusters.yaml, when there is one: a hub, and sites with known roles.
+if [ -f "$dir/clusters.yaml" ]; then . "$(dirname "$0")/clusters.sh"; clusters_load "$dir" || exit 1; fi
 # Every input the library declares (its bootstrap/hub generator values) must
 # be set: replacing the values map can drop one without leaving a marker.
 library_dir "$dir"

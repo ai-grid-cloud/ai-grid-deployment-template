@@ -14,21 +14,44 @@ repository, set the names that must be yours, check the result, and push it.
    Replace `DEPLOYMENT_REPO_URL` with your deployment repository's clone URL. Run every command in this guide from the
    `deployment` directory.
 
-2. In `clusters`, replace the `REQUIRED-` placeholders with your hub's and site's API URLs, the site's name, such as
-   `site-east-1`, and its location, such as `us-east`. Keep the hub's name, `hub`, and the site's role, `combined`:
-   the guide's commands use them. The file is how your repository records which clusters make up your grid.
+2. Name your clusters. Copy the example file:
+
+   ```sh
+   cp clusters-example.yaml clusters.yaml
+   ```
+
+   In `clusters.yaml`, replace each `REQUIRED-` value: the hub's API URL, and the site's name, location and API URL.
+   Keep the hub's name, `hub`, and the site's role, `combined`: the guide's commands use them. To find a cluster's
+   API URL, run `oc whoami --show-server` while logged in to it. For example:
+
+   ```yaml
+   apiVersion: ai-grid.dev/v1alpha1
+   kind: Clusters
+   hub:
+     name: hub
+     api: https://api.hub.example.com:6443
+   sites:
+     - name: site-east-1
+       role: combined
+       location: us-east
+       api: https://api.site-east-1.example.com:6443
+   ```
+
+   The site's name becomes its ACM cluster name, and you can't change it once the site is imported. Commit
+   `clusters.yaml` with your other changes in part 4; it records which clusters make up your grid, and holds no
+   secrets.
 
 3. Log in to each cluster as a `cluster-admin` user:
 
    ```sh
-   make login NAME=hub
-   make login NAME=SITE_NAME
+   make login
    ```
 
-   Replace `SITE_NAME` with the site's name in `clusters`. Each runs `oc login --web` against the cluster's API URL,
-   which opens your browser, and saves the login in `.config/NAME/kubeconfig`, which git ignores. Your own kubeconfig
-   isn't touched. To use a kubeconfig you already have instead, such as the installer's `auth/kubeconfig`, copy it
-   to `.config/NAME/kubeconfig`.
+   For each cluster in `clusters.yaml`, it runs `oc login --web` against the cluster's API URL, which opens your
+   browser, and saves the login in `.config/NAME/kubeconfig`, which git ignores. Your own kubeconfig isn't touched.
+   Clusters you're still logged in to are skipped. When one login expires later, run `make login` again, or
+   `make login NAME=hub` for one cluster. To use a kubeconfig you already have instead, such as the installer's
+   `auth/kubeconfig`, copy it to `.config/NAME/kubeconfig`.
 
 4. Check your prerequisites:
 
@@ -39,7 +62,7 @@ repository, set the names that must be yours, check the result, and push it.
    Replace `QUAY_AUTH_FILE` with your container auth file with the pre-release registry logins, such as
    `~/.config/containers/auth.json`. Add `CATALOG_TOKEN_FILE=~/.ai-grid/catalog-token` after part 2.
 
-   It checks your tools, each cluster in `clusters`, and your registry logins, and fetches the library at your pin
+   It checks your tools, each cluster in `clusters.yaml`, and your registry logins, and fetches the library at your pin
    into `.library/`, which git ignores. The scripts in `scripts/` use it. It changes nothing on your clusters and
    never blocks; checks whose input you haven't set yet print `skipped`. The output is similar to the following:
 
@@ -109,7 +132,8 @@ Find each cluster's apps domain:
 scripts/with-cluster.sh NAME oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}{"\n"}'
 ```
 
-Replace `NAME` with the cluster's name in `clusters`, such as `hub`. The output is similar to `apps.hub.example.com`.
+Replace `NAME` with the cluster's name in `clusters.yaml`, such as `hub`. The output is similar to
+`apps.hub.example.com`.
 
 Replace each `REQUIRED-` placeholder:
 

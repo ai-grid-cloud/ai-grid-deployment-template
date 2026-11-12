@@ -1,0 +1,35 @@
+# Your AI Grid clusters: the hub, and each site with its role.
+#
+# Copy this file to clusters.yaml, replace each REQUIRED- value, and commit it:
+#
+#   cp clusters-example.yaml clusters.yaml
+#
+# The install scripts read clusters.yaml to find each cluster, and your repository
+# keeps a record of which clusters make up your grid. Nothing in it is secret:
+# each cluster's login lives in .config/NAME/kubeconfig, which git ignores
+# (make login).
+apiVersion: ai-grid.dev/v1alpha1
+kind: Clusters
+
+# The ACM hub: runs Argo CD, ACM and the shared services, and no models.
+hub:
+  # The name the scripts and the guide use for the hub. Keep "hub".
+  name: hub
+  # The hub's API URL, from oc whoami --show-server, such as
+  # https://api.hub.example.com:6443
+  api: REQUIRED-hubAPIURL
+
+# Each site: an OpenShift cluster the hub makes part of the grid.
+sites:
+  # The site's name: a DNS label, such as site-east-1. It becomes its ACM
+  # cluster name, and you can't change it once the site is imported.
+  - name: REQUIRED-siteName
+    # combined (tenants enter here and models run here), ingress (tenants enter
+    # here, no models) or inference (models only). The guide installs combined.
+    role: combined
+    # Where the site is, such as us-east. The provider console shows it.
+    location: REQUIRED-location
+    # The site's API URL, such as https://api.site-east-1.example.com:6443
+    api: REQUIRED-siteAPIURL
+
+  # Add a site: copy the four lines above, starting at "- name:".

@@ -1,14 +1,11 @@
 #!/usr/bin/env bash
-# Reads the clusters file at the root of a deployment repository: one line per
-# cluster, four columns, # starts a comment.
+# Reads clusters.yaml at the root of a deployment repository (copied from
+# clusters-example.yaml): the hub, and each site with its role, location and
+# API URL. Each cluster's login is .config/NAME/kubeconfig (git-ignored; make
+# login). kubectl parses the YAML offline (--local), and jq reads the result.
 #
-#   name      role                                 location   api
-#   hub       hub                                  -          https://api.hub.example.com:6443
-#   site-b    combined | ingress | inference       us-east    https://api.site-b.example.com:6443
-#
-# Each cluster's login is .config/NAME/kubeconfig (git-ignored; make login NAME=...).
 # Sourced by the other scripts:
-#   clusters_load DIR             reads and checks DIR/clusters
+#   clusters_load DIR             reads and checks DIR/clusters.yaml
 #   hub_name, site_names          the hub's name; the sites' names
 #   cluster_field NAME FIELD      role, location or api
 #   cluster_kubeconfig NAME       the path of NAME's kubeconfig
@@ -18,24 +15,29 @@ CLUSTERS_DIR="" CLUSTERS_ROWS=""
 
 clusters_load() {
   CLUSTERS_DIR=$(cd "${1:-.}" && pwd)
-  local f="$CLUSTERS_DIR/clusters" rows="" line n=0 hubs=0 name role location api extra
-  [ -f "$f" ] || { echo "error: no clusters file in $CLUSTERS_DIR" >&2; return 1; }
-  while IFS= read -r line || [ -n "$line" ]; do
-    n=$((n+1)); line=${line%%#*}
-    [ -n "${line//[[:space:]]/}" ] || continue
-    read -r name role location api extra <<<"$line"
-    [ -n "$api" ] && [ -z "$extra" ] || { echo "error: clusters line $n needs 4 columns: name role location api" >&2; return 1; }
-    case "$line" in *REQUIRED-*) echo "error: clusters line $n still has a placeholder: $(grep -oE 'REQUIRED-[A-Za-z]+' <<<"$line" | tr '\n' ' ')" >&2; return 1 ;; esac
-    [[ "$name" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || { echo "error: clusters line $n: name $name isn't a DNS label" >&2; return 1; }
-    case "$role" in
-      hub) hubs=$((hubs+1)) ;;
-      combined|ingress|inference) ;;
-      *) echo "error: clusters line $n: role $role isn't hub, combined, ingress or inference" >&2; return 1 ;;
+  local f="$CLUSTERS_DIR/clusters.yaml" json rows="" what name role location api left
+  [ -f "$f" ] || { echo "error: no clusters.yaml: copy clusters-example.yaml to clusters.yaml and edit it (install guide, page 2)" >&2; return 1; }
+  json=$(KUBECONFIG=/dev/null kubectl label --local -f "$f" ai-grid.dev/read=true -o json 2>&1) ||
+    { echo "error: clusters.yaml isn't valid: $json" >&2; return 1; }
+  [ "$(jq -r .kind <<<"$json")" = Clusters ] || { echo "error: clusters.yaml needs kind: Clusters" >&2; return 1; }
+  left=$(grep -oE 'REQUIRED-[A-Za-z]+' "$f" | sort -u | tr '\n' ' ' || true)
+  [ -z "$left" ] || { echo "error: set these in clusters.yaml: ${left% }" >&2; return 1; }
+  # One tab-separated row per cluster: what (hub or site N), name, role, location, api.
+  while IFS=$'\t' read -r what name role location api; do
+    [ -n "$name" ] && [ -n "$role" ] && [ -n "$location" ] && [ -n "$api" ] ||
+      { echo "error: clusters.yaml: $what needs name$([ "$what" = hub ] || echo ', role, location') and api" >&2; return 1; }
+    [[ "$name" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || { echo "error: clusters.yaml: $what name $name isn't a DNS label" >&2; return 1; }
+    case "$what:$role" in
+      hub:hub|site*:combined|site*:ingress|site*:inference) ;;
+      *) echo "error: clusters.yaml: $what role $role isn't combined, ingress or inference" >&2; return 1 ;;
     esac
-    [[ "$api" =~ ^https:// ]] || { echo "error: clusters line $n: api $api isn't an https URL" >&2; return 1; }
+    [[ "$api" =~ ^https:// ]] || { echo "error: clusters.yaml: $what api $api isn't an https URL" >&2; return 1; }
+    case " $(awk '{print $1}' <<<"$rows" | tr '\n' ' ') " in *" $name "*) echo "error: clusters.yaml: the name $name is used twice" >&2; return 1 ;; esac
     rows+="$name $role $location $api"$'\n'
-  done < "$f"
-  [ "$hubs" = 1 ] || { echo "error: the clusters file needs exactly one hub, found $hubs" >&2; return 1; }
+  done < <(jq -r '(["hub", .hub.name, "hub", "-", .hub.api]),
+      ((.sites // []) | to_entries[] | ["site \(.key + 1)", .value.name, .value.role, .value.location, .value.api])
+      | map(. // "" | tostring) | @tsv' <<<"$json")
+  [ -n "$rows" ] || { echo "error: clusters.yaml has no hub" >&2; return 1; }
   CLUSTERS_ROWS=$rows
 }
 
@@ -70,3 +72,9 @@ merge_kubeconfigs() { # HUB SITE OUT: renames each cluster, user and context, so
   KUBECONFIG="$tmp/hub.json:$tmp/site.json" oc config view --raw --flatten > "$out"
   rm -rf "$tmp"
 }
+
+# scripts/clusters.sh --rows DIR prints one line per cluster (name role location
+# api), or the error; prereqs.py uses it.
+if [ "${BASH_SOURCE[0]}" = "$0" ] && [ "${1:-}" = --rows ]; then
+  clusters_load "${2:-.}" && printf '%s' "$CLUSTERS_ROWS"
+fi

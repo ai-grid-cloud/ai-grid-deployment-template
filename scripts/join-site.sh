@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Make a site part of the grid: label its ManagedCluster on the hub with the
-# role and location from the clusters file. The hub then installs the site.
+# role and location from clusters.yaml. The hub then installs the site.
 #
 #   scripts/join-site.sh NAME
 set -euo pipefail

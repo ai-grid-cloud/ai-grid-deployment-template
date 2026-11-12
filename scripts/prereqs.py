@@ -7,7 +7,7 @@ Usage: scripts/prereqs.py [--library DIR] [--deployment DIR]
 Runs from your deployment repository; the library is .library/, which make prereqs fetches
 at your pin (scripts/library.sh).
 
-The clusters come from the deployment's clusters file, each with its login in
+The clusters come from the deployment's clusters.yaml, each with its login in
 .config/NAME/kubeconfig. Each option also reads an environment variable:
 QUAY_AUTH_FILE, CATALOG_TOKEN_FILE and LIBRARY. A check whose input you haven't set
 prints "skipped". Every line is: status, name, detail. Statuses: ok, MISSING,
@@ -226,26 +226,20 @@ ROLES = ("hub", "combined", "ingress", "inference")
 
 
 def read_clusters(deployment):
-    """[(name, role)] from DIR/clusters, or an error string."""
-    path = os.path.join(deployment, "clusters")
+    """[(name, role)] from DIR/clusters.yaml, or an error string. scripts/clusters.sh reads and checks it."""
+    if not os.path.isfile(os.path.join(deployment, "clusters.yaml")):
+        return "no clusters.yaml: copy clusters-example.yaml to clusters.yaml and edit it (page 2, part 1)"
+    if not (shutil.which("kubectl") and shutil.which("jq")):
+        return "needs kubectl and jq to read clusters.yaml"
+    env = dict(os.environ, PATH=os.environ.get("PATH", "") + ":/usr/bin:/bin")
     try:
-        lines = open(path).read().splitlines()
-    except OSError:
-        return "no clusters file: set your hub and sites in it (page 2, part 1)"
-    rows = []
-    for n, line in enumerate(lines, 1):
-        cols = line.split("#", 1)[0].split()
-        if not cols:
-            continue
-        left = re.findall(r"REQUIRED-[A-Za-z]+", line)
-        if left:
-            return f"set {' '.join(left)} in the clusters file (page 2, part 1)"
-        if len(cols) != 4 or cols[1] not in ROLES:
-            return f"clusters line {n} needs: name role location api, with role one of {', '.join(ROLES)}"
-        rows.append((cols[0], cols[1]))
-    if [r for _, r in rows].count("hub") != 1:
-        return "the clusters file needs exactly one hub"
-    return rows
+        p = subprocess.run(["/bin/bash", os.path.join(REPO, "scripts", "clusters.sh"), "--rows", deployment],
+                           capture_output=True, text=True, timeout=30, env=env)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"can't read clusters.yaml: {e}"
+    if p.returncode != 0:
+        return first_line(p.stderr).removeprefix("error: ") or "can't read clusters.yaml"
+    return [tuple(line.split()[:2]) for line in p.stdout.splitlines() if line.strip()]
 
 
 def check_clusters(deployment):

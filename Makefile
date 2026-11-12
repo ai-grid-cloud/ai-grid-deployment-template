@@ -1,4 +1,4 @@
-# Run from your deployment repository. The clusters file names your hub and
+# Run from your deployment repository. clusters.yaml names your hub and
 # sites; each one's login is .config/NAME/kubeconfig. The scripts fetch the
 # library at your pin into .library/ (scripts/library.sh); set LIBRARY to use
 # your own checkout.
@@ -11,9 +11,8 @@ export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY
 help: ## Show the targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /: /'
 
-login: ## Log in to one cluster from the clusters file: make login NAME=hub
-	@test -n "$(NAME)" || { echo "usage: make login NAME=<a name from the clusters file>" >&2; exit 2; }
-	@scripts/login.sh "$(NAME)"
+login: ## Log in to each cluster in clusters.yaml that needs it; NAME=... for one
+	@scripts/login.sh $(NAME)
 
 prereqs: ## Report what is installed and what isn't found; never blocks
 	-@scripts/library.sh >/dev/null

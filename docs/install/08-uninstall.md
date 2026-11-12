@@ -4,7 +4,7 @@ On this page you remove AI Grid from your clusters: each site first, then the hu
 to how it was before you [prepared the hub](03-prepare-hub.md): OpenShift with your platform's own services. It
 removes everything the install put there.
 
-Each command reads your hub and sites from the `clusters` file and signs in with each cluster's login in
+Each command reads your hub and sites from `clusters.yaml` and signs in with each cluster's login in
 `.config/NAME/kubeconfig`, the same as the install. Sign in again first if a login has expired:
 
 ```sh
@@ -107,7 +107,7 @@ Until every site is uninstalled, the hub's preview warns `sites are still manage
 
 The script refuses, and deletes nothing, in these cases:
 
-- A login's API server isn't the cluster's `api` in the `clusters` file. Run `make login NAME=NAME` against the right
+- A login's API server isn't the cluster's `api` in `clusters.yaml`. Run `make login NAME=NAME` against the right
   cluster.
 - A login isn't `cluster-admin`, or is only through objects the uninstall deletes.
 - The site's ACM agent says it's a different cluster.

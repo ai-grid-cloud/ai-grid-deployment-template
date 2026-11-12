@@ -5,7 +5,7 @@
 #   scripts/uninstall.sh site NAME [--dry-run] [--plan-file PATH]
 #   scripts/uninstall.sh hub       [--dry-run] [--plan-file PATH]
 #
-# NAME is a site in the clusters file (its ACM ManagedCluster name). Each
+# NAME is a site in clusters.yaml (its ACM ManagedCluster name). Each
 # cluster's login is .config/NAME/kubeconfig (make login NAME=...); the site
 # step uses the hub's login and the site's.
 #
@@ -18,7 +18,7 @@
 # stops partway can only resume with its plan file.
 #
 # Safety:
-# - Refuses a login whose API server isn't the cluster's api in the clusters file.
+# - Refuses a login whose API server isn't the cluster's api in clusters.yaml.
 # - Refuses unless each login is cluster-admin, and unless that access comes
 #   through a binding the uninstall doesn't delete.
 # - Never touches the protected namespaces and operator packages (the
@@ -69,11 +69,11 @@ S() { oc --kubeconfig "$site_kc" "$@"; }
 tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 
 # --- checks ---------------------------------------------------------------
-check_api() { # NAME: the login's API server is the cluster's api in the clusters file
+check_api() { # NAME: the login's API server is the cluster's api in clusters.yaml
   local want got
   want=$(cluster_field "$1" api | sed 's#/*$##')
   got=$(oc --kubeconfig "$(cluster_kubeconfig "$1")" whoami --show-server 2>/dev/null | sed 's#/*$##')
-  [ "$got" = "$want" ] || die "$1: the login is for ${got:-no server}, not $want (the clusters file); run make login NAME=$1"
+  [ "$got" = "$want" ] || die "$1: the login is for ${got:-no server}, not $want (clusters.yaml); run make login NAME=$1"
 }
 check_admin() { # KUBECONFIG LABEL: the login works and is cluster-admin
   local kc=$1 label=$2 who

@@ -1,12 +1,12 @@
 # Prepare the site and join it to ACM
 
-On this page you check the site and import it into ACM. Set the site's name from your clusters file first:
+On this page you check the site and import it into ACM. Set the site's name from your `clusters.yaml` first:
 
 ```sh
 export SITE=SITE_NAME
 ```
 
-Replace `SITE_NAME` with the site's name in `clusters`, such as `site-east-1`. It becomes the site's ACM cluster name.
+Replace `SITE_NAME` with the site's name in `clusters.yaml`, such as `site-east-1`. It becomes the site's ACM cluster name.
 
 If the cluster was a site of another hub, first [reuse it](#reuse-a-cluster-from-another-hub).
 

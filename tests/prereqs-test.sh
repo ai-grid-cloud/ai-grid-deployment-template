@@ -18,7 +18,11 @@ mkbin() { # dir: a bin dir with every tool stubbed
   local b=$1; mkdir -p "$b"; ln -sf "$PY" "$b/python3"
   # git answers --version itself and passes rev-parse on to the real git.
   printf '#!/bin/bash\n[ "$1" = --version ] && { echo "git version 1.2.3"; exit; }\nexec %s "$@"\n' "$GIT" > "$b/git"
-  for t in kubectl jq curl openssl base64 clusteradm make; do
+  # kubectl and jq answer --version themselves and pass the rest to the real ones (clusters.yaml).
+  for t in kubectl jq; do
+    printf '#!/bin/bash\ncase "$1" in version|--version) echo "%s 1.2.3"; exit ;; esac\nexec %s "$@"\n' "$t" "$(command -v "$t")" > "$b/$t"
+  done
+  for t in curl openssl base64 clusteradm make; do
     printf '#!/bin/bash\necho "%s 1.2.3"\n' "$t" > "$b/$t"
   done
   printf '#!/bin/bash\necho v5.8.3\n' > "$b/kustomize"
@@ -74,14 +78,14 @@ t() { # name expect_regex bin world [args...]; also checks rc 0 and no secret in
 
 w=$(world all-ok); A=$(authfile both quay.io/rhoai registry.stage.redhat.io)
 TOK="$T/token"; printf 'x' > "$TOK"; chmod 600 "$TOK"
-mkdep() { # name clusters-body: a deployment at the pin with that clusters file and a login for each cluster
+mkdep() { # name clusters-body: a deployment at the pin with that clusters.yaml and a login for each cluster
   local d="$T/$1"; mkdir -p "$d/root"
   printf '        libraryRevision: %s\n' "$("$GIT" -C "$LIBD" rev-parse HEAD)" > "$d/root/kustomization.yaml"
-  printf '%b\n' "$2" > "$d/clusters"
-  for n in $(sed 's/#.*//' "$d/clusters" | awk 'NF {print $1}'); do mkdir -p "$d/.config/$n"; : > "$d/.config/$n/kubeconfig"; done
+  printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\n%b\n' "$2" > "$d/clusters.yaml"
+  for n in $(grep -oE 'name: [a-z0-9-]+' "$d/clusters.yaml" | cut -d' ' -f2); do mkdir -p "$d/.config/$n"; : > "$d/.config/$n/kubeconfig"; done
   echo "$d"
 }
-D=$(mkdep deployment '# name role location api\nhub hub - https://api.hub:6443\nsite-b combined us-east https://api.site-b:6443')
+D=$(mkdep deployment "hub: {name: hub, api: 'https://api.hub:6443'}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: 'https://api.site-b:6443'}")
 ALL=(--deployment "$D" --quay-auth-file "$A" --catalog-token-file "$TOK")
 t "all ok: no problem lines" '^[0-9]+ ok$' "$T/bin" "$w" "${ALL[@]}"
 t "all ok: kustomize version" '^ok +kustomize +5\.8\.3' "$T/bin" "$w" "${ALL[@]}"
@@ -106,8 +110,8 @@ mkbin "$T/oldk"; printf '#!/bin/bash\necho "{Version:kustomize/v4.5.7 GitCommit:
 t "kustomize v4 is OLD" '^OLD +kustomize +4\.5\.7; version 5 or later needed' "$T/oldk" "$w"
 
 t "nothing set: registry skipped" '^skipped +registry logins +set QUAY_AUTH_FILE' "$T/bin" "$w"
-t "no clusters file: skipped" '^skipped +cluster checks +no clusters file' "$T/bin" "$w" --deployment "$T/other"
-P=$(mkdep placeholder 'hub hub - REQUIRED-hubAPIURL')
+t "no clusters.yaml: skipped" '^skipped +cluster checks +no clusters.yaml: copy clusters-example.yaml' "$T/bin" "$w" --deployment "$T/other"
+P=$(mkdep placeholder 'hub: {name: hub, api: REQUIRED-hubAPIURL}')
 t "clusters placeholder: skipped" '^skipped +cluster checks +.*REQUIRED-hubAPIURL' "$T/bin" "$w" --deployment "$P"
 t "site section named" '^Site site-b \(combined\)' "$T/bin" "$w" "${ALL[@]}"
 t "nothing set: token skipped" '^skipped +catalog token file' "$T/bin" "$w"

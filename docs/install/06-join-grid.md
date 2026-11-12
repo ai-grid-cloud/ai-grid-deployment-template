@@ -28,7 +28,7 @@ every repository is an input.` before the commit. What the files do, and other w
 
 ## 2. Label the site
 
-The site's labels on the hub make it a grid site, in the role and location from your clusters file:
+The site's labels on the hub make it a grid site, in the role and location from your `clusters.yaml`:
 
 ```sh
 scripts/join-site.sh "$SITE"

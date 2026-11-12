@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run a command against one cluster from the clusters file, with its login.
+# Run a command against one cluster from clusters.yaml, with its login.
 #
 #   scripts/with-cluster.sh NAME COMMAND [ARG ...]
 #
