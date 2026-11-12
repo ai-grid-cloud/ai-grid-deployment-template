@@ -33,7 +33,8 @@ case "$*" in
   "get applications.argoproj.io -A -o name")
     [ -f "$w.crd" ] || { echo 'error: the server doesn'"'"'t have a resource type "applications"' >&2; exit 1; }
     cat "$w.apps" 2>/dev/null; true ;;
-  "get ns -o name") echo namespace/default ;;
+  "get ns -o name") if [ -f "$w.ns" ]; then cat "$w.ns"; else echo namespace/default; fi ;;
+  "get ns -o jsonpath="*) cat "$w.terminating" 2>/dev/null; true ;;
   "get oauth cluster -o jsonpath="*) echo rhbk ;;
   *) exit 1 ;;
 esac
@@ -50,5 +51,11 @@ t "no kind at all is none too" 0 "^Argo CD Applications: none$" section site-b
 printf '%s\n' application.argoproj.io/a application.argoproj.io/b > "$STUB/hub.apps"
 t "Applications left are counted" 0 "^Argo CD Applications: 2 left$" section hub
 t "the kind itself isn't reported" 0 "^ok$" bash -c '! grep -q "Application kind" <<<"$0" && echo ok' "$(run 2>&1)"
+
+printf 'namespace/default\nnamespace/submariner-operator\n' > "$STUB/site-b.ns"
+t "a Submariner namespace is an install namespace" 0 "^Install namespaces left: submariner-operator $" section site-b
+echo submariner-operator > "$STUB/site-b.terminating"
+t "a namespace stuck in Terminating is named" 0 "^Namespaces in Terminating: submariner-operator$" section site-b
+t "  ... and none is reported as none" 0 "^Namespaces in Terminating: none$" section hub
 
 echo "uninstall-check tests: $((total-fails)) ok, $fails failed"; exit "$fails"

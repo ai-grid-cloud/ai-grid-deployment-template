@@ -12,8 +12,11 @@
 #   cluster_field NAME FIELD      role, location or api
 #   cluster_kubeconfig NAME       the path of NAME's kubeconfig
 #   merge_kubeconfigs HUB SITE OUT  one kubeconfig with contexts hub and site
+#   INSTALL_NS_RE                 an extended regex matching the namespaces an
+#                                 install creates on a hub or a site
 
 CLUSTERS_DIR="" CLUSTERS_ROWS=""
+INSTALL_NS_RE='open-cluster-management|multicluster-engine|redhat-ods|redhat-ai-grid|maas|ai-grid|gitops|kuadrant|submariner'
 
 clusters_load() {
   CLUSTERS_DIR=$(cd "${1:-.}" && pwd)

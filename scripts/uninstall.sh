@@ -266,6 +266,40 @@ drop_dangling_console_plugins() { # KUBECONFIG: enabled plugins with no ConsoleP
   oc --kubeconfig "$kc" patch consoles.operator.openshift.io cluster --type merge \
     -p "$(python3 -c 'import json, sys; print(json.dumps({"spec": {"plugins": sys.argv[1:]}}))' ${keep[@]+"${keep[@]}"})" >/dev/null
 }
+# Submariner's objects carry the finalizer controllers.submariner.io/cleanup,
+# which only its operator removes. Deleted after the operator is gone, they hold
+# namespace submariner-operator in Terminating, and a reinstall can't write
+# there (site-b, 2026-11-12).
+SUB_KINDS="submariners.submariner.io servicediscoveries.submariner.io"
+SUB_FINALIZER=controllers.submariner.io/cleanup
+sub_objects() { # KUBECONFIG: "KIND NAMESPACE NAME" for each Submariner object left
+  local kind
+  for kind in $SUB_KINDS; do
+    { oc --kubeconfig "$1" get "$kind" -A -o jsonpath='{range .items[*]}{.metadata.namespace} {.metadata.name}{"\n"}{end}' \
+      2>/dev/null || true; } | while read -r ns name; do [ -z "$name" ] || echo "$kind $ns $name"; done
+  done
+}
+delete_submariner() { # KUBECONFIG LABEL: delete Submariner's objects while its operator runs, and wait for them
+  local kc=$1 kind ns name
+  while read -r kind ns name; do [ -z "$name" ] || del "$kc" "$kind" "$name" -n "$ns"; done < <(sub_objects "$kc")
+  $dry_run && return 0
+  for _ in $(seq 1 30); do [ -z "$(sub_objects "$kc")" ] && return 0; sleep 10; done
+  echo "warning: Submariner's objects on $2 still present after 300s" >&2
+}
+release_submariner() { # KUBECONFIG: with the operator gone, drop the cleanup finalizer nothing else would remove
+  local kc=$1 kind ns name fins rest
+  oc --kubeconfig "$kc" get deployment submariner-operator -n submariner-operator >/dev/null 2>&1 && return 0
+  while read -r kind ns name; do
+    [ -n "$name" ] || continue
+    fins=$(oc --kubeconfig "$kc" get "$kind" "$name" -n "$ns" -o jsonpath='{.metadata.finalizers[*]}' 2>/dev/null || true)
+    case " $fins " in *" $SUB_FINALIZER "*) ;; *) continue ;; esac
+    if $dry_run; then echo "would remove the $SUB_FINALIZER finalizer from $kind $ns/$name (its operator is gone)"; continue; fi
+    rest=$(python3 -c 'import json, sys; print(json.dumps({"metadata": {"finalizers": [f for f in sys.argv[2:] if f != sys.argv[1]]}}))' \
+      "$SUB_FINALIZER" $fins)
+    oc --kubeconfig "$kc" patch "$kind" "$name" -n "$ns" --type merge -p "$rest" >/dev/null
+    echo "removed the $SUB_FINALIZER finalizer from $kind $ns/$name: its operator is gone, so nothing else would"
+  done < <(sub_objects "$kc")
+}
 load_plan() { # MODE OUTFILE: the saved plan if --plan-file has one, else a new plan (saved there)
   if [ -n "$plan_file" ] && [ -s "$plan_file" ]; then
     cp "$plan_file" "$2"
@@ -304,11 +338,14 @@ for a in json.load(sys.stdin)["items"]:
         print(a["metadata"]["name"])' "$site")"
       [ -z "$left" ] && break; sleep 10
     done
+    say "site: Submariner's objects, while its operator runs"
+    delete_submariner "$site_kc" "$site"
     say "hub: remove $site's Submariner add-on"
     # Before the detach, so the add-on uninstalls Submariner while its operator runs;
     # the detach alone removes the operator first and leaves Submariner's cleanup finalizers.
     del "$hub_kc" managedclusteraddons.addon.open-cluster-management.io submariner -n "$site"
     wait_gone "$hub_kc" 600 "$site's Submariner add-on" managedclusteraddons.addon.open-cluster-management.io submariner -n "$site"
+    release_submariner "$site_kc"
     wait_gone "$site_kc" 600 "Submariner on $site" ns submariner-operator
     say "hub: detach $site from ACM"
     del "$hub_kc" managedcluster "$site"
@@ -343,6 +380,7 @@ for x in json.load(sys.stdin)["items"]:
     del "$site_kc" klusterlet klusterlet
     wait_gone "$site_kc" 300 "Klusterlet" klusterlet klusterlet
   fi
+  release_submariner "$site_kc"
   sweep_ns "$site_kc" open-cluster-management-agent open-cluster-management-agent-addon submariner-operator \
     open-cluster-management-policies open-cluster-management "$site" ai-tenants redhat-ai-gateway-infra
 

@@ -23,6 +23,7 @@ case "$args" in
   *" get namespace "*)
     name=${args##* get namespace }; name=${name%% *}
     grep -qx "$name" "$d/namespaces" 2>/dev/null || exit 1; echo "namespace/$name" ;;
+  *" get namespaces -o jsonpath="*) cat "$d/terminating" 2>/dev/null ;;
   *" get datascienceclusters "*) [ -f "$d/dsc" ] || exit 1; cat "$d/dsc" ;;
   *" get subscriptions.operators.coreos.com "*) [ -f "$d/subs" ] || exit 1; cat "$d/subs" ;;
   *" get gridnetworks,gridsites "*) [ -f "$d/grid" ] || exit 1; cat "$d/grid" ;;
@@ -89,6 +90,10 @@ echo "subscription.operators.coreos.com/rhods-operator" > "$w/subs"
 echo "gridsite.grid.praxis.fast/site-b" > "$w/grid"
 t "previous install found" 1 "^FOUND +previous AI Grid install +.*Reuse a cluster from another hub" "$w" --step spoke
 t "  ... names what it found" 1 "klusterlet.*DataScienceCluster.*rhods-operator.*GridNetwork or GridSite" "$w" --step spoke
+w=$(world terminating); printf 'some-app\nsubmariner-operator\n' > "$w/terminating"
+t "an install namespace stuck in Terminating is a previous install" 1 "^FOUND +previous AI Grid install +namespace submariner-operator in Terminating" "$w" --step spoke
+w=$(world terminating-other); echo some-app > "$w/terminating"
+t "  ... another namespace in Terminating isn't" 0 "^OK +previous AI Grid install +none" "$w" --step spoke
 w=$(world klusterlet); echo open-cluster-management-agent > "$w/namespaces"
 t "a klusterlet alone is a previous install" 1 "^FOUND +previous AI Grid install +klusterlet" "$w" --step spoke
 w=$(world no-cm); : > "$w/crds"

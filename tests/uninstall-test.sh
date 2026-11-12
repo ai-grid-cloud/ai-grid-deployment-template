@@ -41,6 +41,10 @@ case "$*" in
   "get klusterlet klusterlet -o jsonpath="*) cat "$w.klusterlet" 2>/dev/null ;;
   "get klusterlet klusterlet") [ -s "$w.klusterlet" ] ;;
   get\ ns\ *) grep -qx "$3" "$w.ns" 2>/dev/null ;;
+  "get submariners.submariner.io -A -o jsonpath="*) cat "$w.submariners" 2>/dev/null ;;
+  "get servicediscoveries.submariner.io -A -o jsonpath="*) cat "$w.servicediscoveries" 2>/dev/null ;;
+  get\ submariners.submariner.io\ *jsonpath=*|get\ servicediscoveries.submariner.io\ *jsonpath=*) cat "$w.subfins" 2>/dev/null ;;
+  "get deployment submariner-operator -n submariner-operator") [ -f "$w.subop" ] ;;
   "get validatingwebhookconfigurations -o json") cat "$w.vwh" 2>/dev/null ;;
   "get clusterimagesets.hive.openshift.io -o name") cat "$w.cis" 2>/dev/null ;;
   "get configmaps cluster-monitoring-config -n openshift-monitoring -o name") [ -s "$w.cmc" ] && echo configmap/cluster-monitoring-config ;;
@@ -148,4 +152,23 @@ world; printf 'gone-plugin=kuadrant-system\n' > "$W/site-b.plugins"
 t "a console plugin whose backend namespace is gone is deleted" 0 "would delete: consoleplugins.console.openshift.io gone-plugin" site site-b --dry-run
 world; printf 'monitoring-plugin\nmissing-plugin\n' > "$W/hub.enabled"; echo monitoring-plugin > "$W/hub.plugin-objects"
 t "an enabled plugin with no ConsolePlugin is disabled" 0 "console plugin missing-plugin has no ConsolePlugin" hub --dry-run
+# Submariner's objects go while its operator runs; any left with its cleanup
+# finalizer once the operator is gone lose that finalizer.
+subworld() { world; echo "submariner-operator submariner" > "$W/site-b.submariners"
+  echo "submariner-operator submariner" > "$W/site-b.servicediscoveries"; echo "controllers.submariner.io/cleanup" > "$W/site-b.subfins"; }
+subworld; touch "$W/site-b.subop"; out=$(run site site-b --dry-run); total=$((total+1))
+a=$(grep -n "would delete: submariners.submariner.io submariner -n submariner-operator" <<<"$out" | cut -d: -f1 || true)
+b=$(grep -n "would delete: servicediscoveries.submariner.io submariner -n submariner-operator" <<<"$out" | cut -d: -f1 || true)
+c=$(grep -n "would delete: managedclusteraddons.addon.open-cluster-management.io submariner" <<<"$out" | cut -d: -f1 || true)
+if [ -n "$a" ] && [ -n "$b" ] && [ -n "$c" ] && [ "$a" -lt "$c" ] && [ "$b" -lt "$c" ]; then
+  echo "   ok   Submariner's objects go before its add-on, while its operator runs"
+else fails=$((fails+1)); echo "   FAIL Submariner's objects go before its add-on, while its operator runs"; echo "$out" | grep -i submariner; fi
+total=$((total+1))
+if ! grep -q "finalizer" <<<"$out"; then echo "   ok     ... and keep their finalizer while the operator runs"
+else fails=$((fails+1)); echo "   FAIL   ... and keep their finalizer while the operator runs"; fi
+subworld; t "  ... with the operator gone, their cleanup finalizer goes" 0 \
+  "would remove the controllers.submariner.io/cleanup finalizer from submariners.submariner.io submariner-operator/submariner" site site-b --dry-run
+subworld; echo "something.else/keep" > "$W/site-b.subfins"; out=$(run site site-b --dry-run); total=$((total+1))
+if ! grep -q "would remove the" <<<"$out"; then echo "   ok     ... and only that finalizer"
+else fails=$((fails+1)); echo "   FAIL   ... and only that finalizer"; fi
 echo "uninstall tests: $((total-fails)) ok, $fails failed"; exit "$fails"

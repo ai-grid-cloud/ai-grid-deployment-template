@@ -13,7 +13,8 @@
 #   --step spoke   a spoke (with no --cluster, the only site in clusters.yaml) before it joins ACM: OpenShift version, a default
 #                  StorageClass (the hub's policies deliver its pull secret),
 #                  and a previous install (a klusterlet, a DataScienceCluster, a model,
-#                  the OpenShift AI Subscription, grid objects)
+#                  the OpenShift AI Subscription, grid objects, an install
+#                  namespace stuck in Terminating)
 #   --expect-idp   the tenant IdP on this cluster: own (the deployment's own,
 #                  any OIDC provider) checks
 #                  the tenant Policy's two IdP inputs on this cluster: the
@@ -27,7 +28,7 @@
 # bad usage. A key is checked for presence only; its value is never printed.
 set -Eeuo pipefail
 
-usage() { sed -n '5,27p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '5,28p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 step="" kubeconfig="" cluster="" idp="" idp_secret="" idp_ca=""
 while [ $# -gt 0 ]; do
@@ -44,8 +45,8 @@ while [ $# -gt 0 ]; do
 done
 case "$step" in hub|spoke) ;; *) echo "--step must be hub or spoke" >&2; usage ;; esac
 only_site=false; [ -z "$cluster" ] && [ -z "$kubeconfig" ] && [ "$step" = spoke ] && only_site=true
+. "$(dirname "$0")/clusters.sh"
 if [ -n "$cluster" ] || $only_site; then
-  . "$(dirname "$0")/clusters.sh"
   clusters_load "$(dirname "$0")/.." || exit 2
   ! $only_site || cluster=$(site_name) || exit 2
   cluster_login_ok "$cluster" || exit 2
@@ -127,6 +128,9 @@ if [ "$step" = spoke ]; then
     found+=("Subscription redhat-ods-operator/rhods-operator")
   [ -n "$(oc_ get gridnetworks,gridsites -A -o name 2>/dev/null || true)" ] && found+=("GridNetwork or GridSite")
   [ -n "$(oc_ get llminferenceservices -A -o name 2>/dev/null || true)" ] && found+=("LLMInferenceService")
+  # An install namespace stuck in Terminating blocks a reinstall's writes into it.
+  for ns in $(oc_ get namespaces -o jsonpath='{range .items[?(@.status.phase=="Terminating")]}{.metadata.name}{"\n"}{end}' 2>/dev/null |
+    grep -E "$INSTALL_NS_RE" || true); do found+=("namespace $ns in Terminating"); done
   if $ours; then
     report OK "previous AI Grid install" "already a site of this hub"
   elif [ ${#found[@]} -gt 0 ]; then

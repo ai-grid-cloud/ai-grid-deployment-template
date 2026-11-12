@@ -135,8 +135,11 @@ which the first steps remove. If the run stops partway, run the same command aga
 The site step does the following:
 
 1. Removes the site's `ai-grid/enabled` and `ai-grid/role` labels, and waits for its Applications to go.
-2. Removes the site's Submariner add-on, detaches the site from ACM, deletes the Argo CD cluster Secret and grid
-   identity that the detach leaves on the hub, and waits for ACM to remove the site's agent.
+2. Deletes Submariner's `Submariner` and `ServiceDiscovery` objects while its operator runs, then removes the site's
+   Submariner add-on. If any of those objects is still there once the operator is gone, it removes their
+   `controllers.submariner.io/cleanup` finalizer, which nothing else would, and says so. Then it detaches the site
+   from ACM, deletes the Argo CD cluster Secret and grid identity that the detach leaves on the hub, and waits for
+   ACM to remove the site's agent.
 3. Runs `scripts/wipe-site.sh`, which deletes from the site, in order: models while KServe runs; MaaS objects,
    including `MaaSTenantConfig` and `AITenant`, before the DataScienceCluster; the DataScienceCluster and its
    components; the grid's `GridNetwork` and `GridSite`; the AI Grid gateways and their EnvoyFilters; the operators;
@@ -150,8 +153,7 @@ The site step does the following:
 7. Checks that your login still works and is `cluster-admin`.
 
 A site takes 15 to 25 minutes, most of it removing the DataScienceCluster and the operators. The output ends with
-`== done`. Item 2 can print `warning: Submariner on SITE still present after 600s`; the run goes on, and item 5
-deletes Submariner's namespace.
+`== done`.
 
 ## 4. Uninstall the hub
 
@@ -184,14 +186,15 @@ A hub takes about 25 minutes, most of it removing MultiClusterHub, the multiclus
 
 ## 5. Verify
 
-Check each cluster for Argo CD Applications, the install's namespaces and your sign-in:
+Check each cluster for Argo CD Applications, the install's namespaces, namespaces stuck in `Terminating`, and your
+sign-in:
 
 ```sh
 make uninstall-check
 ```
 
-For each cluster you should see `Argo CD Applications: none`, `Install namespaces left: none`, and your platform's
-identity providers. Then sign in once to the cluster's web console.
+For each cluster you should see `Argo CD Applications: none`, `Install namespaces left: none`,
+`Namespaces in Terminating: none`, and your platform's identity providers. Then sign in once to the cluster's web console.
 
 To reinstall, start again at [set up your deployment repository](02-repositories.md), with the same or new
 repositories.
@@ -199,5 +202,6 @@ repositories.
 ## Checkpoint
 
 - Every site's and the hub's uninstall ended with `== done`.
-- No cluster has an Argo CD Application or a namespace from the list in [verify](#5-verify).
+- No cluster has an Argo CD Application, a namespace from the list in [verify](#5-verify), or a namespace in
+  `Terminating`.
 - You can sign in to each cluster's web console.
