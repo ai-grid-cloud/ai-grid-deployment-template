@@ -26,6 +26,7 @@ echo "oc $*" >> "$STUB_DIR/oc.log"
 case " $* " in
   *" whoami "*) echo admin ;;
   *" get applications.argoproj.io deployment-root "*) cat "$STUB_DIR/root-sync" 2>/dev/null ;;
+  *" get managedcluster "*) [ -f "$STUB_DIR/mc.json" ] || exit 1; cat "$STUB_DIR/mc.json" ;;
   *" label "*) echo "managedcluster labeled" ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
@@ -47,5 +48,11 @@ t "not synced yet: waits, then times out without labelling" 1 "hasn't synced ${h
 t "  ... with a progress line" 1 "Waiting for the hub to sync ${head:0:7}"
 echo change > "$D/file"; g -C "$D" add file; g -C "$D" commit -qm two
 t "unpushed commits: asks to push first" 1 "1 commit\(s\) not pushed yet; push first" " label "
+
+echo '{"metadata":{"labels":{"ai-grid/enabled":"true","ai-grid/role":"combined","location":"us-east"}}}' > "$T/mc.json"
+t "labels already set: says so, no wait, no label" 0 "site-b: labels already set" "Waiting| label |push first"
+echo '{"metadata":{"labels":{"ai-grid/enabled":"true","ai-grid/role":"inference","location":"us-east"}}}' > "$T/mc.json"
+t "a different role: still checks the push" 1 "push first"
+rm "$T/mc.json"
 
 echo "join-site tests: $((total-fails)) ok, $fails failed"; exit "$fails"

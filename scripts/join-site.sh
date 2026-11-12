@@ -8,6 +8,7 @@
 # deployment-root has synced origin/main's commit, so the site's files are on
 # the hub before its labels: up to JOIN_WAIT_SECONDS (default 600), checking
 # every JOIN_WAIT_INTERVAL seconds (default 15). JOIN_SITE_NO_WAIT=1 skips both.
+# A site already labelled as clusters.yaml says is left alone, with no wait.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/clusters.sh"
@@ -20,6 +21,14 @@ location=$(cluster_field "$name" location)
 hub=$(hub_name)
 cluster_login_ok "$hub"
 export KUBECONFIG; KUBECONFIG=$(cluster_kubeconfig "$hub")
+
+# Already labelled as clusters.yaml says: nothing to wait for or change.
+current=$(oc get managedcluster "$name" -o json 2>/dev/null |
+  jq -r '.metadata.labels // {} | [.["ai-grid/enabled"], .["ai-grid/role"], .location] | map(. // "") | join(" ")' 2>/dev/null || true)
+if [ "$current" = "true $role $location" ]; then
+  echo "$name: labels already set (ai-grid/enabled=true ai-grid/role=$role location=$location)."
+  exit 0
+fi
 
 if [ "${JOIN_SITE_NO_WAIT:-}" != 1 ]; then
   repo="$here/.."
