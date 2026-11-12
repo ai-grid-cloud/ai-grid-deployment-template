@@ -58,27 +58,19 @@ make update
 ```
 
 It refuses to run while you have uncommitted changes. The first time, it finds the template commit your repository
-started from, so git merges only what changed on each side since then. It prints `Merged the template's main` and
-never pushes. Review the merge, check it, and push:
+started from, so git merges only what changed on each side since then. It never pushes. After the merge it runs
+`scripts/check-deployment.sh`; if the check fails, it says `DON'T PUSH` and you fix what the check names first.
+
+If your repository is older than `root/inputs.yaml`, the update also moves your values there from
+`root/kustomization.yaml`, resets those lines to the template's, and commits that as
+`root: move your inputs to inputs.yaml`, printing each value it moved.
+
+Review the merge and push:
 
 ```sh
 git diff ORIG_HEAD
-scripts/check-deployment.sh
 git push
 ```
 
 If a file changed on both sides, it stops and names the file. Keep your values and the template's other changes in
 it, then run `git add FILE` and `git commit`, or undo the merge with `git merge --abort`.
-
-If your repository is older than `root/inputs.yaml`, the first update that brings it stops once with a conflict in
-`root/kustomization.yaml`, because your values moved to the new file. Take the template's version, put your values
-in `root/inputs.yaml` by running `scripts/set-inputs.sh` with your catalog repository's URL, which also checks the
-result, then commit the merge:
-
-```sh
-git checkout --theirs root/kustomization.yaml
-scripts/set-inputs.sh CATALOG_REPO_URL
-git add root && git commit --no-edit
-```
-
-After that, moving the library pin never touches your values.
