@@ -10,7 +10,7 @@ g() { git -c init.defaultBranch=main -c core.hooksPath=/dev/null "$@"; }
 t() { # name want_rc expect_grep cmd...
   local name=$1 want=$2 expect=$3; shift 3; local rc out
   total=$((total+1))
-  out=$("$@" 2>&1) && rc=0 || rc=$?
+  out=$("$@" 2>&1) && rc=0 || rc=$?; printf '%s\n' "$out" > "$T/last"
   if [ "$rc" = "$want" ] && grep -qE -- "$expect" <<<"$out"; then echo "   ok   $name"
   else fails=$((fails+1)); echo "   FAIL $name (rc=$rc, wanted $want; output:)"; echo "$out"; fi
 }
@@ -74,5 +74,33 @@ t "  ... in the merge commit only" 0 "^Merge the template's main$" g -C "$mine" 
 sed -i.bak 's#^idpIssuerURL=.*#idpIssuerURL=#' "$mine/root/inputs.env"; rm "$mine/root/inputs.env.bak"
 g -C "$mine" commit -qam "unset the issuer"; echo "# note" >> "$tpl/root/self.yaml"; g -C "$tpl" commit -qam "a template change"
 t "a failing check says don't push" 1 "DON'T PUSH" runl
+
+# A repository from the template before root/inputs.env (320f038), with its
+# values in root/inputs.yaml, which the template has since deleted: the merge
+# stops on that file and prints the commands that finish it.
+old=$(git -C "$SRC" rev-parse 320f038^)
+tpl="$T/tpl-old"; mkdir -p "$tpl/root"; cp -R "$SRC/scripts" "$tpl/"
+for f in inputs.yaml kustomization.yaml self.yaml; do git -C "$SRC" show "$old:root/$f" > "$tpl/root/$f"; done
+g -C "$tpl" init -q && g -C "$tpl" add -A && g -C "$tpl" commit -qm "old root"
+mine="$T/mine-old"; mkdir -p "$mine"; cp -R "$tpl/scripts" "$tpl/root" "$mine/"
+g -C "$mine" init -q && g -C "$mine" add -A && g -C "$mine" commit -qm "Initial commit"
+sed -i.bak -e 's#REQUIRED-deploymentRepoURL#https://github.com/acme/deploy.git#' \
+  -e 's#REQUIRED-catalogRepoURL#https://github.com/acme/catalog.git#' \
+  -e 's#REQUIRED-idpIssuerURL#https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants#' \
+  "$mine/root/inputs.yaml" "$mine/root/self.yaml"; rm "$mine/root/"*.bak
+g -C "$mine" commit -qam "set our names"
+rm -rf "$tpl/root"; cp -R "$SRC/root" "$tpl/"; rm -f "$tpl/root/inputs.env"; g -C "$tpl" add -A
+g -C "$tpl" commit -qm "inputs.env"
+t "an old inputs.yaml stops the merge" 1 "conflict in root/inputs.yaml" run
+cp "$T/last" "$T/out"
+t "  ... prints set-inputs.sh with your catalog URL" 0 "^  scripts/set-inputs.sh https://github.com/acme/catalog.git$" cat "$T/out"
+t "  ... then git rm root/inputs.yaml" 0 "^  git rm root/inputs.yaml$" cat "$T/out"
+t "  ... then add inputs.env and commit" 0 "^  git add root/inputs.env && git commit$" cat "$T/out"
+# What set-inputs.sh writes (it reads the clusters, so the test writes it), then the printed steps.
+printf '%s\n' deploymentRepoURL=https://github.com/acme/deploy.git deploymentRevision=main \
+  catalogRepoURL=https://github.com/acme/catalog.git catalogRevision=main \
+  idpIssuerURL=https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants > "$mine/root/inputs.env"
+finish() { (cd "$mine" && g rm -q root/inputs.yaml && g add root/inputs.env && g commit -q --no-edit && git status --porcelain); }
+t "  ... and those steps finish the merge, leaving nothing else" 0 "^$" finish
 
 echo "update tests: $((total-fails)) ok, $fails failed"; exit "$fails"

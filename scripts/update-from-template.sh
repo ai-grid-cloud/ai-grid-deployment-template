@@ -29,8 +29,22 @@ if ! git merge-base HEAD template/main >/dev/null; then
 fi
 if git merge-base --is-ancestor template/main HEAD; then echo "Already up to date with the template."; exit 0; fi
 if ! git merge -q --no-edit -m "Merge the template's main" template/main; then
-  echo "error: conflict in $(git diff --name-only --diff-filter=U | tr '\n' ' ')" >&2
-  echo "Edit each file to keep your values and the template's other changes, then: git add FILE ... && git commit" >&2
+  conflicts=$(git diff --name-only --diff-filter=U)
+  echo "error: conflict in $(tr '\n' ' ' <<<"$conflicts")" >&2
+  if grep -qx root/inputs.yaml <<<"$conflicts"; then
+    # Before 320f038 your inputs were in root/inputs.yaml; now set-inputs.sh writes root/inputs.env.
+    catalog=$(sed -nE 's/.*&catalogRepoURL[[:space:]]+([^[:space:]]+).*/\1/p' root/inputs.yaml | head -n1)
+    case "$catalog" in ""|REQUIRED-*) catalog=CATALOG_REPO_URL ;; esac
+    echo "The template replaced root/inputs.yaml with root/inputs.env. Write root/inputs.env from your values:" >&2
+    echo "  scripts/set-inputs.sh $catalog" >&2
+    echo "It sets both revisions to main; if root/inputs.yaml has another deploymentRevision or catalogRevision," >&2
+    echo "copy it into root/inputs.env. Then remove the old file and finish the merge:" >&2
+    echo "  git rm root/inputs.yaml" >&2
+    echo "  git add root/inputs.env && git commit" >&2
+  fi
+  if grep -qvx root/inputs.yaml <<<"$conflicts"; then
+    echo "Edit each file to keep your values and the template's other changes, then: git add FILE ... && git commit" >&2
+  fi
   echo "Or undo the merge: git merge --abort" >&2
   exit 1
 fi

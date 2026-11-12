@@ -61,6 +61,9 @@ It refuses to run while you have uncommitted changes. The first time, it finds t
 started from, so git merges only what changed on each side since then. It never pushes. After the merge it runs
 `scripts/check-deployment.sh`; if the check fails, it says `DON'T PUSH` and you fix what the check names first.
 
+If your repository still has `root/inputs.yaml`, which the template replaced with `root/inputs.env`, `make update`
+stops on a conflict in that file and prints the commands that move your values and finish the merge.
+
 Review the merge and push:
 
 ```sh
