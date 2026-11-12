@@ -88,21 +88,22 @@ scripts/console-call.sh ai_grid.v1.Models/Create "$(jq -n --arg site "$(scripts/
 
 You should see the subscription with status **Pending**, and **Active** about 2 minutes later.
 
-Or with the API, which finds the organization's ID by its name:
+Or with the API, for the model the API call in step 3 deployed, `smollm2-chat`. The first command finds the
+organization's ID by its name:
 
 ```sh
-ORG_ID=$(scripts/console-call.sh ai_grid.v1.Tenants/List | jq -r '.items[] | select(.metadata.name == "ORG_NAME") | .id')
+ORG_ID=$(scripts/console-call.sh ai_grid.v1.Tenants/List | jq -r --arg name ORG_NAME '.items[] | select(.metadata.name == $name) | .id')
 scripts/console-call.sh ai_grid.v1.Subscriptions/Create "$(jq -n --arg org "$ORG_ID" '{object: {
   id: "smollm2-users",
   metadata: {name: "smollm2-users"},
   spec: {
     organization: {id: $org},
     owner: {groups: ["ai-grid-users"]},
-    model_refs: [{name: "MODEL_NAME", token_rate_limits: [{limit: 100000, window: "1m"}]}]
+    model_refs: [{name: "smollm2-chat", token_rate_limits: [{limit: 100000, window: "1m"}]}]
   }}}')"
 ```
 
-Replace `ORG_NAME` with the organization's name and `MODEL_NAME` with the model's resource name.
+Replace `ORG_NAME` with the organization's name.
 
 ## 5. Check the delivery
 
