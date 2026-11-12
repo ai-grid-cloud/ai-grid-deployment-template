@@ -28,9 +28,7 @@ Placements that match no ManagedCluster yet.
 ## 2. Create the console's secrets
 
 The provider console needs your catalog token for its git writer, and an admin login for the tenant Keycloak. Neither
-goes in git. Wait until `make status` shows `tenant-idp: Synced Healthy` and a `Console:` address.
-
-Then create the secrets:
+goes in git. Create the secrets:
 
 ```sh
 AI_GRID_GIT_TOKEN_FILE=CATALOG_TOKEN_FILE KEYCLOAK_NAMESPACE=tenant-idp KEYCLOAK_REALM=tenants \
@@ -39,7 +37,9 @@ AI_GRID_GIT_TOKEN_FILE=CATALOG_TOKEN_FILE KEYCLOAK_NAMESPACE=tenant-idp KEYCLOAK
 
 Replace `CATALOG_TOKEN_FILE` with the file that holds your catalog token, such as `~/.ai-grid/catalog-token`
 ([set up your deployment repository](02-repositories.md#2-create-your-catalog-repository-and-its-token)). The script prints no secret value, and
-restarts the console to read the new Secrets. For every variable, and for a hub whose ingress certificate isn't
+restarts the console to read the new Secrets. It first waits until the tenant Keycloak's Application `tenant-idp` is
+`Synced` and `Healthy` and the console's Route exists, printing what it waits for, for up to 30 minutes; if it times
+out, run `make status`. For every variable, and for a hub whose ingress certificate isn't
 publicly trusted, see
 [provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/hub/05-console-and-model-delivery.md#provider-console).
 
