@@ -38,15 +38,16 @@ commit, up to 10 minutes, so the site's files are on the hub before its labels. 
 labels, it says `labels already set` and changes nothing. The console shows the location.
 For `ingress` and `inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/spokes/README.md#what-you-choose-per-site).
 
-You should see `managedcluster.cluster.open-cluster-management.io/SITE labeled`. Within a minute the hub creates the
-site's Applications:
+You should see `managedcluster.cluster.open-cluster-management.io/SITE labeled`. The hub then creates the site's
+Applications. Show them:
 
 ```sh
 make site-status
 ```
 
 Under `Applications` you should see `rhoai-SITE-…`, `cluster-config-SITE-…`, `acm-submariner-SITE`, `maas-db-SITE`
-and `SITE-maas-tls`.
+and `SITE-maas-tls`. Most appear within a couple of minutes. `rhoai-SITE-…` can take up to 30 minutes: the hub's
+`rhoai` Application creates it on its next sync retry after the site joins (page 4).
 OpenShift AI takes up to an hour on a new cluster, and less on one that ran OpenShift AI before.
 
 ## 3. Verify
