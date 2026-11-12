@@ -105,7 +105,7 @@ mkbin "$T/nojq"; rm "$T/nojq/jq"
 t "missing tool" '^MISSING +jq ' "$T/nojq" "$w"
 t "missing tool: summary and note" 'Nothing was changed' "$T/nojq" "$w"
 
-t "nothing set: registry skipped" '^skipped +registry logins +set QUAY_AUTH_FILE' "$T/bin" "$w"
+t "nothing set: registry skipped" '^skipped +registry logins +no auth file at ~/.config/containers/auth.json.*; set QUAY_AUTH_FILE' "$T/bin" "$w"
 t "no clusters.yaml: skipped" '^skipped +cluster checks +no clusters.yaml: copy clusters-example.yaml' "$T/bin" "$w" --deployment "$T/other"
 P=$(mkdep placeholder 'hub: {name: hub, api: REQUIRED-hubAPIURL}')
 t "clusters placeholder: skipped" '^skipped +cluster checks +.*REQUIRED-hubAPIURL' "$T/bin" "$w" --deployment "$P"
@@ -145,5 +145,22 @@ t "token file empty" '^FAIL +catalog token file +.* empty' "$T/bin" "$w" --catal
 t "token file missing" '^MISSING +catalog token file' "$T/bin" "$w" --catalog-token-file "$T/none"
 out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$T" STUB_DIR="$w" CATALOG_TOKEN_FILE="$TOK" "$PY" "$SCRIPT" 2>&1) || true
 total=$((total+1)); if grep -qE '^ok +catalog token file' <<<"$out"; then echo "   ok   env vars work like options"; else echo "   FAIL env vars work like options"; fails=$((fails+1)); fi
+
+# Defaults: the usual auth file and token file, when they exist and nothing is set.
+dflt() { # name expect_regex home [VAR=value ...]: runs with no options from that home
+  local name=$1 expect=$2 h=$3; shift 3; total=$((total+1))
+  local out; out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$h" STUB_DIR="$w" "$@" "$PY" "$SCRIPT" 2>&1) || true
+  if grep -qE -- "$expect" <<<"$out"; then echo "   ok   $name"; else echo "   FAIL $name; output:"; echo "$out"; fails=$((fails+1)); fi
+}
+H1="$T/home1"; mkdir -p "$H1/.config/containers" "$H1/.ai-grid" "$T/run1/containers"
+cp "$A" "$H1/.config/containers/auth.json"; cp "$A" "$T/run1/containers/auth.json"
+printf 'x' > "$H1/.ai-grid/catalog-token"; chmod 600 "$H1/.ai-grid/catalog-token"
+dflt "default auth file: ~/.config/containers/auth.json" "^ok +auth file +$H1/.config/containers/auth.json" "$H1" XDG_RUNTIME_DIR="$T/run1"
+dflt "default token file: ~/.ai-grid/catalog-token" "^ok +catalog token file +$H1/.ai-grid/catalog-token" "$H1"
+dflt "an empty variable uses the default" "^ok +auth file +$H1/.config/containers/auth.json" "$H1" QUAY_AUTH_FILE= CATALOG_TOKEN_FILE=
+dflt "QUAY_AUTH_FILE beats the default" "^ok +auth file +$N" "$H1" QUAY_AUTH_FILE="$N"
+H2="$T/home2"; mkdir -p "$H2"
+dflt "fallback auth file: \$XDG_RUNTIME_DIR/containers/auth.json" "^ok +auth file +$T/run1/containers/auth.json" "$H2" XDG_RUNTIME_DIR="$T/run1"
+dflt "no default token file: skipped" '^skipped +catalog token file +no ~/.ai-grid/catalog-token yet' "$H2"
 
 echo "prereqs tests: $((total-fails)) ok, $fails failed"; exit "$fails"

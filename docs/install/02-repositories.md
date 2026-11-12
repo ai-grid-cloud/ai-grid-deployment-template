@@ -38,7 +38,7 @@ repository, set the names that must be yours, check the result, and push it.
    ```
 
    The site's name becomes its ACM cluster name, and you can't change it once the site is imported. Commit
-   `clusters.yaml` with your other changes in part 4; it records which clusters make up your grid, and holds no
+   `clusters.yaml` with your other changes in part 5; it records which clusters make up your grid, and holds no
    secrets.
 
 3. Log in to each cluster as a `cluster-admin` user:
@@ -52,47 +52,6 @@ repository, set the names that must be yours, check the result, and push it.
    Clusters you're still logged in to are skipped. When one login expires later, run `make login` again, or
    `make login NAME=hub` for one cluster. To use a kubeconfig you already have instead, such as the installer's
    `auth/kubeconfig`, copy it to `.config/NAME/kubeconfig`.
-
-4. Check your prerequisites:
-
-   ```sh
-   make prereqs QUAY_AUTH_FILE=QUAY_AUTH_FILE
-   ```
-
-   Replace `QUAY_AUTH_FILE` with your container auth file with the pre-release registry logins, such as
-   `~/.config/containers/auth.json`. Add `CATALOG_TOKEN_FILE=~/.ai-grid/catalog-token` after part 2.
-
-   It checks your tools, each cluster in `clusters.yaml`, and your registry logins, and fetches the library at your pin
-   into `.library/`, which git ignores. The scripts in `scripts/` use it. It changes nothing on your clusters and
-   never blocks; checks whose input you haven't set yet print `skipped`. The output is similar to the following:
-
-   ```text
-   Tools
-   ok       oc                               4.22.17
-   MISSING  clusteradm                       imports the site into ACM
-   ...
-   Hub hub
-   ok       reachable                        https://api.hub.example.com:6443
-   ok       OpenShift 4.21 or later          4.22.18
-   ...
-   Site site-east-1 (combined)
-   ok       ClusterIssuer                    letsencrypt-dns (DNS-01)
-   ...
-   20 ok, 1 missing, 1 skipped
-   Nothing was changed; fix these before the page that needs them.
-   ```
-
-   Install any tool marked `MISSING` before you continue.
-
-   If `registry.stage.redhat.io login` is `MISSING`, add that login to the auth file before page 3: the hub copies
-   your logins to the sites when you bootstrap it, and the model you deploy on page 7 pulls its runtime image through
-   it. To add it:
-
-   ```sh
-   podman login --authfile AUTH_FILE registry.stage.redhat.io
-   ```
-
-   Replace `AUTH_FILE` with the auth file that `make prereqs` names on its `auth file` line.
 
 ## 2. Create your catalog repository and its token
 
@@ -134,7 +93,56 @@ console writes them there with a token that can write only this repository.
    Paste the token into `~/.ai-grid/catalog-token` with an editor. You use it in
    [install the hub components](04-hub-components.md#2-create-the-consoles-secrets).
 
-## 3. Set your names
+## 3. Check your prerequisites
+
+Check your tools, each cluster in `clusters.yaml`, your registry logins and your catalog token:
+
+```sh
+make prereqs
+```
+
+It reads your registry logins from `~/.config/containers/auth.json`, or from `$XDG_RUNTIME_DIR/containers/auth.json`
+when that's where `podman login` saved them, and your catalog token from `~/.ai-grid/catalog-token`. To use another
+auth file, add `QUAY_AUTH_FILE=AUTH_FILE`. It also fetches the library at your pin into `.library/`, which git
+ignores; the scripts in `scripts/` use it. It changes nothing on your clusters and never blocks. The output is similar
+to the following:
+
+```text
+Tools
+ok       oc                               4.22.17
+MISSING  clusteradm                       imports the site into ACM
+...
+Registry logins (pre-release builds)
+ok       auth file                        /home/user/.config/containers/auth.json
+ok       quay.io/rhoai login              quay.io/rhoai entry
+...
+Hub hub
+ok       reachable                        https://api.hub.example.com:6443
+ok       OpenShift 4.21 or later          4.22.18
+...
+Site site-east-1 (combined)
+ok       ClusterIssuer                    letsencrypt-dns (DNS-01)
+...
+Catalog token
+ok       catalog token file               /home/user/.ai-grid/catalog-token (mode 600, not empty)
+
+24 ok, 1 missing
+Nothing was changed; fix these before the page that needs them.
+```
+
+Install any tool marked `MISSING` before you continue.
+
+If `registry.stage.redhat.io login` is `MISSING`, add that login to the auth file before page 3: the hub copies
+your logins to the sites when you bootstrap it, and the model you deploy on page 7 pulls its runtime image through
+it. To add it:
+
+```sh
+podman login --authfile AUTH_FILE registry.stage.redhat.io
+```
+
+Replace `AUTH_FILE` with the auth file that `make prereqs` names on its `auth file` line.
+
+## 4. Set your names
 
 Find each cluster's apps domain:
 
@@ -159,7 +167,7 @@ Keep every other value. Each one is a tested choice: for what it means and how t
 [Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/d5021fa2080d013732825da29d1d2714d9eb0c54/docs/install/appendix-a-inputs.md) and
 [Hub components](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/d5021fa2080d013732825da29d1d2714d9eb0c54/docs/install/hub/README.md#select-components).
 
-## 4. Check and push
+## 5. Check and push
 
 1. Check your repository:
 

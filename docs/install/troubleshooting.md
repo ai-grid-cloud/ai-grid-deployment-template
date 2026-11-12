@@ -7,7 +7,7 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 
 **Cause:** an input in `root/kustomization.yaml`, or a value in another file, is still a `REQUIRED-NAME` placeholder.
 
-**Fix:** set each one it names ([set your names](02-repositories.md#3-set-your-names);
+**Fix:** set each one it names ([set your names](02-repositories.md#4-set-your-names);
 [inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/d5021fa2080d013732825da29d1d2714d9eb0c54/docs/install/appendix-a-inputs.md#inputs)), and run the check again.
 
 ## The hub check prints `MISSING`
