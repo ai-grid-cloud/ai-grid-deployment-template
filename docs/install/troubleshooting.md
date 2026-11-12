@@ -36,7 +36,7 @@ podman login quay.io
 set:
 
 ```sh
-RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1 KUBECONFIG="$HUB_KUBECONFIG" RHOAI_QUAY_AUTH_FILE=QUAY_AUTH_FILE scripts/bootstrap-hub.sh
+RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1 RHOAI_QUAY_AUTH_FILE=QUAY_AUTH_FILE scripts/bootstrap-hub.sh
 ```
 
 ## The root reports `missing input: NAME` or `invalid input: NAME`

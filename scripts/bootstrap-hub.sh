@@ -11,7 +11,9 @@
 #    login, when present) that the prerequisites Policy copies to every site.
 #    The credentials are read from a container auth file and never printed.
 #
-# Usage: KUBECONFIG=HUB_KUBECONFIG RHOAI_QUAY_AUTH_FILE=AUTH_JSON scripts/bootstrap-hub.sh [--deployment DIR]
+# Runs against the hub in the clusters file, with its login (.config/NAME/kubeconfig).
+#
+# Usage: RHOAI_QUAY_AUTH_FILE=AUTH_JSON scripts/bootstrap-hub.sh [--deployment DIR]
 set -Eeuo pipefail
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -30,12 +32,18 @@ auth_file="${RHOAI_QUAY_AUTH_FILE:-}"
 . "$here/library.sh"
 library_dir "$dir" || exit 1
 lib=$LIB
+. "$here/clusters.sh"
+clusters_load "$dir" || exit 1
+hub=$(hub_name)
+cluster_login_ok "$hub" || exit 1
+KUBECONFIG=$(cluster_kubeconfig "$hub"); export KUBECONFIG
+echo "Hub: $hub ($(oc whoami --show-server))."
 bash "$here/check-deployment.sh" "$dir"
 . "$here/deployment-inputs.sh"
 deployment_render "$dir"
 echo "Library at $(deployment_input libraryRevision)."
 
-RHOAI_QUAY_PULL_SECRET_FILE="$auth_file" bash "$here/check-prerequisites.sh" --step hub --context "$(oc config current-context)" ||
+RHOAI_QUAY_PULL_SECRET_FILE="$auth_file" bash "$here/check-prerequisites.sh" --step hub --kubeconfig "$KUBECONFIG" ||
   echo "Prerequisites incomplete before install; the ones this script installs are expected to be missing."
 
 oc apply -f "$lib/bootstrap/namespace.yaml" -f "$lib/bootstrap/gitops-operator-group.yaml" -f "$lib/bootstrap/openshift-gitops-sub.yaml"

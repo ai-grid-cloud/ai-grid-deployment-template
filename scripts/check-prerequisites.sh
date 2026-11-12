@@ -3,7 +3,7 @@
 # step needs before AI Grid components go on it. Read only: it never changes
 # the cluster and never reads a Secret's data.
 #
-# Usage: scripts/check-prerequisites.sh --step hub|spoke --context CTX [--expect-idp library|own]
+# Usage: scripts/check-prerequisites.sh --step hub|spoke --cluster NAME|--kubeconfig FILE [--expect-idp library|own]
 #        [--idp-secret NS/NAME:KEY --idp-ca NS/NAME:KEY]
 #
 #   --step hub     the hub, before and after its infrastructure step: OpenShift
@@ -27,11 +27,12 @@ set -Eeuo pipefail
 
 usage() { sed -n '5,25p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
-step="" context="" idp="" idp_secret="" idp_ca=""
+step="" kubeconfig="" cluster="" idp="" idp_secret="" idp_ca=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --step) step=${2:-}; shift 2 ;;
-    --context) context=${2:-}; shift 2 ;;
+    --kubeconfig) kubeconfig=${2:-}; shift 2 ;;
+    --cluster) cluster=${2:-}; shift 2 ;;
     --expect-idp) idp=${2:-}; shift 2 ;;
     --idp-secret) idp_secret=${2:-}; shift 2 ;;
     --idp-ca) idp_ca=${2:-}; shift 2 ;;
@@ -40,7 +41,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 case "$step" in hub|spoke) ;; *) echo "--step must be hub or spoke" >&2; usage ;; esac
-[ -n "$context" ] || { echo "--context is required" >&2; usage; }
+if [ -n "$cluster" ]; then
+  . "$(dirname "$0")/clusters.sh"
+  clusters_load "$(dirname "$0")/.." && cluster_login_ok "$cluster" || exit 2
+  kubeconfig=$(cluster_kubeconfig "$cluster")
+fi
+[ -f "$kubeconfig" ] || { echo "--cluster or --kubeconfig is required" >&2; usage; }
 case "$idp" in ""|library|own) ;; *) echo "--expect-idp must be library or own" >&2; usage ;; esac
 ref_ok() { [[ $1 =~ ^[a-z0-9.-]+/[a-z0-9.-]+:[A-Za-z0-9._-]+$ ]]; }
 if [ "$idp" = own ]; then
@@ -51,7 +57,7 @@ fi
 
 MIN_MINOR=21
 missing=0
-oc_() { oc --context "$context" "$@"; }
+oc_() { oc --kubeconfig "$kubeconfig" "$@"; }
 report() { # OK|MISSING what detail
   printf '%-8s %-40s %s\n' "$1" "$2" "${3:-}"
   [ "$1" = OK ] || missing=1

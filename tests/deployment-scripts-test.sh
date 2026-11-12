@@ -110,6 +110,6 @@ t "a library checkout off the pin fails" 1 "isn't at your pin 0123456789abcdef" 
 d=$(fixture pin)
 sed -i.bak "s/$SHA/0123456789abcdef0123456789abcdef01234567/g" "$d/root/kustomization.yaml"
 t "bootstrap-hub refuses a library checkout off the pin" 1 "isn't at your pin 0123456789abcdef" \
-  bash -c 'f=$(mktemp); echo {} > "$f"; RHOAI_QUAY_AUTH_FILE=$f bash scripts/bootstrap-hub.sh --deployment "$0"' "$d"
+  bash -c 'f=$(mktemp); echo {} > "$f"; RHOAI_QUAY_AUTH_FILE=$f KUBECONFIG=$f bash scripts/bootstrap-hub.sh --deployment "$0"' "$d"
 
 echo "deployment-scripts tests: $((total-fails)) ok, $fails failed"; exit "$fails"

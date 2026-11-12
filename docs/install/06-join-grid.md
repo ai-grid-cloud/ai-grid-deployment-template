@@ -11,7 +11,7 @@ A site that runs the MaaS gateway (role `combined` or `ingress`) needs three fil
 holds the three files; copy them for your site:
 
 ```sh
-APPS_DOMAIN=$(oc --context "$SITE_CONTEXT" get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
+APPS_DOMAIN=$(scripts/with-cluster.sh "$SITE" oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
 DNS01_ISSUER=ISSUER_NAME
 for f in apps/SITE-maas-tls.yaml sites/SITE/maas-tls/certificate.yaml values/clusters/SITE/rhoai.yaml; do
   mkdir -p "$(dirname "${f//SITE/$SITE}")"
@@ -28,18 +28,19 @@ every repository is an input.` before the commit. What the files do, and other w
 
 ## 2. Label the site
 
+The site's labels on the hub make it a grid site, in the role and location from your clusters file:
+
 ```sh
-oc --context "$HUB_CONTEXT" label managedcluster "$SITE" ai-grid/enabled=true ai-grid/role=combined location=LOCATION
+scripts/join-site.sh "$SITE"
 ```
 
-Replace `LOCATION` with a label for where the site is, such as `us-east`. The console shows it. For `ingress` and
-`inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/spokes/README.md#what-you-choose-per-site).
+The console shows the location. For `ingress` and `inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/spokes/README.md#what-you-choose-per-site).
 
 You should see `managedcluster.cluster.open-cluster-management.io/SITE labeled`. Within a minute the hub creates the
 site's Applications:
 
 ```sh
-oc --context "$HUB_CONTEXT" get applications.argoproj.io -n openshift-gitops | grep -- "-$SITE"
+scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops | grep -- "-$SITE"
 ```
 
 You should see `rhoai-SITE-…`, `cluster-config-SITE-…`, `acm-submariner-SITE`, `maas-db-SITE` and `SITE-maas-tls`.
@@ -50,8 +51,8 @@ OpenShift AI takes 45 to 60 minutes.
 1. OpenShift AI is ready, and the site is in the grid:
 
    ```sh
-   oc --context "$SITE_CONTEXT" get datasciencecluster -o jsonpath='{.items[0].status.phase}{"\n"}'
-   oc --context "$SITE_CONTEXT" get gridnetworks,gridsites -A
+   scripts/with-cluster.sh "$SITE" oc get datasciencecluster -o jsonpath='{.items[0].status.phase}{"\n"}'
+   scripts/with-cluster.sh "$SITE" oc get gridnetworks,gridsites -A
    ```
 
    You should see `Ready`, the GridNetwork, and the site's GridSite `Available`. If the phase flips between `Ready`
@@ -60,7 +61,7 @@ OpenShift AI takes 45 to 60 minutes.
 2. Every hub Application is `Synced` and `Healthy`, including the three that waited for the first site:
 
    ```sh
-   oc --context "$HUB_CONTEXT" get applications.argoproj.io -n openshift-gitops \
+   scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops \
      -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status}{"\n"}{end}' \
      | grep -v ' Synced Healthy$'
    ```

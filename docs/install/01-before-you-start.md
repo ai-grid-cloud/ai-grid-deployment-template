@@ -37,7 +37,7 @@ GridSite stays `Connecting` ([site networking](https://github.com/ai-grid-cloud/
 |---|---|
 | Pre-release builds only: a container auth file with a `quay.io/rhoai` login (a robot token scoped to `quay.io/rhoai`) and a `registry.stage.redhat.io` login | [Prepare the hub](03-prepare-hub.md) |
 | A cert-manager ClusterIssuer on each ingress or combined site that issues publicly trusted certificates by **DNS-01** | [Join the site to the grid](06-join-grid.md) |
-| `cluster-admin` on every cluster | Every page |
+| A `cluster-admin` sign-in to every cluster, and each cluster's API URL | [Set up your deployment repository](02-repositories.md#1-clone-your-repository-and-log-in-to-your-clusters) and every page after it |
 
 ## 4. Tools on your workstation
 
@@ -47,11 +47,11 @@ GridSite stays `Connecting` ([site networking](https://github.com/ai-grid-cloud/
 - `jq`, `curl`, `openssl` and `base64`: used by the setup scripts and in first use.
 - `python3`: reads cluster state in the setup scripts.
 - `clusteradm`: imports the site into ACM.
-- `make`: runs the prerequisites check.
+- `make`: runs the cluster logins and the prerequisites check.
 
 After you clone your repository in
-[set up your deployment repository](02-repositories.md#1-clone-your-repository), check them from its
-directory:
+[set up your deployment repository](02-repositories.md#1-clone-your-repository-and-log-in-to-your-clusters), check
+them from its directory:
 
 ```sh
 make prereqs
@@ -61,6 +61,6 @@ It prints each tool as `ok`, with its version, or `MISSING`, and changes nothing
 
 ## Checkpoint
 
-- You have kubeconfig contexts with `cluster-admin` for the hub and the site.
+- You can sign in to the hub and the site as a `cluster-admin` user, and you have each one's API URL.
 - You have the tools in part 4.
 - You have the registry logins and a DNS-01 ClusterIssuer on the site.

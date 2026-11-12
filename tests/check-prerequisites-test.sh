@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SCRIPT="$HERE/../scripts/check-prerequisites.sh"
-T=$(mktemp -d); trap 'rm -rf "$T"' EXIT; mkdir -p "$T/bin"
+T=$(mktemp -d); trap 'rm -rf "$T"' EXIT; mkdir -p "$T/bin"; : > "$T/stub.kubeconfig"
 
 # The stub answers from files in $STUB_DIR, in the shape the script's
 # jsonpath queries print: version; storageclasses ("<name> <is-default>" per
@@ -51,7 +51,7 @@ t() { # name want_rc expect_grep world [args...]
   local name=$1 want=$2 expect=$3 w=$4; shift 4; local rc out
   total=$((total+1))
   out=$(env -i PATH="$T/bin:/usr/bin:/bin" STUB_DIR="$w" RHOAI_QUAY_PULL_SECRET_FILE="${PULL:-}" \
-    bash "$SCRIPT" --context stub "$@" 2>&1) && rc=0 || rc=$?
+    bash "$SCRIPT" --kubeconfig "$T/stub.kubeconfig" "$@" 2>&1) && rc=0 || rc=$?
   if [ "$rc" -eq "$want" ] && grep -qE "$expect" <<<"$out"; then
     printf '   ok   %s\n' "$name"
   else

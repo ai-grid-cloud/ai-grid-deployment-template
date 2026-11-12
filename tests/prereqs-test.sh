@@ -74,9 +74,15 @@ t() { # name expect_regex bin world [args...]; also checks rc 0 and no secret in
 
 w=$(world all-ok); A=$(authfile both quay.io/rhoai registry.stage.redhat.io)
 TOK="$T/token"; printf 'x' > "$TOK"; chmod 600 "$TOK"
-D="$T/deployment"; mkdir -p "$D/root"
-printf '        libraryRevision: %s\n' "$("$GIT" -C "$LIBD" rev-parse HEAD)" > "$D/root/kustomization.yaml"
-ALL=(--deployment "$D" --hub-context hub --site-context site --quay-auth-file "$A" --catalog-token-file "$TOK")
+mkdep() { # name clusters-body: a deployment at the pin with that clusters file and a login for each cluster
+  local d="$T/$1"; mkdir -p "$d/root"
+  printf '        libraryRevision: %s\n' "$("$GIT" -C "$LIBD" rev-parse HEAD)" > "$d/root/kustomization.yaml"
+  printf '%b\n' "$2" > "$d/clusters"
+  for n in $(sed 's/#.*//' "$d/clusters" | awk 'NF {print $1}'); do mkdir -p "$d/.config/$n"; : > "$d/.config/$n/kubeconfig"; done
+  echo "$d"
+}
+D=$(mkdep deployment '# name role location api\nhub hub - https://api.hub:6443\nsite-b combined us-east https://api.site-b:6443')
+ALL=(--deployment "$D" --quay-auth-file "$A" --catalog-token-file "$TOK")
 t "all ok: no problem lines" '^[0-9]+ ok$' "$T/bin" "$w" "${ALL[@]}"
 t "all ok: kustomize version" '^ok +kustomize +5\.8\.3' "$T/bin" "$w" "${ALL[@]}"
 t "all ok: site ClusterIssuer with DNS-01" '^ok +ClusterIssuer +le-dns \(DNS-01\)' "$T/bin" "$w" "${ALL[@]}"
@@ -100,8 +106,10 @@ mkbin "$T/oldk"; printf '#!/bin/bash\necho "{Version:kustomize/v4.5.7 GitCommit:
 t "kustomize v4 is OLD" '^OLD +kustomize +4\.5\.7; version 5 or later needed' "$T/oldk" "$w"
 
 t "nothing set: registry skipped" '^skipped +registry logins +set QUAY_AUTH_FILE' "$T/bin" "$w"
-t "nothing set: hub skipped" '^skipped +hub checks +set HUB_CONTEXT' "$T/bin" "$w"
-t "nothing set: site skipped" '^skipped +site checks +set SITE_CONTEXT' "$T/bin" "$w"
+t "no clusters file: skipped" '^skipped +cluster checks +no clusters file' "$T/bin" "$w" --deployment "$T/other"
+P=$(mkdep placeholder 'hub hub - REQUIRED-hubAPIURL')
+t "clusters placeholder: skipped" '^skipped +cluster checks +.*REQUIRED-hubAPIURL' "$T/bin" "$w" --deployment "$P"
+t "site section named" '^Site site-b \(combined\)' "$T/bin" "$w" "${ALL[@]}"
 t "nothing set: token skipped" '^skipped +catalog token file' "$T/bin" "$w"
 
 t "quay.io/rhoai and stage" '^ok +registry.stage.redhat.io login' "$T/bin" "$w" --quay-auth-file "$A"
@@ -118,16 +126,18 @@ rm "$w/fail-image"
 
 w=$(world old); echo "4.20.5" > "$w/version"; echo no > "$w/can-i"
 echo '{"items":[{"metadata":{"name":"gp2"}}]}' > "$w/storageclasses.json"
-t "OpenShift 4.20 is OLD" '^OLD +OpenShift 4.21 or later +4.20.5' "$T/bin" "$w" --hub-context hub
-t "not cluster-admin" '^MISSING +cluster-admin' "$T/bin" "$w" --hub-context hub
-t "no default StorageClass" '^MISSING +default StorageClass' "$T/bin" "$w" --hub-context hub
+t "OpenShift 4.20 is OLD" '^OLD +OpenShift 4.21 or later +4.20.5' "$T/bin" "$w" --deployment "$D"
+t "not cluster-admin" '^MISSING +cluster-admin' "$T/bin" "$w" --deployment "$D"
+t "no default StorageClass" '^MISSING +default StorageClass' "$T/bin" "$w" --deployment "$D"
 echo '{"items":[{"metadata":{"name":"self-signed"},"spec":{"selfSigned":{}}}]}' > "$w/clusterissuers.json"
-t "ClusterIssuer without DNS-01" '^MISSING +ClusterIssuer +self-signed \(no DNS-01\)' "$T/bin" "$w" --site-context site
+t "ClusterIssuer without DNS-01" '^MISSING +ClusterIssuer +self-signed \(no DNS-01\)' "$T/bin" "$w" --deployment "$D"
 touch "$w/fail-issuers"
-t "no cert-manager" '^MISSING +ClusterIssuer +error: the server' "$T/bin" "$w" --site-context site
+t "no cert-manager" '^MISSING +ClusterIssuer +error: the server' "$T/bin" "$w" --deployment "$D"
 touch "$w/fail-whoami"
-t "unreachable cluster" '^FAIL +reachable +context hub: error: Unauthorized' "$T/bin" "$w" --hub-context hub
-t "unreachable cluster skips the rest" '^skipped +cluster-admin +cluster not reachable' "$T/bin" "$w" --hub-context hub
+t "unreachable cluster" '^FAIL +reachable +hub: error: Unauthorized' "$T/bin" "$w" --deployment "$D"
+t "unreachable cluster skips the rest" '^skipped +cluster-admin +cluster not reachable' "$T/bin" "$w" --deployment "$D"
+rm "$D/.config/site-b/kubeconfig"
+t "no login: skipped with the fix" '^skipped +site-b checks +no login: run make login NAME=site-b' "$T/bin" "$w" --deployment "$D"
 
 printf 'x' > "$T/loose"; chmod 644 "$T/loose"; : > "$T/empty"; chmod 600 "$T/empty"
 t "token file too open" '^FAIL +catalog token file +.* mode 644' "$T/bin" "$w" --catalog-token-file "$T/loose"

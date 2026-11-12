@@ -3,55 +3,63 @@
 Your deployment repository starts with the template's tested choices. On this page you create your catalog
 repository, set the names that must be yours, check the result, and push it.
 
-## 1. Clone your repository
+## 1. Clone your repository and log in to your clusters
 
-```sh
-git clone DEPLOYMENT_REPO_URL deployment && cd deployment
-```
+1. Clone your deployment repository:
 
-Replace `DEPLOYMENT_REPO_URL` with your deployment repository's clone URL. Run every command in this guide from the
-`deployment` directory.
+   ```sh
+   git clone DEPLOYMENT_REPO_URL deployment && cd deployment
+   ```
 
-The scripts in `scripts/` use the library at the commit your repository pins. The first one that needs the library
-fetches it into `.library/`, which git ignores, and fetches it again when you move the pin.
+   Replace `DEPLOYMENT_REPO_URL` with your deployment repository's clone URL. Run every command in this guide from the
+   `deployment` directory.
 
-Check your prerequisites:
+2. In `clusters`, replace the `REQUIRED-` placeholders with your hub's and site's API URLs, the site's name, such as
+   `site-east-1`, and its location, such as `us-east`. Keep the hub's name, `hub`, and the site's role, `combined`:
+   the guide's commands use them. The file is how your repository records which clusters make up your grid.
 
-```sh
-make prereqs
-```
+3. Log in to each cluster as a `cluster-admin` user:
 
-It checks your tools and fetches the library at your pin. It changes nothing on your clusters and never blocks.
-Checks whose input you haven't set yet print `skipped`. Set them as you reach them, for example:
+   ```sh
+   make login NAME=hub
+   make login NAME=SITE_NAME
+   ```
 
-```sh
-make prereqs HUB_CONTEXT=HUB_CONTEXT SITE_CONTEXT=SITE_CONTEXT QUAY_AUTH_FILE=QUAY_AUTH_FILE
-```
+   Replace `SITE_NAME` with the site's name in `clusters`. Each runs `oc login --web` against the cluster's API URL,
+   which opens your browser, and saves the login in `.config/NAME/kubeconfig`, which git ignores. Your own kubeconfig
+   isn't touched. To use a kubeconfig you already have instead, such as the installer's `auth/kubeconfig`, copy it
+   to `.config/NAME/kubeconfig`.
 
-Replace the following:
+4. Check your prerequisites:
 
-- `HUB_CONTEXT` and `SITE_CONTEXT`: each cluster's kubeconfig context.
-- `QUAY_AUTH_FILE`: your container auth file with the pre-release registry logins, such as
-  `~/.config/containers/auth.json`.
+   ```sh
+   make prereqs QUAY_AUTH_FILE=QUAY_AUTH_FILE
+   ```
 
-Add `CATALOG_TOKEN_FILE=~/.ai-grid/catalog-token` after part 2.
+   Replace `QUAY_AUTH_FILE` with your container auth file with the pre-release registry logins, such as
+   `~/.config/containers/auth.json`. Add `CATALOG_TOKEN_FILE=~/.ai-grid/catalog-token` after part 2.
 
-The output is similar to the following:
+   It checks your tools, each cluster in `clusters`, and your registry logins, and fetches the library at your pin
+   into `.library/`, which git ignores. The scripts in `scripts/` use it. It changes nothing on your clusters and
+   never blocks; checks whose input you haven't set yet print `skipped`. The output is similar to the following:
 
-```text
-Tools
-ok       oc                               4.22.17
-ok       kustomize                        5.8.3
-MISSING  clusteradm                       imports the site into ACM
-...
-Hub cluster
-skipped  hub checks                       set HUB_CONTEXT to the hub's kubeconfig context
-...
-12 ok, 1 missing, 4 skipped
-Nothing was changed; fix these before the page that needs them.
-```
+   ```text
+   Tools
+   ok       oc                               4.22.17
+   MISSING  clusteradm                       imports the site into ACM
+   ...
+   Hub hub
+   ok       reachable                        https://api.hub.example.com:6443
+   ok       OpenShift 4.21 or later          4.22.18
+   ...
+   Site site-east-1 (combined)
+   ok       ClusterIssuer                    letsencrypt-dns (DNS-01)
+   ...
+   20 ok, 1 missing, 1 skipped
+   Nothing was changed; fix these before the page that needs them.
+   ```
 
-Install any tool marked `MISSING` or `OLD` before you continue.
+   Install any tool marked `MISSING` or `OLD` before you continue.
 
 ## 2. Create your catalog repository and its token
 
@@ -98,10 +106,10 @@ console writes them there with a token that can write only this repository.
 Find each cluster's apps domain:
 
 ```sh
-oc --context CONTEXT get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}{"\n"}'
+scripts/with-cluster.sh NAME oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}{"\n"}'
 ```
 
-Replace `CONTEXT` with the cluster's kubeconfig context. The output is similar to `apps.hub.example.com`.
+Replace `NAME` with the cluster's name in `clusters`, such as `hub`. The output is similar to `apps.hub.example.com`.
 
 Replace each `REQUIRED-` placeholder:
 

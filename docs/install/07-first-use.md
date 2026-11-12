@@ -63,7 +63,7 @@ You should see the subscription with status **Pending**, and **Active** about 5 
 ## 5. Check the delivery
 
 ```sh
-oc --context "$SITE_CONTEXT" get llminferenceservices,maassubscriptions,maasauthpolicies -A
+scripts/with-cluster.sh "$SITE" oc get llminferenceservices,maassubscriptions,maasauthpolicies -A
 ```
 
 You should see the model `Ready`, and the subscription and its auth policy. If they don't appear within a few
@@ -74,7 +74,7 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
 1. Create a test user in the organization, in group `ai-grid-users`. The script generates the password into a file:
 
    ```sh
-   scripts/create-test-tenant.sh --kubeconfig "$HUB_KUBECONFIG" --org ORG_NAME --user TENANT_USER \
+   scripts/create-test-tenant.sh --kubeconfig .config/hub/kubeconfig --org ORG_NAME --user TENANT_USER \
      --password-file TENANT_PASSWORD_FILE
    ```
 
@@ -85,7 +85,7 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
 
    ```sh
    T=$(mktemp -d); (umask 077
-   oc --context "$HUB_CONTEXT" get secret tenant-idp-client -n tenant-idp-client \
+   scripts/with-cluster.sh hub oc get secret tenant-idp-client -n tenant-idp-client \
      -o jsonpath='{.data.client-secret}' | base64 -d > "$T/client-secret"
    curl -sS "IDP_ISSUER_URL/protocol/openid-connect/token" \
      --data-urlencode grant_type=password --data-urlencode client_id=ai-grid-tenants \

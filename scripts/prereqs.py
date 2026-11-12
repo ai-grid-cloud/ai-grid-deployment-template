@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Report which AI Grid install prerequisites you have. Never blocks, never changes anything.
 
-Usage: scripts/prereqs.py [--library DIR] [--hub-context CONTEXT] [--site-context CONTEXT]
+Usage: scripts/prereqs.py [--library DIR] [--deployment DIR]
                           [--quay-auth-file FILE] [--catalog-token-file FILE]
 
 Runs from your deployment repository; the library is .library/, which make prereqs fetches
 at your pin (scripts/library.sh).
 
-Each option also reads an environment variable: HUB_CONTEXT, SITE_CONTEXT,
+The clusters come from the deployment's clusters file, each with its login in
+.config/NAME/kubeconfig. Each option also reads an environment variable:
 QUAY_AUTH_FILE, CATALOG_TOKEN_FILE and LIBRARY. A check whose input you haven't set
 prints "skipped". Every line is: status, name, detail. Statuses: ok, MISSING,
 OLD, FAIL, skipped. Cluster checks are read-only (get, whoami, auth can-i).
@@ -221,29 +222,65 @@ def check_registry(auth_file):
         report("FAIL", "pull the pinned catalog", f"{short}: {first_line(err or out) or 'oc image info failed'}")
 
 
-def check_cluster(label, context, site):
-    section(f"{label} cluster")
+ROLES = ("hub", "combined", "ingress", "inference")
+
+
+def read_clusters(deployment):
+    """[(name, role)] from DIR/clusters, or an error string."""
+    path = os.path.join(deployment, "clusters")
+    try:
+        lines = open(path).read().splitlines()
+    except OSError:
+        return "no clusters file: set your hub and sites in it (page 2, part 1)"
+    rows = []
+    for n, line in enumerate(lines, 1):
+        cols = line.split("#", 1)[0].split()
+        if not cols:
+            continue
+        left = re.findall(r"REQUIRED-[A-Za-z]+", line)
+        if left:
+            return f"set {' '.join(left)} in the clusters file (page 2, part 1)"
+        if len(cols) != 4 or cols[1] not in ROLES:
+            return f"clusters line {n} needs: name role location api, with role one of {', '.join(ROLES)}"
+        rows.append((cols[0], cols[1]))
+    if [r for _, r in rows].count("hub") != 1:
+        return "the clusters file needs exactly one hub"
+    return rows
+
+
+def check_clusters(deployment):
+    rows = read_clusters(deployment)
+    if isinstance(rows, str):
+        section("Clusters")
+        report("skipped", "cluster checks", rows)
+        return
+    for name, role in rows:
+        check_cluster(name, role, os.path.join(deployment, ".config", name, "kubeconfig"))
+
+
+def check_cluster(name, role, kubeconfig):
+    site = role != "hub"
+    section(f"Site {name} ({role})" if site else f"Hub {name}")
     names = ["reachable", "OpenShift 4.21 or later", "cluster-admin", "default StorageClass"]
-    if site:
+    if role in ("combined", "ingress"):
         names.append("ClusterIssuer")
-    env_var = "SITE_CONTEXT" if site else "HUB_CONTEXT"
-    if not context:
-        report("skipped", f"{label.lower()} checks", f"set {env_var} to the {label.lower()}'s kubeconfig context")
+    if not os.path.isfile(kubeconfig):
+        report("skipped", f"{name} checks", f"no login: run make login NAME={name}")
         return
     if not shutil.which("oc"):
-        report("skipped", f"{label.lower()} checks", "needs oc")
+        report("skipped", f"{name} checks", "needs oc")
         return
 
     def oc(*args):
-        return run(["oc", "--context", context, OC_TIMEOUT, *args])
+        return run(["oc", "--kubeconfig", kubeconfig, OC_TIMEOUT, *args])
 
     rc, out, err = oc("whoami", "--show-server")
     if rc != 0:
-        report("FAIL", "reachable", f"context {context}: {first_line(err) or 'oc whoami failed'}")
+        report("FAIL", "reachable", f"{name}: {first_line(err) or 'oc whoami failed'}")
         for n in names[1:]:
             report("skipped", n, "cluster not reachable")
         return
-    report("ok", "reachable", f"{context}: {out.strip()}")
+    report("ok", "reachable", out.strip())
 
     rc, out, err = oc("get", "clusterversion", "version", "-o", "jsonpath={.status.desired.version}")
     m = version_of(out) if rc == 0 else None
@@ -276,7 +313,7 @@ def check_cluster(label, context, site):
         else:
             report("MISSING", "default StorageClass", "no StorageClass is marked default")
 
-    if not site:
+    if "ClusterIssuer" not in names:
         return
     rc, out, err = oc("get", "clusterissuers.cert-manager.io", "-o", "json")
     try:
@@ -323,8 +360,6 @@ def main():
         description="Report which AI Grid install prerequisites you have. Never blocks; always exits 0.")
     p.add_argument("--deployment", default=REPO, help="your deployment repository (default: this one)")
     p.add_argument("--library", default=LIB, help="your library checkout (default: .library) [LIBRARY]")
-    p.add_argument("--hub-context", default=os.environ.get("HUB_CONTEXT"), help="hub kubeconfig context [HUB_CONTEXT]")
-    p.add_argument("--site-context", default=os.environ.get("SITE_CONTEXT"), help="site kubeconfig context [SITE_CONTEXT]")
     p.add_argument("--quay-auth-file", default=os.environ.get("QUAY_AUTH_FILE"),
                    help="container auth file with the pre-release registry logins [QUAY_AUTH_FILE]")
     p.add_argument("--catalog-token-file", default=os.environ.get("CATALOG_TOKEN_FILE"),
@@ -335,8 +370,7 @@ def main():
     check_tools()
     check_library(a.deployment)
     check_registry(a.quay_auth_file)
-    check_cluster("Hub", a.hub_context, site=False)
-    check_cluster("Site", a.site_context, site=True)
+    check_clusters(a.deployment)
     check_catalog_token(a.catalog_token_file)
 
     counts = {s: results.count(s) for s in ("ok", "MISSING", "OLD", "FAIL", "skipped")}

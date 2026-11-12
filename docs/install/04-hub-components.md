@@ -6,13 +6,13 @@ Keycloak. On this page you wait for them, create the console's secrets, and chec
 ## 1. Watch the components install
 
 ```sh
-watch -n 30 "oc --context $HUB_CONTEXT get applications.argoproj.io -n openshift-gitops"
+watch -n 30 scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops
 ```
 
 Every Application appears within a few minutes. ACM takes longer:
 
 ```sh
-oc --context "$HUB_CONTEXT" get multiclusterhub -A
+scripts/with-cluster.sh hub oc get multiclusterhub -A
 ```
 
 You should see the MultiClusterHub with status `Running`, about 20 minutes after the bootstrap.
@@ -31,14 +31,13 @@ The provider console needs your catalog token for its git writer, and an admin l
 goes in git. Wait until the tenant Keycloak is `Healthy` and the console's Route exists:
 
 ```sh
-oc --context "$HUB_CONTEXT" get applications.argoproj.io -n openshift-gitops tenant-idp
-oc --context "$HUB_CONTEXT" get route ai-grid-provider-console -n ai-grid-provider-console
+scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops tenant-idp
+scripts/with-cluster.sh hub oc get route ai-grid-provider-console -n ai-grid-provider-console
 ```
 
 Then create the secrets:
 
 ```sh
-oc config use-context "$HUB_CONTEXT"
 AI_GRID_GIT_TOKEN_FILE=CATALOG_TOKEN_FILE KEYCLOAK_NAMESPACE=tenant-idp KEYCLOAK_REALM=tenants \
   scripts/create-console-secrets.sh
 ```
@@ -54,7 +53,7 @@ publicly trusted, see
 1. Every Application is `Synced` and `Healthy`, except the three in part 1:
 
    ```sh
-   oc --context "$HUB_CONTEXT" get applications.argoproj.io -n openshift-gitops \
+   scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops \
      -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status}{"\n"}{end}' \
      | grep -v ' Synced Healthy$'
    ```
@@ -64,8 +63,8 @@ publicly trusted, see
 2. The console is up:
 
    ```sh
-   oc --context "$HUB_CONTEXT" get pods -n ai-grid-provider-console
-   oc --context "$HUB_CONTEXT" get route -n ai-grid-provider-console -o jsonpath='{.items[0].spec.host}{"\n"}'
+   scripts/with-cluster.sh hub oc get pods -n ai-grid-provider-console
+   scripts/with-cluster.sh hub oc get route -n ai-grid-provider-console -o jsonpath='{.items[0].spec.host}{"\n"}'
    ```
 
    You should see the console pod `3/3 Running` and its hostname, `CONSOLE_HOST`. Open `https://CONSOLE_HOST` and
