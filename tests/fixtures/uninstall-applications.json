@@ -1,0 +1,37 @@
+{"items": [
+ {"metadata": {"name": "maas-db"},
+  "spec": {"destination": {"server": "https://kubernetes.default.svc", "namespace": "maas-db"},
+           "syncPolicy": {"syncOptions": ["CreateNamespace=true"]}},
+  "status": {"resources": [
+    {"group": "postgresql.cnpg.io", "version": "v1", "kind": "Cluster", "namespace": "maas-db", "name": "maas-db"},
+    {"group": "", "version": "v1", "kind": "Secret", "namespace": "maas-db", "name": "maas-db-app"},
+    {"group": "operators.coreos.com", "version": "v1alpha1", "kind": "Subscription", "namespace": "cnpg-system", "name": "cloudnative-pg"},
+    {"group": "", "version": "v1", "kind": "Namespace", "name": "cnpg-system"},
+    {"group": "policy.open-cluster-management.io", "version": "v1", "kind": "Policy", "namespace": "maas-db", "name": "maas-db-config"}]}},
+ {"metadata": {"name": "acm"},
+  "spec": {"destination": {"server": "https://kubernetes.default.svc", "namespace": "open-cluster-management"}},
+  "status": {"resources": [
+    {"group": "operator.open-cluster-management.io", "version": "v1", "kind": "MultiClusterHub", "namespace": "open-cluster-management", "name": "multiclusterhub"},
+    {"group": "observability.open-cluster-management.io", "version": "v1beta2", "kind": "MultiClusterObservability", "name": "observability"},
+    {"group": "apiextensions.k8s.io", "version": "v1", "kind": "CustomResourceDefinition", "name": "things.example.com"},
+    {"group": "", "version": "v1", "kind": "Namespace", "name": "open-cluster-management"}]}},
+ {"metadata": {"name": "cluster-config-local-cluster"},
+  "spec": {"destination": {"name": "in-cluster", "namespace": "openshift-config"}},
+  "status": {"resources": [
+    {"group": "rbac.authorization.k8s.io", "version": "v1", "kind": "ClusterRoleBinding", "name": "cluster-admin-admin"},
+    {"group": "", "version": "v1", "kind": "ConfigMap", "namespace": "openshift-config", "name": "something"},
+    {"group": "", "version": "v1", "kind": "ConfigMap", "namespace": "openshift-ingress", "name": "kept-ns-object"},
+    {"group": "", "version": "v1", "kind": "Namespace", "name": "openshift-gitops"}]}},
+ {"metadata": {"name": "rhoai-site-b-1234"},
+  "spec": {"destination": {"server": "https://cluster-proxy-addon-user.multicluster-engine.svc.cluster.local:9092/site-b", "namespace": "redhat-ods-operator"},
+           "syncPolicy": {"syncOptions": ["CreateNamespace=true"]}},
+  "status": {"resources": [
+    {"group": "datasciencecluster.opendatahub.io", "version": "v2", "kind": "DataScienceCluster", "name": "default-dsc"},
+    {"group": "operators.coreos.com", "version": "v1alpha1", "kind": "Subscription", "namespace": "openshift-nfd", "name": "nfd"},
+    {"group": "", "version": "v1", "kind": "Namespace", "name": "redhat-ods-applications"}]}},
+ {"metadata": {"name": "argo-children"},
+  "spec": {"destination": {"server": "https://kubernetes.default.svc", "namespace": "openshift-gitops"}},
+  "status": {"resources": [
+    {"group": "argoproj.io", "version": "v1alpha1", "kind": "ApplicationSet", "namespace": "openshift-gitops", "name": "nested"},
+    {"group": "argoproj.io", "version": "v1beta1", "kind": "ArgoCD", "namespace": "openshift-gitops", "name": "openshift-gitops"}]}}
+]}

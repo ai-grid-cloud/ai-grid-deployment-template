@@ -19,14 +19,16 @@ For what AI Grid is and how its parts fit together, see [How AI Grid works](http
 | [5. Prepare the site](05-prepare-site.md) | Infrastructure check, import into ACM | 15 minutes |
 | [6. Join the site to the grid](06-join-grid.md) | The site's files, then labels that install OpenShift AI and enrol it | 45 to 60 minutes |
 | [7. First use](07-first-use.md) | A model from the provider console, a tenant calling it | 30 minutes |
+| [8. Uninstall](08-uninstall.md) | Only when you remove AI Grid: each site, then the hub | 15 minutes per site, 25 for the hub |
 
 To add more sites, repeat pages 5 and 6 for each.
 
 ## Reference
 
 - [Troubleshooting](troubleshooting.md): problems while following this guide.
+- [Uninstall](08-uninstall.md): remove AI Grid from each site, then the hub.
 - In the library at your pin: [How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/README.md#how-ai-grid-works),
-  [Operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/operate.md) (upgrade, add and remove sites, rotate credentials, uninstall),
+  [Operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/operate.md) (upgrade, add and remove sites, rotate credentials),
   [Tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/tenant-access.md), [Known gaps](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/known-gaps.md), [Hub](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/hub/README.md),
   [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/spokes/README.md),
   [Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/appendix-a-inputs.md).

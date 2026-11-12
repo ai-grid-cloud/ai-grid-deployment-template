@@ -1,0 +1,97 @@
+# Objects the install's operators and add-ons leave behind, outside Argo CD's inventory
+# and outside the namespaces the uninstall deletes. Found by scanning site-b and proto-hub
+# after the first real uninstall (2026-11-10); uninstall.sh deletes them last, before the
+# final login check. Columns, tab-separated:
+#
+#   STEP      site or hub
+#   KIND      resource, as oc names it
+#   NAMESPACE a namespace, or - for cluster-scoped
+#   TARGET    a name; label:SELECTOR; prefix:TEXT (names starting with TEXT); or all
+#   FLAGS     - ; strip (drop finalizers first: their controller is already gone); or
+#             managed-by:MANAGER (only if MANAGER wrote it: leaves a platform's own copy)
+#
+# Protected namespaces are never touched, whatever this file says. A prefix must not match
+# the admin/edit/view/crdview roles OLM generates for each CRD ("KIND.GROUP-VERSION-..."):
+# the CRDs stay, and so do those roles.
+
+# --- site: MaaS and the AI gateway in openshift-ingress, which stays -----------------
+site	telemetrypolicies.extensions.kuadrant.io	openshift-ingress	all	strip
+site	deployments.apps	openshift-ingress	label:app.kubernetes.io/managed-by=ai-gateway-controller	-
+site	services	openshift-ingress	label:app.kubernetes.io/managed-by=ai-gateway-controller	-
+site	configmaps	openshift-ingress	label:app.kubernetes.io/managed-by=ai-gateway-controller	-
+site	serviceaccounts	openshift-ingress	label:app.kubernetes.io/managed-by=ai-gateway-controller	-
+site	networkpolicies.networking.k8s.io	openshift-ingress	label:app.kubernetes.io/managed-by=ai-gateway-controller	-
+site	destinationrules.networking.istio.io	openshift-ingress	label:app.kubernetes.io/managed-by=ai-gateway-controller	-
+site	servicemonitors.monitoring.coreos.com	openshift-ingress	payload-processing-metrics	-
+site	rolebindings.rbac.authorization.k8s.io	openshift-ingress	odh-model-controller-grid-publisher	-
+site	clusterrolebindings.rbac.authorization.k8s.io	-	prefix:payload-processing-metrics-	-
+site	clusterroles.rbac.authorization.k8s.io	-	prefix:payload-processing-metrics-	-
+site	clusterroles.rbac.authorization.k8s.io	-	odh-model-controller-grid-publisher	-
+# The install's MaaS gateway route, certificate Secret and network policies
+site	routes.route.openshift.io	openshift-ingress	maas-gateway-route	-
+site	secrets	openshift-ingress	maas-gateway-public-tls	-
+site	networkpolicies.networking.k8s.io	openshift-ingress	grid-gateway-backend	-
+site	networkpolicies.networking.k8s.io	openshift-ingress	llminference-engine-serving	-
+site	networkpolicies.networking.k8s.io	openshift-ingress	llminference-scheduler-serving	-
+site	networkpolicies.networking.k8s.io	openshift-ingress	rhoai-collector-metrics	-
+site	configmaps	openshift-ingress	kserve-gateway-options	-
+site	configmaps	openshift-ingress	odh-kserve-custom-ca-bundle	-
+# OpenShift AI's cluster-scoped objects
+site	auths.services.platform.opendatahub.io	-	all	strip
+site	clusterservingruntimes.serving.kserve.io	-	all	-
+site	consoleplugins.console.openshift.io	-	kuadrant-console-plugin	-
+
+# --- hub: user-workload monitoring that HyperShift turned on ------------------------
+hub	configmaps	openshift-monitoring	cluster-monitoring-config	managed-by:hypershift-operator-manager
+hub	configmaps	openshift-user-workload-monitoring	user-workload-monitoring-config	-
+hub	secrets	openshift-user-workload-monitoring	telemetry-remote-write	-
+hub	rolebindings.rbac.authorization.k8s.io	openshift-user-workload-monitoring	alertmanager-user-workload-prometheususer-workload	-
+hub	rolebindings.rbac.authorization.k8s.io	openshift-user-workload-monitoring	user-workload-alertmanager-thanos-ruler	-
+# --- hub: console and OAuth entries ---------------------------------------------------
+hub	consoleplugins.console.openshift.io	-	gitops-plugin	-
+hub	consolelinks.console.openshift.io	-	argocd	-
+hub	consolequickstarts.console.openshift.io	-	external-secrets-operator-example	-
+hub	consoleyamlsamples.console.openshift.io	-	prefix:eso-	-
+hub	oauthclients.oauth.openshift.io	-	ai-grid-provider-console	-
+hub	configmaps	openshift-config-managed	prefix:gitops-	-
+hub	secrets	openshift-marketplace	rhoai-catalog-pull-secret	-
+# --- hub: operator singletons whose operators are gone -------------------------------
+hub	gitopsservices.pipelines.openshift.io	-	all	strip
+hub	externalsecretsmanagers.operator.openshift.io	-	all	strip
+# --- hub: ACM, the multicluster engine and HyperShift ---------------------------------
+hub	clusterclaims.cluster.open-cluster-management.io	-	all	-
+hub	clusterimagesets.hive.openshift.io	-	all	-
+hub	priorityclasses.scheduling.k8s.io	-	prefix:hypershift-	-
+hub	priorityclasses.scheduling.k8s.io	-	klusterlet-critical	-
+hub	validatingadmissionpolicybindings.admissionregistration.k8s.io	-	hostedcluster-block-key-rotation-during-reencryption	-
+hub	validatingadmissionpolicybindings.admissionregistration.k8s.io	-	hypershift.openshift.io-deprecation-policy	-
+hub	validatingadmissionpolicies.admissionregistration.k8s.io	-	hostedcluster-block-key-rotation-during-reencryption	-
+hub	validatingadmissionpolicies.admissionregistration.k8s.io	-	hypershift.openshift.io-deprecation-policy	-
+hub	servicemonitors.monitoring.coreos.com	openshift-monitoring	prefix:submariner-	-
+# --- hub: RBAC the operators created outside their CSVs -------------------------------
+hub	clusterrolebindings.rbac.authorization.k8s.io	-	prefix:open-cluster-management:	-
+hub	clusterroles.rbac.authorization.k8s.io	-	prefix:open-cluster-management:	-
+hub	clusterrolebindings.rbac.authorization.k8s.io	-	prefix:submariner-	-
+hub	clusterroles.rbac.authorization.k8s.io	-	prefix:submariner-	-
+hub	clusterrolebindings.rbac.authorization.k8s.io	-	prefix:ocp-submariner-	-
+hub	clusterroles.rbac.authorization.k8s.io	-	prefix:ocp-submariner-	-
+hub	clusterroles.rbac.authorization.k8s.io	-	access-to-brokers-submariner-crd	-
+hub	clusterrolebindings.rbac.authorization.k8s.io	-	prefix:external-secrets-	-
+hub	clusterroles.rbac.authorization.k8s.io	-	prefix:external-secrets-	-
+hub	clusterroles.rbac.authorization.k8s.io	-	prefix:cnpg-	-
+hub	clusterroles.rbac.authorization.k8s.io	-	prefix:persesdashboard-	-
+hub	clusterroles.rbac.authorization.k8s.io	-	prefix:persesdatasource-	-
+hub	clusterroles.rbac.authorization.k8s.io	-	prefix:persesglobaldatasource-	-
+hub	clusterrolebindings.rbac.authorization.k8s.io	-	klusterlet	-
+hub	clusterroles.rbac.authorization.k8s.io	-	klusterlet	-
+hub	clusterroles.rbac.authorization.k8s.io	-	klusterlet-bootstrap-kubeconfig	-
+hub	clusterrolebindings.rbac.authorization.k8s.io	-	cluster-proxy-addon-agent-tokenreview	-
+hub	clusterroles.rbac.authorization.k8s.io	-	cluster-proxy-addon-agent-tokenreview	-
+hub	clusterrolebindings.rbac.authorization.k8s.io	-	gitops-service-cluster	-
+hub	clusterroles.rbac.authorization.k8s.io	-	gitops-service-cluster	-
+hub	clusterroles.rbac.authorization.k8s.io	-	global-search-user	-
+hub	clusterroles.rbac.authorization.k8s.io	-	odh-model-controller-grid-publisher	-
+hub	rolebindings.rbac.authorization.k8s.io	kube-system	cnpg-controller-manager-service-auth-reader	-
+hub	rolebindings.rbac.authorization.k8s.io	kube-system	obo-prometheus-operator-admission-webhook-service-auth-reader	-
+hub	rolebindings.rbac.authorization.k8s.io	kube-system	openshift-gitops-operator-controller-manager-service-auth-reader	-
+hub	rolebindings.rbac.authorization.k8s.io	kube-system	perses-operator-service-auth-reader	-

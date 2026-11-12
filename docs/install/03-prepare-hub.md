@@ -3,8 +3,7 @@
 On this page you check the hub, install OpenShift GitOps, and apply your root. From then on, Argo CD installs
 everything from git.
 
-If the cluster ran an AI Grid hub before, uninstall that hub first
-([uninstall](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/operate.md#uninstall)).
+If the cluster ran an AI Grid hub before, uninstall that hub first ([uninstall](08-uninstall.md)).
 
 ## 1. Check the infrastructure
 
