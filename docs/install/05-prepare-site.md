@@ -72,3 +72,5 @@ site, within a few minutes.
 ## Checkpoint
 
 - The site's ManagedCluster is joined and available, and its Argo CD cluster Secret exists on the hub.
+
+Next: [6. Join the site to the grid](06-join-grid.md)

@@ -81,3 +81,5 @@ OpenShift AI takes 45 to 60 minutes.
 - The site's DataScienceCluster is `Ready` and its GridSite `Available`.
 - Every hub Application is `Synced` and `Healthy`.
 - `https://maas.SITE_APPS_DOMAIN` answers `401` over trusted TLS.
+
+Next: [7. First use](07-first-use.md)

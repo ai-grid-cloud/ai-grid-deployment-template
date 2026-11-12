@@ -16,3 +16,5 @@ You need the following. On the next page, `make prereqs` checks most of it for y
 ## Checkpoint
 
 - You have everything in the list. Page 2 checks it.
+
+Next: [2. Set up your deployment repository](02-repositories.md)

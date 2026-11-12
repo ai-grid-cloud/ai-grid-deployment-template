@@ -116,3 +116,6 @@ see [operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/d5021
 
 - The model is **Ready** and the subscription **Active** in the console.
 - A tenant's chat call returns a reply with an `x-grid-site` header.
+
+To add more sites, repeat [5. Prepare the site](05-prepare-site.md) and
+[6. Join the site to the grid](06-join-grid.md) for each. Back to the [install guide](README.md).

@@ -147,3 +147,5 @@ Keep every other value. Each one is a tested choice: for what it means and how t
 - `scripts/check-deployment.sh` prints `root renders; every input is set; every repository is an input.`
 - Your deployment repository is pushed, your catalog repository has a `main` branch, and your catalog token is in
   `~/.ai-grid/catalog-token`.
+
+Next: [3. Prepare the hub](03-prepare-hub.md)

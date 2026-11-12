@@ -75,3 +75,5 @@ publicly trusted, see
 - Every Application is `Synced` and `Healthy`, apart from the three that wait for a site.
 - The MultiClusterHub is `Running`.
 - The console opens and you can sign in.
+
+Next: [5. Prepare the site](05-prepare-site.md)

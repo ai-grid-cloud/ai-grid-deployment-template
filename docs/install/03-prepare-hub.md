@@ -58,3 +58,5 @@ You should see `deployment-root` `Synced`, and the ApplicationSet conditions wit
 
 - The hub check shows `OK` for everything except object storage.
 - `deployment-root` is `Synced`, and the root ApplicationSet `apps` reports no error.
+
+Next: [4. Install the hub components](04-hub-components.md)
