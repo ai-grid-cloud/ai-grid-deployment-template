@@ -88,10 +88,11 @@ console writes them there with a token that can write only this repository.
 3. Save the token to a file outside your repository that only you can read, and never commit it:
 
    ```sh
-   mkdir -p ~/.ai-grid && install -m 600 /dev/null ~/.ai-grid/catalog-token
+   mkdir -p ~/.ai-grid && (umask 077 && printf 'Paste the token: ' && read -rs t && printf '%s' "$t" > ~/.ai-grid/catalog-token && echo)
    ```
 
-   Paste the token into `~/.ai-grid/catalog-token` with an editor. You use it in
+   It asks for the token without showing it, and writes it to `~/.ai-grid/catalog-token`, readable only by you. Paste
+   the token and press Enter. You use it in
    [install the hub components](04-hub-components.md#2-create-the-consoles-secrets).
 
 ## 3. Check your prerequisites
