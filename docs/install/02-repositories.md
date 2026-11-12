@@ -22,7 +22,8 @@ repository, set the names that must be yours, check the result, and push it.
 
    In `clusters.yaml`, replace each `REQUIRED-` value: the hub's API URL, and the site's name, location and API URL.
    Keep the hub's name, `hub`, and the site's role, `combined`: the guide's commands use them. To find a cluster's
-   API URL, run `oc whoami --show-server` while logged in to it. For example:
+   API URL, open its web console, click your user name > **Copy login command**, and read the `--server=` value, or
+   take it from the cluster installer's output. For example:
 
    ```yaml
    apiVersion: ai-grid.dev/v1alpha1
