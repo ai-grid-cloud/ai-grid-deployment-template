@@ -122,8 +122,8 @@ Replace each `REQUIRED-` placeholder:
 | `tenant-idp/manifests/settings.yaml` | `REQUIRED-portalRedirectURI` | `https://maas.SITE_APPS_DOMAIN/*`, with the site's apps domain |
 
 Keep every other value. Each one is a tested choice: for what it means and how to change it, see
-[Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/appendix-a-inputs.md) and
-[Hub components](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/hub/README.md#select-components).
+[Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/d5021fa2080d013732825da29d1d2714d9eb0c54/docs/install/appendix-a-inputs.md) and
+[Hub components](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/d5021fa2080d013732825da29d1d2714d9eb0c54/docs/install/hub/README.md#select-components).
 
 ## 4. Check and push
 

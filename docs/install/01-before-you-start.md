@@ -7,7 +7,7 @@ Gather the following before you run anything. On the next page, `make prereqs` c
 - **A hub and a site,** each on OpenShift 4.21 or later with a default StorageClass. Size the site for its models;
   GPU models need GPU nodes.
 - **Two worker nodes on each cluster** that Submariner can use as gateways. On compact clusters and single-node
-  OpenShift, you label them by hand ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/hub/01-acm.md#submariner)).
+  OpenShift, you label them by hand ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/d5021fa2080d013732825da29d1d2714d9eb0c54/docs/install/hub/01-acm.md#submariner)).
 - **A `cluster-admin` sign-in to each cluster,** and its API URL.
 - **On the site, a cert-manager ClusterIssuer** that issues publicly trusted certificates by DNS-01.
 
@@ -18,7 +18,7 @@ Gather the following before you run anything. On the next page, `make prereqs` c
 - The site reaches the hub's tenant identity provider on 443, and tenants reach the site on 443.
 - Every router name answers `AAAA` queries with an address or an empty answer, never `NXDOMAIN`.
 
-For separate ingress and inference sites, see [site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/spokes/networking.md).
+For separate ingress and inference sites, see [site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/d5021fa2080d013732825da29d1d2714d9eb0c54/docs/install/spokes/networking.md).
 
 ## 3. Registry logins
 

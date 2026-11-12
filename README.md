@@ -21,7 +21,7 @@ The template carries choices tested end to end on 2026-11-10, so you change only
 
 The hub's Argo CD reads all three. Your deployment repository points at the library and the catalog in
 `root/kustomization.yaml`; to upgrade, you move the library pin. For more, see
-[How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/README.md#how-ai-grid-works).
+[How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/d5021fa2080d013732825da29d1d2714d9eb0c54/docs/install/README.md#how-ai-grid-works).
 
 ## Start here
 
