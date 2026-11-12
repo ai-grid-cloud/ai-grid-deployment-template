@@ -148,9 +148,9 @@ apps domains through your cluster logins, prints each value it sets, and then ru
 
 | File | Value | Set to |
 |---|---|---|
-| `root/kustomization.yaml` | `deploymentRepoURL` | Your deployment repository's URL, from `git remote get-url origin` |
-| `root/kustomization.yaml` | `catalogRepoURL` | `CATALOG_REPO_URL` |
-| `root/kustomization.yaml` | `idpIssuerURL` | `https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants`, with the hub's apps domain |
+| `root/inputs.yaml` | `deploymentRepoURL` | Your deployment repository's URL, from `git remote get-url origin` |
+| `root/inputs.yaml` | `catalogRepoURL` | `CATALOG_REPO_URL` |
+| `root/inputs.yaml` | `idpIssuerURL` | `https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants`, with the hub's apps domain |
 | `root/self.yaml` | `repoURL` | Your deployment repository's URL |
 | `tenant-idp/manifests/settings.yaml` | `portalRedirectURI` | `https://maas.SITE_APPS_DOMAIN/*`, with the apps domain of the first `combined` or `ingress` site |
 

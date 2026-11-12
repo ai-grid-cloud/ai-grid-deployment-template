@@ -3,9 +3,11 @@
 # directory, so a commit here (a selection change, a new pin) reaches the hub.
 # Reference: the library's docs/install/appendix-a-inputs.md ("Your root").
 #
-# Set the three REQUIRED- inputs below to yours; check-deployment.sh names any
-# left. To upgrade the library, change the SHA in all three places (the remote
-# base, the generator revision and values.libraryRevision) in one commit.
+# Your inputs (your repositories and tenant IdP) are in inputs.yaml, not here:
+# the REQUIRED- placeholders below are replaced by that file's patch, so leave
+# them. This file comes from the template, and make update brings its changes.
+# To upgrade the library, change the SHA in all three places (the remote base,
+# the generator revision and values.libraryRevision) in one commit.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -85,3 +87,6 @@ patches:
             files:
               - path: apps/*.yaml
             values: *inputs
+  # Your inputs, replacing the REQUIRED- placeholders above. Keep it last.
+  - target: { group: argoproj.io, kind: ApplicationSet, name: apps }
+    path: inputs.yaml

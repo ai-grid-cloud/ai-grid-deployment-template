@@ -40,4 +40,20 @@ t "later update takes the change" 0 "^v3$" cat "$mine/guide.md"
 echo "mine too" > "$mine/guide.md"; g -C "$mine" commit -qam "my edit"; echo v4 > "$tpl/guide.md"; g -C "$tpl" commit -qam v4
 t "a conflict stops with the fix" 1 "conflict.*guide.md" run
 
+# With the real root/: your inputs live in root/inputs.yaml, so a template
+# commit that moves the library pin in root/kustomization.yaml merges cleanly.
+tpl="$T/template-root"; mkdir -p "$tpl"; cp -R "$SRC/scripts" "$SRC/root" "$tpl/"
+g -C "$tpl" init -q && g -C "$tpl" add -A && g -C "$tpl" commit -qm v1
+mine="$T/mine-root"; mkdir -p "$mine"; cp -R "$tpl/scripts" "$tpl/root" "$mine/"
+g -C "$mine" init -q && g -C "$mine" add -A && g -C "$mine" commit -qm "Initial commit"
+sed -i.bak -e 's#REQUIRED-deploymentRepoURL$#https://github.com/acme/deploy.git#' -e 's#REQUIRED-catalogRepoURL$#https://github.com/acme/catalog.git#' \
+  -e 's#REQUIRED-idpIssuerURL$#https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants#' "$mine/root/inputs.yaml" "$mine/root/self.yaml"
+rm "$mine"/root/*.bak; g -C "$mine" commit -qam "set our names"
+old=$(sed -n -E 's/^ *libraryRevision: *([0-9a-f]{40}).*/\1/p' "$tpl/root/kustomization.yaml")
+sed -i.bak "s/$old/0123456789abcdef0123456789abcdef01234567/g" "$tpl/root/kustomization.yaml"; rm "$tpl/root/kustomization.yaml.bak"
+g -C "$tpl" commit -qam "move the pin"
+t "a pin move merges with your inputs set" 0 "Merged the template" run
+t "  ... takes the new pin" 0 "libraryRevision: 0123456789abcdef0123456789abcdef01234567" cat "$mine/root/kustomization.yaml"
+t "  ... keeps your inputs" 0 "&catalogRepoURL https://github.com/acme/catalog.git$" cat "$mine/root/inputs.yaml"
+
 echo "update tests: $((total-fails)) ok, $fails failed"; exit "$fails"

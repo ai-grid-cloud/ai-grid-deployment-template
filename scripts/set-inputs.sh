@@ -2,7 +2,7 @@
 # Set the values that name your repositories and hosts (install guide, page 2),
 # then check the repository:
 #
-#   root/kustomization.yaml             deploymentRepoURL, catalogRepoURL, idpIssuerURL
+#   root/inputs.yaml                    deploymentRepoURL, catalogRepoURL, idpIssuerURL
 #   root/self.yaml                      repoURL (deploymentRepoURL)
 #   tenant-idp/manifests/settings.yaml  portalRedirectURI
 #
@@ -11,7 +11,8 @@
 # portalRedirectURI https://maas.SITE_APPS_DOMAIN/*, with the apps domains read
 # from the hub and the first combined or ingress site in clusters.yaml through
 # their logins. Only those REQUIRED-<name> placeholders are replaced; a value
-# that's already set is left alone, and so are the root's "op: test" lines.
+# that's already set is left alone. root/kustomization.yaml, the template's, is
+# never touched.
 #
 # Usage: scripts/set-inputs.sh CATALOG_REPO_URL
 set -euo pipefail
@@ -54,9 +55,9 @@ import os, sys
 deployment, catalog, issuer, redirect = sys.argv[1:]
 d = os.environ["DIR"]
 sets = [
-    ("root/kustomization.yaml", "deploymentRepoURL", deployment),
-    ("root/kustomization.yaml", "catalogRepoURL", catalog),
-    ("root/kustomization.yaml", "idpIssuerURL", issuer),
+    ("root/inputs.yaml", "deploymentRepoURL", deployment),
+    ("root/inputs.yaml", "catalogRepoURL", catalog),
+    ("root/inputs.yaml", "idpIssuerURL", issuer),
     ("root/self.yaml", "deploymentRepoURL", deployment),
     ("tenant-idp/manifests/settings.yaml", "portalRedirectURI", redirect),
 ]

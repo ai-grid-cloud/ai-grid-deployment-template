@@ -21,8 +21,9 @@ The template carries choices tested end to end on 2026-11-10, so you change only
 | Your deployment repository, from this template | The library pin, which components run, your inputs, each site's files, the install guide and its scripts | You |
 | Your catalog repository, created in the install guide | Models and subscriptions | The provider console |
 
-The hub's Argo CD reads all three. Your deployment repository points at the library and the catalog in
-`root/kustomization.yaml`; to upgrade, you move the library pin. For more, see
+The hub's Argo CD reads all three. Your deployment repository pins the library in `root/kustomization.yaml`, which
+comes from the template, and names your repositories, the catalog among them, in `root/inputs.yaml`, which is yours;
+to upgrade, you move the library pin. For more, see
 [How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/README.md#how-ai-grid-works).
 
 ## Start here
@@ -68,3 +69,16 @@ git push
 
 If a file changed on both sides, it stops and names the file. Keep your values and the template's other changes in
 it, then run `git add FILE` and `git commit`, or undo the merge with `git merge --abort`.
+
+If your repository is older than `root/inputs.yaml`, the first update that brings it stops once with a conflict in
+`root/kustomization.yaml`, because your values moved to the new file. Take the template's version, put your values
+in `root/inputs.yaml` by running `scripts/set-inputs.sh` with your catalog repository's URL, which also checks the
+result, then commit the merge:
+
+```sh
+git checkout --theirs root/kustomization.yaml
+scripts/set-inputs.sh CATALOG_REPO_URL
+git add root && git commit --no-edit
+```
+
+After that, moving the library pin never touches your values.
