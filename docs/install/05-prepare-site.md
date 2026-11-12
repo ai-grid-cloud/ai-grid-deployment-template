@@ -61,8 +61,9 @@ scripts/import-site.sh
 It runs the library's import script, which runs `clusteradm` against both clusters. It prints a summary of what it
 will do and asks `Import SITE now? [y/N]`; read the summary and answer `y`. Any other answer changes nothing.
 
-The site joins ACM, and the hub's Argo CD registers it. Nothing AI Grid installs yet: that waits for the labels you
-add on the next page.
+The site joins ACM, and the hub's Argo CD registers it. The hub then prepares the site: it creates empty namespaces
+for OpenShift AI and the grid, delivers the registry logins, labels the Submariner gateway nodes and starts
+Submariner. OpenShift AI and the grid wait for the labels you add on the next page.
 
 ## 3. Check the import
 
