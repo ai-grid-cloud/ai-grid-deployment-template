@@ -158,8 +158,8 @@ The `REQUIRED-libraryRepoURL` and `REQUIRED-libraryRevision` in the root's `op: 
 library's files, not yours. A value that's already set is kept, so you can run the script again.
 
 Keep every other value. Each one is a tested choice: for what it means and how to change it, see
-[Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9cb50e9afcc069669aff57d2bf25d0b759b85ece/docs/install/appendix-a-inputs.md) and
-[Hub components](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9cb50e9afcc069669aff57d2bf25d0b759b85ece/docs/install/hub/README.md#select-components).
+[Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/4aa1c997d86e88955e3e4ea3017e74bdaa100988/docs/install/appendix-a-inputs.md) and
+[Hub components](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/4aa1c997d86e88955e3e4ea3017e74bdaa100988/docs/install/hub/README.md#select-components).
 
 ## 5. Check and push
 
