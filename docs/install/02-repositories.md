@@ -162,8 +162,8 @@ You should see `root renders; every input is set; every repository is an input.`
 `unset inputs:` or `placeholders left in your files:`, set the values it names and run `scripts/check-deployment.sh`.
 
 Keep every other value. Each one is a tested choice: for what it means and how to change it, see
-[Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/appendix-a-inputs.md) and
-[Hub components](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/hub/README.md#select-components).
+[Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/appendix-a-inputs.md) and
+[Hub components](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/hub/README.md#select-components).
 
 ## 5. Commit and push
 

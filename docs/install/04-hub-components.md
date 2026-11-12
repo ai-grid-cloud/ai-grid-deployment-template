@@ -42,7 +42,7 @@ restarts the console to read the new Secrets. It first waits until the tenant Ke
 `Synced` and `Healthy` and the console's Route exists, printing what it waits for, for up to 30 minutes; if it times
 out, run `make status`. For every variable, and for a hub whose ingress certificate isn't
 publicly trusted, see
-[provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/hub/05-console-and-model-delivery.md#provider-console).
+[provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/hub/05-console-and-model-delivery.md#provider-console).
 
 ## 3. Verify
 

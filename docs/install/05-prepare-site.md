@@ -46,7 +46,7 @@ make site-check
 
 You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass`, `previous AI Grid install` and
 `apps domain DNS`. The hub delivers the registry logins and image mirror once the site is imported. For GPU sites, see
-[GPU operator and NFD](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/spokes/openshift-ai.md#nvidia-gpu-operator-and-node-feature-discovery).
+[GPU operator and NFD](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/spokes/openshift-ai.md#nvidia-gpu-operator-and-node-feature-discovery).
 
 ## 2. Import the site into ACM
 
