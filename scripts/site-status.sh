@@ -3,6 +3,8 @@
 # make site-status). Read only:
 #   - its ManagedCluster on the hub: JOINED and AVAILABLE
 #   - the hub's Applications for the site: sync and health
+#   - !! for each of its add-ons on the hub whose ManifestApplied is False
+#   - !! for each install namespace on the site stuck in Terminating
 #   - for a combined or ingress site, the HTTP status of its MaaS hostname
 #     (401 without a token, over trusted TLS), or "not installed yet" while it
 #     has no DataScienceCluster
@@ -30,10 +32,17 @@ apps=$(h get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null |
   jq -r --arg n "$name" '.items[] | select(.spec.destination.name == $n or (.metadata.name | test("(^|-)" + $n + "(-|$)")))
     | [.metadata.name, (.status.sync.status // "Unknown"), (.status.health.status // "Unknown")] | @tsv' || true)
 if [ -n "$apps" ]; then echo "Applications:"; column -t <<<"$apps" | sed 's/^/  /'; else echo "Applications: none yet"; fi
+# An add-on whose manifests the site refuses (such as Submariner's, into a
+# namespace stuck in Terminating).
+h get managedclusteraddons.addon.open-cluster-management.io -n "$name" -o json 2>/dev/null |
+  jq -r '.items[] | . as $a | .status.conditions[]? | select(.type == "ManifestApplied" and .status == "False")
+    | "  !! ManagedClusterAddOn \($a.metadata.name): ManifestApplied=False: \(.message // "")"' 2>/dev/null || true
 
 echo "== $name"
 if ! cluster_login_ok "$name"; then exit 0; fi
 s() { KUBECONFIG=$(cluster_kubeconfig "$name") oc "$@"; }
+{ s get ns -o jsonpath='{range .items[?(@.status.phase=="Terminating")]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true; } |
+  { grep -E "$INSTALL_NS_RE" || true; } | while read -r ns; do echo "  !! Namespace $ns is Terminating"; done
 case "$(cluster_field "$name" role)" in
   combined|ingress)
     if [ -z "$(s get datasciencecluster -o name 2>/dev/null || true)" ]; then

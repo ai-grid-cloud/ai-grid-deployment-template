@@ -34,6 +34,8 @@ case " $* " in
   *" get managedcluster "*) echo '{"status":{"conditions":[{"type":"ManagedClusterJoined","status":"True"},{"type":"ManagedClusterConditionAvailable","status":"True"}]}}' ;;
   *" get applications.argoproj.io "*) echo '{"items":[{"metadata":{"name":"rhoai-site-b-x"},"spec":{"destination":{"name":"site-b"}},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"}}},{"metadata":{"name":"rhoai-site-c-x"},"spec":{"destination":{"name":"site-c"}},"status":{"sync":{"status":"OutOfSync"},"health":{"status":"Missing"}}}]}' ;;
   *" get ingresses.config.openshift.io "*) echo apps.example.invalid ;;
+  *" get managedclusteraddons.addon.open-cluster-management.io "*) cat "$STUB_LOG.addons" 2>/dev/null || echo '{"items":[]}' ;;
+  *" get ns -o jsonpath="*) cat "$STUB_LOG.terminating" 2>/dev/null; true ;;
   *" get datasciencecluster "*) [ -f "$STUB_LOG.no-dsc" ] || echo datasciencecluster.datasciencecluster.opendatahub.io/default-dsc ;;
   *" get llminferenceservices,"*) echo "NAMESPACE   NAME           READY"; echo "models      smollm2-chat   True" ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
@@ -55,6 +57,13 @@ t "site-status with one site uses it" 0 "ManagedCluster: JOINED=True AVAILABLE=T
 t "  ... lists its hub Applications only" 0 "^ok$" bash -c 'out=$(PATH="$1:$PATH" make -s -C "$0" site-status 2>&1); grep -q rhoai-site-b-x <<<"$out" && ! grep -q rhoai-site-c-x <<<"$out" && echo ok' "$one" "$T/bin"
 t "  ... reads the MaaS host and the site's models" 0 "smollm2-chat" m "$one" site-status
 t "  ... and only reads" 0 "^ok$" bash -c '! grep -E " oc (apply|label|patch|delete|create)" "$0" && echo ok' "$STUB_LOG"
+echo '{"items":[{"metadata":{"name":"submariner"},"status":{"conditions":[{"type":"ManifestApplied","status":"False","message":"namespace submariner-operator is being terminated"}]}},{"metadata":{"name":"work-manager"},"status":{"conditions":[{"type":"ManifestApplied","status":"True","message":"ok"}]}}]}' > "$STUB_LOG.addons"
+printf 'some-app\nsubmariner-operator\n' > "$STUB_LOG.terminating"
+t "site-status flags an add-on whose manifests aren't applied" 0 "^  !! ManagedClusterAddOn submariner: ManifestApplied=False: namespace submariner-operator is being terminated$" m "$one" site-status
+t "  ... and only that one" 0 "^ok$" bash -c '! PATH="$1:$PATH" make -s -C "$0" site-status 2>&1 | grep -q "work-manager" && echo ok' "$one" "$T/bin"
+t "site-status flags an install namespace in Terminating" 0 "^  !! Namespace submariner-operator is Terminating$" m "$one" site-status
+t "  ... not another one" 0 "^ok$" bash -c '! PATH="$1:$PATH" make -s -C "$0" site-status 2>&1 | grep -q "some-app" && echo ok' "$one" "$T/bin"
+rm "$STUB_LOG.addons" "$STUB_LOG.terminating"
 touch "$STUB_LOG.no-dsc"; : > "$STUB_LOG"
 t "site-status before OpenShift AI: MaaS not installed yet" 0 "^MaaS: not installed yet \(page 6\)$" m "$one" site-status
 t "  ... and no HTTP check" 0 "^ok$" bash -c '! grep -q "ingresses.config" "$0" && echo ok' "$STUB_LOG"
