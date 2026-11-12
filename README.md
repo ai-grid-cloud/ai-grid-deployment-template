@@ -1,5 +1,7 @@
-> **Prototype:** this template pins [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops)
-> branch `feat/deployment-inputs` until it merges into `main`.
+> **Prototype:** this template pins one fixed commit of
+> [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) from branch
+> `feat/deployment-inputs`, until that branch merges into `main`. The commit is `libraryRevision` in
+> `root/kustomization.yaml`.
 
 # AI Grid deployment template
 
