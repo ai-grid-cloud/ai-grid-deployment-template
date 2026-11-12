@@ -149,14 +149,20 @@ STUB
 cat > "$T/cbin/curl" <<'STUB'
 #!/bin/bash
 echo "curl $*" >> "$STUB_DIR/curl.log"
-for a in "$@"; do case "$a" in @*) cat "${a#@}" >> "$STUB_DIR/curl.log" ;; esac; done
-echo '{"items":[]}'; echo "HTTP 200"
+out="" prev=""
+for a in "$@"; do case "$a" in @*) cat "${a#@}" >> "$STUB_DIR/curl.log" ;; esac; [ "$prev" = -o ] && out=$a; prev=$a; done
+echo '{"object":{"id":"org-1"}}' > "$out"; cat "$STUB_DIR/code" 2>/dev/null || printf 200
 STUB
 chmod +x "$T/cbin/oc" "$T/cbin/curl"; : > "$T/curl.log"
 t "console-call calls the console's Route" 0 "HTTP 200" env PATH="$T/cbin:$PATH" "$d/scripts/console-call.sh" ai_grid.v1.Clusters/List
 t "  ... with the hub login's token in a header file" 0 "Authorization: Bearer sha256~FAKE_console_token" cat "$T/curl.log"
 t "  ... never on the command line" 1 "^0$" bash -c 'grep "^curl " "$0" | grep -c FAKE_console_token' "$T/curl.log"
 t "  ... at the console's host and method" 0 "https://console.apps.hub.example.com/ai_grid.v1.Clusters/List" cat "$T/curl.log"
+t "  ... prints only the reply on stdout when piped, for jq" 0 "^org-1$" \
+  bash -c 'PATH="$0:$PATH" "$1/scripts/console-call.sh" ai_grid.v1.Tenants/Create 2>/dev/null | jq -r .object.id' "$T/cbin" "$d"
+printf 403 > "$T/code"
+t "  ... and fails on an error status" 1 "HTTP 403" env PATH="$T/cbin:$PATH" "$d/scripts/console-call.sh" ai_grid.v1.Tenants/Create
+rm "$T/code"
 touch "$T/no-token"
 t "console-call without a token says how to get one" 1 "make login NAME=hub" env PATH="$T/cbin:$PATH" "$d/scripts/console-call.sh" ai_grid.v1.Clusters/List
 rm "$T/no-token"
