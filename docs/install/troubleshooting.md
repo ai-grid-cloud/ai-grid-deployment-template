@@ -28,15 +28,14 @@ To log in to `quay.io`:
 podman login quay.io
 ```
 
-## `bootstrap-hub.sh` refuses a general `quay.io` login
+## `make bootstrap` refuses a general `quay.io` login
 
 **Cause:** the auth file holds a login for all of `quay.io`, which the hub would copy to every site.
 
-**Fix:** use a robot token scoped to `quay.io/rhoai`, or accept the risk by running the bootstrap with the variable
-set:
+**Fix:** use a robot token scoped to `quay.io/rhoai`, or accept the risk by allowing the general login:
 
 ```sh
-RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1 RHOAI_QUAY_AUTH_FILE=QUAY_AUTH_FILE scripts/bootstrap-hub.sh
+make bootstrap ALLOW_GENERIC_LOGIN=1
 ```
 
 ## The root reports `missing input: NAME` or `invalid input: NAME`

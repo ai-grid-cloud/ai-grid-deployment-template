@@ -116,4 +116,24 @@ sed -i.bak "s/$SHA/0123456789abcdef0123456789abcdef01234567/g" "$d/root/kustomiz
 t "bootstrap-hub refuses a library checkout off the pin" 1 "isn't at your pin 0123456789abcdef" \
   env PATH="$T/badk:$PATH" bash -c 'f=$(mktemp); echo {} > "$f"; RHOAI_QUAY_AUTH_FILE=$f KUBECONFIG=$f bash scripts/bootstrap-hub.sh --deployment "$0"' "$d"
 
+# bootstrap-hub checks the auth file before it writes to the hub: a stub oc
+# logs every call, and a refused auth file must leave no oc apply.
+d=$(fixture auth)
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\n' > "$d/clusters.yaml"
+mkdir -p "$d/.config/hub" "$T/ocbin"; : > "$d/.config/hub/kubeconfig"
+cat > "$T/ocbin/oc" <<STUB
+#!/bin/bash
+echo "oc \$*" >> "$T/oc.log"
+case "\$1" in kustomize) exec "$(command -v oc)" "\$@" ;; whoami) echo https://api.hub.example.com:6443 ;; esac
+STUB
+chmod +x "$T/ocbin/oc"
+printf '{"auths":{"quay.io":{"auth":"dTpw"}}}' > "$T/generic.json"
+: > "$T/oc.log"
+t "bootstrap-hub refuses a general login before any write" 1 "no quay.io/rhoai login in .*generic.json.*ALLOW_GENERIC_LOGIN=1" \
+  env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/generic.json" bash scripts/bootstrap-hub.sh --deployment "$d"
+t "  ... and made no oc apply" 0 "^ok$" bash -c '! grep -q " apply" "$0" && echo ok' "$T/oc.log"
+printf 'not json' > "$T/bad.json"
+t "bootstrap-hub refuses an unreadable auth file" 1 "can't read .*bad.json" \
+  env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/bad.json" bash scripts/bootstrap-hub.sh --deployment "$d"
+
 echo "deployment-scripts tests: $((total-fails)) ok, $fails failed"; exit "$fails"

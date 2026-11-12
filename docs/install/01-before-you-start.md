@@ -16,7 +16,7 @@ Submariner gateway nodes: check those yourself.
 - **A `quay.io/rhoai` login:** this template installs a pre-release (nightly) OpenShift AI 3.6 build from
   `quay.io/rhoai`, so you need a container auth file with a login for it. Red Hat gives `quay.io/rhoai` robot tokens
   to early-access partners; ask your Red Hat contact. A general `quay.io` login also works
-  ([general `quay.io` login](troubleshooting.md#bootstrap-hubsh-refuses-a-general-quayio-login)).
+  ([general `quay.io` login](troubleshooting.md#make-bootstrap-refuses-a-general-quayio-login)).
 - **Tools:** `oc`, `git`, `jq`, `curl`, `openssl`, `python3`, `clusteradm` and `make`.
 
 ## Checkpoint
