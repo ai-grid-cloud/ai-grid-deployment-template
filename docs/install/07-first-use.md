@@ -125,32 +125,16 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
    Replace `ORG_NAME` with the organization's name, `TENANT_USER` with a user name, and `TENANT_PASSWORD_FILE` with
    a path outside any repository.
 
-2. Get the user's access token. The client secret and password stay in files:
+2. Call the model as that user, and see which site served it:
 
    ```sh
-   T=$(mktemp -d); (umask 077
-   scripts/with-cluster.sh hub oc get secret tenant-idp-client -n tenant-idp-client \
-     -o jsonpath='{.data.client-secret}' | base64 -d > "$T/client-secret"
-   curl -sS "IDP_ISSUER_URL/protocol/openid-connect/token" \
-     --data-urlencode grant_type=password --data-urlencode client_id=ai-grid-tenants \
-     --data-urlencode client_secret@"$T/client-secret" --data-urlencode username=TENANT_USER \
-     --data-urlencode password@TENANT_PASSWORD_FILE --data-urlencode scope=openid \
-     | jq -r '"Authorization: Bearer " + .access_token' > "$T/auth")
+   scripts/tenant-call.sh --user TENANT_USER --password-file TENANT_PASSWORD_FILE --subscription SUBSCRIPTION_ID \
+     --model MODEL_NAME
    ```
 
-   Replace `IDP_ISSUER_URL` with your `idpIssuerURL`.
-
-3. Call the model, and see which site served it:
-
-   ```sh
-   curl -sS -D "$T/h" -H @"$T/auth" -H 'X-MaaS-Subscription: SUBSCRIPTION_ID' -H 'Content-Type: application/json' \
-     -d '{"model":"MODEL_NAME","messages":[{"role":"user","content":"Say hello in five words."}],"max_tokens":20}' \
-     "https://maas.$APPS_DOMAIN/v1/chat/completions" | jq -r '.choices[0].message.content'
-   grep -i '^x-grid-site' "$T/h"
-   ```
-
-   Replace `SUBSCRIPTION_ID` with the subscription you created, and `MODEL_NAME` with the model's resource name. You
-   should see a short reply and `x-grid-site: SITE`.
+   Replace `SUBSCRIPTION_ID` with the subscription you created, and `MODEL_NAME` with the model's resource name. It
+   gets the user's token from your tenant Keycloak (the `idpIssuerURL` in `root/inputs.yaml`), calls the site's MaaS
+   hostname, and prints no password or token. You should see a short reply, `HTTP 200` and `x-grid-site: SITE`.
 
 Tenants normally call with an API key, and create keys in the Org UI at `https://maas.SITE_APPS_DOMAIN/maas-portal`.
 For API keys, refusal checks and revoking a key, see [tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/tenant-access.md). To remove what you created,
