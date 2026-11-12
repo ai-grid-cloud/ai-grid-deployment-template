@@ -110,6 +110,21 @@ t "a Placement that matches is a problem" "^  other +Synced +Degraded$"
 rm "$W/placements.json"
 t "no Placements readable: nothing waits" "^  models +Synced +Degraded$"
 
+# A sync that keeps retrying because its only failed tasks are Placements
+# that match no ManagedCluster also waits for a site; any other failed task
+# is a problem. Placements aren't readable here: the failed tasks say enough.
+W="$T/retrying"; mkdir -p "$W"
+appop() { # name sync health task-json...
+  local n=$1 sy=$2 h=$3; shift 3; local IFS=,
+  printf '{"metadata":{"name":"%s"},"status":{"sync":{"status":"%s"},"health":{"status":"%s"},"operationState":{"phase":"Running","message":"one or more synchronization tasks completed unsuccessfully. Retrying attempt #3","syncResult":{"resources":[%s]}}}}' "$n" "$sy" "$h" "$*"
+}
+task() { printf '{"group":"%s","kind":"%s","namespace":"x","name":"%s","status":"%s","message":"%s"}' "$@"; }
+nomatch="No ManagedCluster matches any of the cluster predicate"
+pl=cluster.open-cluster-management.io
+echo "{\"items\":[$(appop rhoai OutOfSync Degraded "$(task $pl Placement p1 SyncFailed "$nomatch")" "$(task apps Deployment d1 Synced ok)"),$(appop odd OutOfSync Degraded "$(task $pl Placement p1 SyncFailed "$nomatch")" "$(task apps Deployment d2 SyncFailed boom)")]}" > "$W/apps.json"
+t "a sync retrying only on no-match Placements waits for a site" "^Waiting for a site to join \(expected until page 6\): rhoai$" "^  rhoai "
+t "  ... another failed task is a problem" "^  odd +OutOfSync +Degraded$"
+
 # Done: everything ready, the controller healthy, the console up.
 W="$T/done"; mkdir -p "$W"
 echo "{\"items\":[$(app acm Synced Healthy),$(app tenant-idp Synced Healthy)]}" > "$W/apps.json"

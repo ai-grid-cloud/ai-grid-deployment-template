@@ -43,14 +43,20 @@ unmatched=$(oc get placements.cluster.open-cluster-management.io -A -o json 2>/d
     | "\(.metadata.namespace)/\(.metadata.name)"]' 2>/dev/null)
 # One row per Application: name, sync, health, and "site" when it's Synced and
 # what keeps it from Healthy is such a Placement: it has one, and every resource
-# whose health Argo CD reports as not Healthy is one.
+# whose health Argo CD reports as not Healthy is one. Also "site" when its sync
+# keeps retrying because every failed task is a Placement that matches no
+# ManagedCluster, so the later waves wait.
 apps=$(oc get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null |
   jq -r --argjson u "${unmatched:-[]}" '.items[] | [.metadata.name, (.status.sync.status // "Unknown"),
       (.status.health.status // "Unknown"),
       ([.status.resources[]? | select(.kind == "Placement") | "\(.namespace)/\(.name)" | select(IN($u[]))] as $waiting
        | [.status.resources[]? | select(.health != null and .health.status != "Healthy")
           | select((.kind == "Placement" and ("\(.namespace)/\(.name)" | IN($u[]))) | not)] as $other
+       | [.status.operationState.syncResult.resources[]? | select(.status == "SyncFailed")] as $failed
        | if .status.sync.status == "Synced" and ($waiting | length > 0) and ($other | length == 0)
+         then "site"
+         elif ($failed | length > 0) and all($failed[]; .kind == "Placement"
+           and ((.message // "") | contains("No ManagedCluster matches")))
          then "site" else "-" end)] | @tsv' 2>/dev/null)
 if [ -z "$apps" ]; then
   echo "Applications: none yet"

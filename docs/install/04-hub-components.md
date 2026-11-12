@@ -23,8 +23,8 @@ If nothing changes for 10 minutes, or `make status` prints a line starting with 
 
 Some Applications wait for the first site to [join the grid](06-join-grid.md), and aren't a problem until then:
 `make status` lists them on one line, `Waiting for a site to join`. They're the Submariner, `limitador-redis` and MaaS
-database Applications, which need a peer cluster, and any Application whose only unhealthy resources are ACM
-Placements that match no ManagedCluster yet.
+database Applications, which need a peer cluster, and any Application whose only unhealthy resources, or only failed
+sync tasks, are ACM Placements that match no ManagedCluster yet.
 
 ## 2. Create the console's secrets
 
@@ -67,7 +67,8 @@ publicly trusted, see
 
 ## Checkpoint
 
-- Every Application is `Synced` and `Healthy`, apart from the ones that wait for a site.
+- Every Application is `Synced` and `Healthy`, apart from the ones that wait for a site. After the site joins on
+  page 6, those finish on their next sync retry, which can take up to 30 minutes.
 - The MultiClusterHub is `Running`.
 - The console opens and you can sign in.
 
