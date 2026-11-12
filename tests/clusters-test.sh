@@ -66,6 +66,8 @@ t "with-cluster with an expired login" 1 "hub: login expired: run make login NAM
 rm "$T/fail-whoami"; : > "$STUB_LOG"
 t "join-site labels from the file" 0 "oc label managedcluster site-c ai-grid/enabled=true ai-grid/role=inference location=us-west --overwrite" \
   bash -c 'PATH="$1:$PATH" "$0/scripts/join-site.sh" site-c; cat "$STUB_LOG"' "$d" "$T/bin"
+t "check-revisions without a hub login" 1 "no login for hub|login expired" env PATH="$T/bin:$PATH" LIBRARY=/nonexistent bash -c 'rm -f "$0/.config/hub/kubeconfig"; "$0/scripts/check-revisions.sh"' "$d"
+: > "$d/.config/hub/kubeconfig"
 t "join-site refuses the hub" 1 "hub is the hub" env PATH="$T/bin:$PATH" "$d/scripts/join-site.sh" hub
 
 # import-site.sh merges two kubeconfigs whose names collide (both "admin")
