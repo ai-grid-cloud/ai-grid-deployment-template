@@ -32,6 +32,15 @@ t "sites listed" 0 "^site-b site-c$" bash -c '. "$0/scripts/clusters.sh"; cluste
 t "a site's role" 0 "^inference$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_field site-c role' "$d"
 t "kubeconfig path" 0 "/good/.config/site-b/kubeconfig$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_kubeconfig site-b' "$d"
 t "unknown cluster" 1 "no cluster nope in" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_field nope role' "$d"
+t "site_name with several sites asks for one" 1 "name a site: site-b, site-c" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name' "$d"
+t "site_name keeps a given name" 0 "^site-c$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name site-c' "$d"
+d1=$(repo one "hub: {name: hub, api: 'https://api.hub.example.com:6443'}
+sites:
+$(site site-b combined us-east https://api.site-b.example.com:6443)")
+t "site_name defaults to the only site" 0 "^site-b$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name' "$d1"
+t "clusters.sh --site prints the only site" 0 "^site-b$" bash "$d1/scripts/clusters.sh" --site
+t "clusters.sh --site with several sites" 1 "name a site" bash "$d/scripts/clusters.sh" --site
+t "site_name: the word site is the only site" 0 "^site-b$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name site' "$d1"
 
 d=$(repo placeholder 'hub: {name: hub, api: REQUIRED-hubAPIURL}')
 t "placeholder named" 1 "set these in clusters.yaml: REQUIRED-hubAPIURL" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
@@ -89,6 +98,20 @@ t "login leaves a working hub login alone" 1 "^0$" grep -c "login --server https
 : > "$STUB_LOG"
 t "join-site labels from the file" 0 "oc label managedcluster site-c ai-grid/enabled=true ai-grid/role=inference location=us-west --overwrite" \
   bash -c 'PATH="$1:$PATH" "$0/scripts/join-site.sh" site-c; cat "$STUB_LOG"' "$d" "$T/bin"
+t "join-site with several sites needs a name" 1 "name a site: site-b, site-c" env PATH="$T/bin:$PATH" "$d/scripts/join-site.sh"
+mkdir -p "$d1/.config/hub" "$d1/.config/site-b"; : > "$d1/.config/hub/kubeconfig"; : > "$d1/.config/site-b/kubeconfig"; : > "$STUB_LOG"
+t "join-site with one site needs no name" 0 "oc label managedcluster site-b ai-grid/enabled=true ai-grid/role=combined location=us-east" \
+  bash -c 'PATH="$1:$PATH" "$0/scripts/join-site.sh"; cat "$STUB_LOG"' "$d1" "$T/bin"
+t "with-cluster site is the only site" 0 "KUBECONFIG=$d1/.config/site-b/kubeconfig oc get nodes" \
+  bash -c 'PATH="$1:$PATH" "$0/scripts/with-cluster.sh" site oc get nodes; cat "$STUB_LOG"' "$d1" "$T/bin"
+t "with-cluster site with several sites" 1 "name a site: site-b, site-c" env PATH="$T/bin:$PATH" "$d/scripts/with-cluster.sh" site oc get nodes
+: > "$STUB_LOG"
+t "login NAME=site is the only site" 0 "oc login --server https://api.site-b.example.com:6443" \
+  bash -c 'PATH="$1:$PATH" "$0/scripts/login.sh" site; cat "$STUB_LOG"' "$d1" "$T/bin"
+t "site check with several sites needs a name" 2 "name a site: site-b, site-c" env PATH="$T/bin:$PATH" "$d/scripts/check-prerequisites.sh" --step spoke
+: > "$STUB_LOG"
+t "site check with one site needs no name" 0 "KUBECONFIG=$d1/.config/site-b/kubeconfig oc whoami" \
+  bash -c 'PATH="$1:$PATH" "$0/scripts/check-prerequisites.sh" --step spoke; cat "$STUB_LOG"' "$d1" "$T/bin"
 t "check-revisions without a hub login" 1 "no login for hub|login expired" env PATH="$T/bin:$PATH" LIBRARY=/nonexistent bash -c 'rm -f "$0/.config/hub/kubeconfig"; "$0/scripts/check-revisions.sh"' "$d"
 : > "$d/.config/hub/kubeconfig"
 t "join-site refuses the hub" 1 "hub is the hub" env PATH="$T/bin:$PATH" "$d/scripts/join-site.sh" hub

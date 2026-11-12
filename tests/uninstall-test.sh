@@ -82,7 +82,7 @@ no_writes() { # name args...: the run succeeds, says it deleted nothing, and the
 
 # Arguments and clusters.yaml
 world; t "no step is refused" 1 "usage: uninstall.sh" 
-world; t "a site step needs a name" 1 "usage: uninstall.sh site NAME" site --dry-run
+world; t "a site step with no name takes the only site" 0 "site-b: signed in as" site --dry-run
 world; t "an unknown site is refused" 1 "no cluster site-z in" site site-z --dry-run
 world; t "the hub as a site is refused" 1 "hub is the hub" site hub --dry-run
 world; t "local-cluster as a site is refused" 1 "isn't supported yet" site local-cluster --dry-run

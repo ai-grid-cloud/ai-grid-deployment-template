@@ -9,8 +9,11 @@ Each command reads your hub and sites from `clusters.yaml` and signs in with eac
 
 ```sh
 make login NAME=hub
-make login NAME="$SITE"
+make login NAME=site
 ```
+
+These commands work on the only site in your `clusters.yaml`. With several sites, give each site's name in place of
+`site`, and after `uninstall.sh site`.
 
 ## What stays and what goes
 
@@ -79,7 +82,7 @@ its resources when a site's folder goes. The site step deletes them first, while
 Preview a site's uninstall. It deletes nothing:
 
 ```sh
-scripts/uninstall.sh site "$SITE" --dry-run
+scripts/uninstall.sh site --dry-run
 ```
 
 The output starts with the checks, then lists every step and every object it would delete, in order:
@@ -118,7 +121,7 @@ The script refuses, and deletes nothing, in these cases:
 For each site, run the site step with a plan file:
 
 ```sh
-scripts/uninstall.sh site "$SITE" --plan-file "$SITE-uninstall-plan.tsv"
+scripts/uninstall.sh site --plan-file site-uninstall-plan.tsv
 ```
 
 The plan comes from the site's Applications on the hub, which the first steps remove. If the run stops partway, run
@@ -176,7 +179,7 @@ A hub takes about 25 minutes, most of it removing MultiClusterHub, the multiclus
 ## 5. Verify
 
 On each cluster, check that the Argo CD Application kind, the install's namespaces and your sign-in are as expected.
-Run these for the hub, then for each site with `"$SITE"` in place of `hub`:
+Run these for the hub, then for each site with `site` in place of `hub`:
 
 ```sh
 scripts/with-cluster.sh hub oc get applications.argoproj.io -A 2>&1 | head -1

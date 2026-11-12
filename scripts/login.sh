@@ -2,7 +2,7 @@
 # Log in to the clusters in clusters.yaml, each into .config/NAME/kubeconfig.
 #
 #   scripts/login.sh                         (make login) every cluster whose login doesn't work
-#   scripts/login.sh NAME [oc login flags]   (make login NAME=...) one cluster
+#   scripts/login.sh NAME [oc login flags]   (make login NAME=...) one cluster; NAME=site is the only site
 #
 # With no flags it runs oc login --web, which opens your browser. To use a
 # kubeconfig you already have, such as the installer's auth/kubeconfig, copy it
@@ -24,7 +24,11 @@ login() { # NAME [oc login flags]
   echo "Logged in to $name as $(KUBECONFIG=$k oc whoami)."
 }
 
-if [ $# -ge 1 ]; then login "$@"; exit; fi
+if [ $# -ge 1 ]; then
+  name=$1; shift
+  [ "$name" != site ] || name=$(site_name site)
+  login "$name" "$@"; exit
+fi
 for name in $(hub_name) $(site_names); do
   if cluster_login_ok "$name" 2>/dev/null; then echo "$name: already logged in."; else login "$name"; fi
 done

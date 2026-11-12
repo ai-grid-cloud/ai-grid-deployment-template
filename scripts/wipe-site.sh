@@ -34,7 +34,7 @@ GATEWAYS="data-science-gateway openshift-ai-inference maas-default-gateway"
 NAMESPACES="ai-grid-internal-models kuadrant-system limitador-redis models-as-a-service odh-observability-webhook-probe redhat-ai-grid redhat-ods-applications redhat-ods-monitoring redhat-ods-operator openshift-cluster-observability-operator openshift-lws-operator openshift-opentelemetry-operator openshift-tempo-operator openshift-operators-redhat"
 WEBHOOK_PATTERN='kserve|opendatahub|odh-|llminferenceservice'
 
-usage() { echo "Usage: wipe-site.sh --kubeconfig PATH [--dry-run [--assume-detached]]"; }
+usage() { echo "Usage: wipe-site.sh [--kubeconfig PATH] [--dry-run [--assume-detached]]  (default: the only site's login)"; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 kubeconfig="" dry_run=false assume_detached=false
@@ -48,7 +48,14 @@ while [ $# -gt 0 ]; do
     *) usage >&2; die "unknown argument: $1" ;;
   esac
 done
-[ -n "$kubeconfig" ] || { usage >&2; die "--kubeconfig is required"; }
+if [ -z "$kubeconfig" ]; then
+  here="$(cd "$(dirname "$0")" && pwd)"
+  . "$here/clusters.sh"
+  clusters_load "$here/.." || exit 1
+  site=$(site_name) || exit 1
+  cluster_login_ok "$site" || exit 1
+  kubeconfig=$(cluster_kubeconfig "$site")
+fi
 $assume_detached && ! $dry_run && die "--assume-detached is only for --dry-run"
 k() { oc --kubeconfig "$kubeconfig" "$@"; }
 

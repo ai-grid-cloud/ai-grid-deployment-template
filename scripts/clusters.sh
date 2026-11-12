@@ -7,6 +7,8 @@
 # Sourced by the other scripts:
 #   clusters_load DIR             reads and checks DIR/clusters.yaml
 #   hub_name, site_names          the hub's name; the sites' names
+#   site_name [NAME]              NAME, or the only site when NAME is empty or
+#                                 "site"; with several sites, asks you to name one
 #   cluster_field NAME FIELD      role, location or api
 #   cluster_kubeconfig NAME       the path of NAME's kubeconfig
 #   merge_kubeconfigs HUB SITE OUT  one kubeconfig with contexts hub and site
@@ -44,6 +46,18 @@ clusters_load() {
 hub_name() { awk '$2 == "hub" {print $1}' <<<"$CLUSTERS_ROWS"; }
 site_names() { awk '$2 != "hub" && NF {print $1}' <<<"$CLUSTERS_ROWS"; }
 
+site_name() { # [NAME]
+  local n=${1:-} all count
+  all=$(site_names)
+  if [ -n "$n" ] && { [ "$n" != site ] || grep -qx site <<<"$all"; }; then echo "$n"; return 0; fi
+  count=$(grep -c . <<<"$all" || true)
+  case "$count" in
+    1) echo "$all" ;;
+    0) echo "error: clusters.yaml has no site" >&2; return 1 ;;
+    *) echo "error: name a site: $(echo $all | sed 's/ /, /g')" >&2; return 1 ;;
+  esac
+}
+
 cluster_field() { # NAME role|location|api
   local col
   case "$2" in role) col=2 ;; location) col=3 ;; api) col=4 ;; *) echo "error: unknown field $2" >&2; return 1 ;; esac
@@ -74,7 +88,10 @@ merge_kubeconfigs() { # HUB SITE OUT: renames each cluster, user and context, so
 }
 
 # scripts/clusters.sh --rows DIR prints one line per cluster (name role location
-# api), or the error; prereqs.py uses it.
+# api), or the error; prereqs.py uses it. scripts/clusters.sh --site [NAME]
+# prints site_name's answer for this repository.
 if [ "${BASH_SOURCE[0]}" = "$0" ] && [ "${1:-}" = --rows ]; then
   clusters_load "${2:-.}" && printf '%s' "$CLUSTERS_ROWS"
+elif [ "${BASH_SOURCE[0]}" = "$0" ] && [ "${1:-}" = --site ]; then
+  clusters_load "$(dirname "$0")/.." && site_name "${2:-}"
 fi

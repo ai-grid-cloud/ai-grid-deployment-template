@@ -10,7 +10,7 @@
 #                  version, a default StorageClass, cert-manager's CRDs, the
 #                  quay.io/rhoai pull-secret file ($RHOAI_QUAY_PULL_SECRET_FILE)
 #                  and the object-storage Secret (apps/object-storage/README.md)
-#   --step spoke   a spoke before it joins ACM: OpenShift version, a default
+#   --step spoke   a spoke (with no --cluster, the only site in clusters.yaml) before it joins ACM: OpenShift version, a default
 #                  StorageClass (the hub's policies deliver its pull secret),
 #                  and a previous install (a klusterlet, a DataScienceCluster,
 #                  the OpenShift AI Subscription, grid objects)
@@ -43,9 +43,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 case "$step" in hub|spoke) ;; *) echo "--step must be hub or spoke" >&2; usage ;; esac
+if [ -z "$cluster" ] && [ -z "$kubeconfig" ] && [ "$step" = spoke ]; then cluster=site; fi
 if [ -n "$cluster" ]; then
   . "$(dirname "$0")/clusters.sh"
-  clusters_load "$(dirname "$0")/.." && cluster_login_ok "$cluster" || exit 2
+  clusters_load "$(dirname "$0")/.." || exit 2
+  [ "$cluster" != site ] || cluster=$(site_name site) || exit 2
+  cluster_login_ok "$cluster" || exit 2
   kubeconfig=$(cluster_kubeconfig "$cluster")
 fi
 [ -f "$kubeconfig" ] || { echo "--cluster or --kubeconfig is required" >&2; usage; }

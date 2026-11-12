@@ -2,10 +2,11 @@
 # Uninstall AI Grid: each site, then the hub. The end state is each cluster as
 # it was before the install (docs/install/08-uninstall.md).
 #
-#   scripts/uninstall.sh site NAME [--dry-run] [--plan-file PATH]
+#   scripts/uninstall.sh site [NAME] [--dry-run] [--plan-file PATH]
 #   scripts/uninstall.sh hub       [--dry-run] [--plan-file PATH]
 #
-# NAME is a site in clusters.yaml (its ACM ManagedCluster name). Each
+# NAME is a site in clusters.yaml (its ACM ManagedCluster name); it defaults to
+# the only site. Each
 # cluster's login is .config/NAME/kubeconfig (make login NAME=...); the site
 # step uses the hub's login and the site's.
 #
@@ -38,11 +39,10 @@ usage() { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; }
 step="${1:-}"; [ $# -eq 0 ] || shift
 site="" plan_file="" dry_run=false
 case "$step" in
-  site) [ $# -gt 0 ] && [ "${1#-}" = "$1" ] || die "usage: uninstall.sh site NAME [--dry-run] [--plan-file PATH]"
-        site=$1; shift ;;
+  site) if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then site=$1; shift; else site=site; fi ;;
   hub) ;;
   -h|--help) usage; exit 0 ;;
-  *) die "usage: uninstall.sh site NAME | hub [--dry-run] [--plan-file PATH] (see --help)" ;;
+  *) die "usage: uninstall.sh site [NAME] | hub [--dry-run] [--plan-file PATH] (see --help)" ;;
 esac
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -57,6 +57,7 @@ for c in oc python3; do command -v "$c" >/dev/null || die "required command not 
 clusters_load "$here/.."
 hub=$(hub_name)
 if [ "$step" = site ]; then
+  site=$(site_name "$site") || exit 1
   [ "$site" != local-cluster ] || die "a hub that is also a site isn't supported yet: unlabel local-cluster, then run the hub step"
   [ "$(cluster_field "$site" role)" != hub ] || die "$site is the hub: run uninstall.sh hub"
 fi

@@ -63,7 +63,7 @@ You should see the subscription with status **Pending**, and **Active** about 5 
 ## 5. Check the delivery
 
 ```sh
-scripts/with-cluster.sh "$SITE" oc get llminferenceservices,maassubscriptions,maasauthpolicies -A
+scripts/with-cluster.sh site oc get llminferenceservices,maassubscriptions,maasauthpolicies -A
 ```
 
 You should see the model `Ready`, and the subscription and its auth policy. If they don't appear within a few

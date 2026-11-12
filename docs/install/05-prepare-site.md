@@ -1,12 +1,8 @@
 # Prepare the site and join it to ACM
 
-On this page you check the site and import it into ACM. Set the site's name from your `clusters.yaml` first:
-
-```sh
-export SITE=SITE_NAME
-```
-
-Replace `SITE_NAME` with the site's name in `clusters.yaml`, such as `site-east-1`. It becomes the site's ACM cluster name.
+On this page you check the site and import it into ACM. The site's name in `clusters.yaml` becomes its ACM cluster
+name. These commands work on the only site in your `clusters.yaml`. With several sites, give the site's name where
+a command says `site`, or add it after the script's name, such as `scripts/import-site.sh SITE_NAME`.
 
 If the cluster was a site of another hub, first [reuse it](#reuse-a-cluster-from-another-hub).
 
@@ -15,7 +11,7 @@ If the cluster was a site of another hub, first [reuse it](#reuse-a-cluster-from
 Let the site check tell you whether you need this section:
 
 ```sh
-scripts/check-prerequisites.sh --step spoke --cluster "$SITE"
+scripts/check-prerequisites.sh --step spoke
 ```
 
 If its `previous AI Grid install` line is `OK` (`none`, or `leftover CRDs only; safe`), skip to part 1. If it's
@@ -27,7 +23,7 @@ follow these steps first:
 2. Preview the wipe of the old install:
 
    ```sh
-   scripts/wipe-site.sh --kubeconfig ".config/$SITE/kubeconfig" --dry-run
+   scripts/wipe-site.sh --dry-run
    ```
 
    Read the list. It must not name your platform's identity provider, cert-manager, NFD, the GPU operator or your
@@ -39,14 +35,14 @@ follow these steps first:
 You should then see no DataScienceCluster, GridNetwork, GridSite or LLMInferenceService:
 
 ```sh
-scripts/with-cluster.sh "$SITE" oc get datasciencecluster,gridnetworks,gridsites,llminferenceservices -A
+scripts/with-cluster.sh site oc get datasciencecluster,gridnetworks,gridsites,llminferenceservices -A
 ```
 
 ## 1. Check the site's infrastructure
 
 ```sh
-scripts/check-prerequisites.sh --step spoke --cluster "$SITE"
-dig AAAA router-default.$(scripts/with-cluster.sh "$SITE" oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
+scripts/check-prerequisites.sh --step spoke
+dig AAAA router-default.$(scripts/with-cluster.sh site oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
 ```
 
 You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass` and `previous AI Grid install`, and a
@@ -60,7 +56,7 @@ You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass` and `p
 summary and changes nothing without `--yes`:
 
 ```sh
-scripts/import-site.sh "$SITE"
+scripts/import-site.sh
 ```
 
 Read the summary, then run the same command with `--yes` added.
@@ -71,8 +67,8 @@ add on the next page.
 ## 3. Check the import
 
 ```sh
-scripts/with-cluster.sh hub oc get managedcluster "$SITE"
-scripts/with-cluster.sh hub oc get secret -n openshift-gitops -l argocd.argoproj.io/secret-type=cluster | grep "$SITE"
+scripts/with-cluster.sh hub oc get managedcluster "$(scripts/clusters.sh --site)"
+scripts/with-cluster.sh hub oc get secret -n openshift-gitops -l argocd.argoproj.io/secret-type=cluster
 ```
 
 You should see the ManagedCluster with `JOINED` and `AVAILABLE` both `True`, and an Argo CD cluster Secret for the

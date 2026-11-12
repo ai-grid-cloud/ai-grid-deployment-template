@@ -1,7 +1,9 @@
 # Join the site to the grid
 
 Labels on the site's ManagedCluster make it a grid site. The hub then installs OpenShift AI, MaaS, the grid and the
-tenant settings in the site's role. Use the shell variables from [prepare the site](05-prepare-site.md).
+tenant settings in the site's role. These commands work on the only site in your `clusters.yaml`. With several sites,
+give the site's name where a command says `site`, or add it after the script's name, such as
+`scripts/join-site.sh SITE_NAME`.
 
 ## 1. Add the site's values
 
@@ -11,6 +13,7 @@ A site that runs the MaaS gateway (role `combined` or `ingress`) needs three fil
 holds the three files; copy them for your site:
 
 ```sh
+SITE=$(scripts/clusters.sh --site)
 APPS_DOMAIN=$(scripts/with-cluster.sh "$SITE" oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
 DNS01_ISSUER=ISSUER_NAME
 for f in apps/SITE-maas-tls.yaml sites/SITE/maas-tls/certificate.yaml values/clusters/SITE/rhoai.yaml; do
@@ -22,7 +25,8 @@ scripts/check-deployment.sh
 git add -A && git commit -m "site $SITE: values and MaaS certificate" && git push origin HEAD:main
 ```
 
-Replace `ISSUER_NAME` with your DNS-01 ClusterIssuer on the site. You should see `root renders; every input is set;
+Replace `ISSUER_NAME` with your DNS-01 ClusterIssuer on the site. With several sites, use
+`SITE=$(scripts/clusters.sh --site SITE_NAME)`. You should see `root renders; every input is set;
 every repository is an input.` before the commit. What the files do, and other ways to get the certificate:
 [MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/spokes/maas-certificate.md).
 
@@ -31,7 +35,7 @@ every repository is an input.` before the commit. What the files do, and other w
 The site's labels on the hub make it a grid site, in the role and location from your `clusters.yaml`:
 
 ```sh
-scripts/join-site.sh "$SITE"
+scripts/join-site.sh
 ```
 
 The console shows the location. For `ingress` and `inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/spokes/README.md#what-you-choose-per-site).
@@ -40,7 +44,7 @@ You should see `managedcluster.cluster.open-cluster-management.io/SITE labeled`.
 site's Applications:
 
 ```sh
-scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops | grep -- "-$SITE"
+scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops | grep -- "-$(scripts/clusters.sh --site)"
 ```
 
 You should see `rhoai-SITE-…`, `cluster-config-SITE-…`, `acm-submariner-SITE`, `maas-db-SITE` and `SITE-maas-tls`.
@@ -51,8 +55,8 @@ OpenShift AI takes 45 to 60 minutes.
 1. OpenShift AI is ready, and the site is in the grid:
 
    ```sh
-   scripts/with-cluster.sh "$SITE" oc get datasciencecluster -o jsonpath='{.items[0].status.phase}{"\n"}'
-   scripts/with-cluster.sh "$SITE" oc get gridnetworks,gridsites -A
+   scripts/with-cluster.sh site oc get datasciencecluster -o jsonpath='{.items[0].status.phase}{"\n"}'
+   scripts/with-cluster.sh site oc get gridnetworks,gridsites -A
    ```
 
    You should see `Ready`, the GridNetwork, and the site's GridSite `Available`. If the phase flips between `Ready`
