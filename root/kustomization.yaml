@@ -39,10 +39,10 @@ patches:
           # 2. Grid (hub/02-grid.md).
           - path: apps/grid-bootstrap/application.yaml
           - path: apps/ai-grid-policies/application.yaml
-          # 3. MaaS shared services (hub/03-maas-shared-services.md).
+          # 3. MaaS shared services (hub/03-maas-shared-services.md), on the hub;
+          #    apps/external-services, which runs them on a labelled site instead, is left out.
           - path: apps/maas-db/application.yaml
           - path: apps/limitador-redis/application.yaml
-          - path: apps/external-services/application.yaml
           # 4. Tenant identity (hub/04-tenant-identity.md): none here; this
           #    deployment's own Keycloak is apps/tenant-idp.yaml.
           # 5. Provider console and model delivery (hub/05-console-and-model-delivery.md).
