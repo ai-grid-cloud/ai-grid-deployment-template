@@ -47,27 +47,22 @@ The hub's Argo CD reads all three. Your deployment repository points at the libr
 
 ## Update from the template
 
-Your repository doesn't follow the template by itself. To pick up the template's later fixes, merge it in from your
-repository's directory:
+Your repository doesn't follow the template by itself. To pick up the template's later fixes, merge them in from
+your repository's directory:
 
 ```sh
-git remote add template https://github.com/ai-grid-cloud/ai-grid-deployment-template.git
-git fetch template
-git merge --allow-unrelated-histories template/main
+make update
 ```
 
-Repositories made from a template share no history with it, so the first merge needs `--allow-unrelated-histories` and
-shows a conflict in each file the template changed since you created yours: keep your values, take the rest. If you
-haven't changed anything yet, take the template's version of every conflict instead:
+It refuses to run while you have uncommitted changes. The first time, it finds the template commit your repository
+started from, so git merges only what changed on each side since then. It prints `Merged the template's main` and
+never pushes. Review the merge, check it, and push:
 
 ```sh
-git merge --allow-unrelated-histories -X theirs template/main
-```
-
-After the first merge, update with:
-
-```sh
-git fetch template
-git merge template/main
+git diff ORIG_HEAD
+scripts/check-deployment.sh
 git push
 ```
+
+If a file changed on both sides, it stops and names the file. Keep your values and the template's other changes in
+it, then run `git add FILE` and `git commit`, or undo the merge with `git merge --abort`.
