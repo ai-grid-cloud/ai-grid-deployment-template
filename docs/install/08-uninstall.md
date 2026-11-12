@@ -179,13 +179,13 @@ A hub takes about 25 minutes, most of it removing MultiClusterHub, the multiclus
 
 ## 5. Verify
 
-Check each cluster's Argo CD Application kind, the install's namespaces and your sign-in:
+Check each cluster for Argo CD Applications, the install's namespaces and your sign-in:
 
 ```sh
 make uninstall-check
 ```
 
-For each cluster you should see `Argo CD Application kind: gone`, `Install namespaces left: none`, and your platform's
+For each cluster you should see `Argo CD Applications: none`, `Install namespaces left: none`, and your platform's
 identity providers. Then sign in once to the cluster's web console.
 
 To reinstall, start again at [set up your deployment repository](02-repositories.md), with the same or new
@@ -194,5 +194,5 @@ repositories.
 ## Checkpoint
 
 - Every site's and the hub's uninstall ended with `== done`.
-- No cluster has the Argo CD Application kind or a namespace from the list in [verify](#5-verify).
+- No cluster has an Argo CD Application or a namespace from the list in [verify](#5-verify).
 - You can sign in to each cluster's web console.
