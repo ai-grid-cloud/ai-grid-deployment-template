@@ -130,9 +130,12 @@ def check_library(deployment):
         report("FAIL", "library at your pin", f"no libraryRevision in {k}")
         return
     pin = m.group(1)
+    lib = os.path.relpath(LIB)
+    if not os.path.exists(os.path.join(LIB, ".git")):
+        report("FAIL", "library at your pin", f"no library checkout at {lib}: clone it (page 2, part 1)")
+        return
     rc, out, _ = run(["git", "-C", LIB, "rev-parse", "HEAD"], timeout=5)
     head = out.strip()
-    lib = os.path.relpath(LIB)
     if rc == 0 and head == pin:
         report("ok", "library at your pin", pin[:12])
     else:
