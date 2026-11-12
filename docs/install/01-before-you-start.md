@@ -51,7 +51,7 @@ GridSite stays `Connecting` ([site networking](https://github.com/ai-grid-cloud/
 - `make`: runs the prerequisites check.
 
 After you clone your repository in
-[set up your deployment repository](02-repositories.md#1-clone-your-repository-and-the-library), check them from its
+[set up your deployment repository](02-repositories.md#1-clone-your-repository), check them from its
 directory:
 
 ```sh

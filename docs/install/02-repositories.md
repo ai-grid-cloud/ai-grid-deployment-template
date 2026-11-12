@@ -3,19 +3,17 @@
 Your deployment repository starts with the template's tested choices. On this page you create your catalog
 repository, set the names that must be yours, check the result, and push it.
 
-## 1. Clone your repository and the library
-
-Clone your deployment repository, then the library at the commit your repository pins. The scripts this guide runs
-come from the library checkout, so they always match your pin:
+## 1. Clone your repository
 
 ```sh
 git clone DEPLOYMENT_REPO_URL deployment && cd deployment
-git clone -q https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git ../library
-git -C ../library checkout -q "$(sed -n 's/^ *libraryRevision: *//p' root/kustomization.yaml)"
 ```
 
 Replace `DEPLOYMENT_REPO_URL` with your deployment repository's clone URL. Run every command in this guide from the
 `deployment` directory.
+
+The scripts in `scripts/` use the library at the commit your repository pins. The first one that needs the library
+fetches it into `.library/`, which git ignores, and fetches it again when you move the pin.
 
 Check your prerequisites:
 
@@ -23,8 +21,8 @@ Check your prerequisites:
 make prereqs
 ```
 
-It checks your tools and that `../library` is at your pin. It changes nothing and never blocks. Checks whose input
-you haven't set yet print `skipped`. Set them as you reach them, for example:
+It checks your tools and fetches the library at your pin. It changes nothing on your clusters and never blocks.
+Checks whose input you haven't set yet print `skipped`. Set them as you reach them, for example:
 
 ```sh
 make prereqs HUB_CONTEXT=HUB_CONTEXT SITE_CONTEXT=SITE_CONTEXT QUAY_AUTH_FILE=QUAY_AUTH_FILE
@@ -124,7 +122,7 @@ Keep every other value. Each one is a tested choice: for what it means and how t
 1. Check your repository:
 
    ```sh
-   ../library/scripts/check-deployment.sh .
+   scripts/check-deployment.sh
    ```
 
    You should see `root renders; every input is set; every repository is an input.` If you see
@@ -138,6 +136,6 @@ Keep every other value. Each one is a tested choice: for what it means and how t
 
 ## Checkpoint
 
-- `../library/scripts/check-deployment.sh .` prints `root renders; every input is set; every repository is an input.`
+- `scripts/check-deployment.sh` prints `root renders; every input is set; every repository is an input.`
 - Your deployment repository is pushed, your catalog repository has a `main` branch, and your catalog token is in
   `~/.ai-grid/catalog-token`.

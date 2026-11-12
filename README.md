@@ -16,7 +16,7 @@ The template carries choices tested end to end on 2026-11-10, so you change only
 | Repository | What it holds | Who changes it |
 |---|---|---|
 | Library, [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) | The components (Argo CD applications, ACM policies, charts) and their reference docs | Its maintainers; you pin one commit and don't edit it |
-| Your deployment repository, from this template | The library pin, which components run, your inputs, each site's files, and the install guide | You |
+| Your deployment repository, from this template | The library pin, which components run, your inputs, each site's files, the install guide and its scripts | You |
 | Your catalog repository, created in the install guide | Models and subscriptions | The provider console |
 
 The hub's Argo CD reads all three. Your deployment repository points at the library and the catalog in

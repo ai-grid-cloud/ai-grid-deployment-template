@@ -23,7 +23,7 @@ Skip this section for a cluster that was never an AI Grid site.
 2. Preview the wipe of the old install:
 
    ```sh
-   ../library/scripts/wipe-site.sh --kubeconfig "$SITE_KUBECONFIG" --dry-run
+   scripts/wipe-site.sh --kubeconfig "$SITE_KUBECONFIG" --dry-run
    ```
 
    Read the list. It must not name your platform's identity provider, cert-manager, NFD, the GPU operator or your
@@ -42,7 +42,7 @@ oc --context "$SITE_CONTEXT" get datasciencecluster,gridnetworks,gridsites,llmin
 
 ```sh
 oc config use-context "$SITE_CONTEXT"
-../library/scripts/add-htpasswd-admin.sh --kubeconfig "$SITE_KUBECONFIG" --password-file SITE_ADMIN_PASSWORD_FILE
+scripts/add-htpasswd-admin.sh --kubeconfig "$SITE_KUBECONFIG" --password-file SITE_ADMIN_PASSWORD_FILE
 ```
 
 Replace `SITE_ADMIN_PASSWORD_FILE` with a path outside any repository. Sign in once as `admin` with the `htpasswd`
@@ -51,7 +51,7 @@ provider to confirm it.
 ## 2. Check the site's infrastructure
 
 ```sh
-bash ../library/scripts/check-prerequisites.sh --step spoke --context "$SITE_CONTEXT"
+scripts/check-prerequisites.sh --step spoke --context "$SITE_CONTEXT"
 dig AAAA router-default.$(oc --context "$SITE_CONTEXT" get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
 ```
 
@@ -61,11 +61,11 @@ You should see `OK` for `OpenShift 4.21 or later` and `default StorageClass`, an
 
 ## 3. Import the site into ACM
 
-The library's import script runs `clusteradm` against both clusters. It prints a summary and changes nothing without
-`--yes`:
+`scripts/import-site.sh` runs the library's import script, which runs `clusteradm` against both clusters. It prints a
+summary and changes nothing without `--yes`:
 
 ```sh
-HUB_CONTEXT="$HUB_CONTEXT" bash ../library/docs/acm/cluster-onboarding/import-managed-cluster.sh \
+HUB_CONTEXT="$HUB_CONTEXT" scripts/import-site.sh \
   --spoke-context "$SITE_CONTEXT" --cluster-name "$SITE"
 ```
 

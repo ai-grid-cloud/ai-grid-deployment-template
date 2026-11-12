@@ -18,7 +18,7 @@ for f in apps/SITE-maas-tls.yaml sites/SITE/maas-tls/certificate.yaml values/clu
   sed -e "s/SITE/$SITE/g" -e "s/APPS_DOMAIN/$APPS_DOMAIN/g" -e "s/DNS01_ISSUER/$DNS01_ISSUER/g" \
     "site-template/$f" > "${f//SITE/$SITE}"
 done
-../library/scripts/check-deployment.sh .
+scripts/check-deployment.sh
 git add -A && git commit -m "site $SITE: values and MaaS certificate" && git push origin HEAD:main
 ```
 

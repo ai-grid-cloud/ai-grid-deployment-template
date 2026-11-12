@@ -90,7 +90,7 @@ t "library at the pin" '^ok +library at your pin' "$T/bin" "$w" "${ALL[@]}"
 mkdir -p "$T/other/root"; echo "  libraryRevision: 0123456789abcdef0123456789abcdef01234567" > "$T/other/root/kustomization.yaml"
 t "library not at the pin" '^FAIL +library at your pin +.* not 0123456789ab: git -C ' "$T/bin" "$w" --deployment "$T/other"
 keep=$LIBD; LIBD="$T/no-library"
-t "library not cloned" '^FAIL +library at your pin +no library checkout at .*no-library: clone it \(page 2, part 1\)' "$T/bin" "$w" "${ALL[@]}"
+t "library not cloned" '^FAIL +library at your pin +no library checkout at .*no-library: run scripts/library.sh' "$T/bin" "$w" "${ALL[@]}"
 LIBD=$keep
 
 mkbin "$T/nojq"; rm "$T/nojq/jq"

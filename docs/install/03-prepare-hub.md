@@ -21,7 +21,7 @@ Add an htpasswd admin before anything else. If the hub's external sign-in breaks
 
 ```sh
 oc config use-context "$HUB_CONTEXT"
-../library/scripts/add-htpasswd-admin.sh --kubeconfig "$HUB_KUBECONFIG" --password-file HUB_ADMIN_PASSWORD_FILE
+scripts/add-htpasswd-admin.sh --kubeconfig "$HUB_KUBECONFIG" --password-file HUB_ADMIN_PASSWORD_FILE
 ```
 
 Replace `HUB_ADMIN_PASSWORD_FILE` with a path outside any repository, such as `~/.ai-grid/hub-admin`. The script
@@ -34,7 +34,7 @@ provider. Never delete an identity provider, or the namespace that runs it, that
 ## 2. Check the infrastructure
 
 ```sh
-RHOAI_QUAY_PULL_SECRET_FILE=QUAY_AUTH_FILE bash ../library/scripts/check-prerequisites.sh --step hub --context "$HUB_CONTEXT"
+RHOAI_QUAY_PULL_SECRET_FILE=QUAY_AUTH_FILE scripts/check-prerequisites.sh --step hub --context "$HUB_CONTEXT"
 ```
 
 Replace `QUAY_AUTH_FILE` with your container auth file with both pre-release registry logins
@@ -56,11 +56,11 @@ MISSING  object storage                           Secret open-cluster-management
 
 ## 3. Install OpenShift GitOps and apply your root
 
-The library's `bootstrap-hub.sh` checks your deployment, installs OpenShift GitOps, applies `root/` once, and seeds
+`scripts/bootstrap-hub.sh` checks your deployment, installs OpenShift GitOps, applies `root/` once, and seeds
 the registry logins that a Policy copies to every site. It reads them from the auth file and never prints them.
 
 ```sh
-KUBECONFIG="$HUB_KUBECONFIG" RHOAI_QUAY_AUTH_FILE=QUAY_AUTH_FILE ../library/scripts/bootstrap-hub.sh --deployment .
+KUBECONFIG="$HUB_KUBECONFIG" RHOAI_QUAY_AUTH_FILE=QUAY_AUTH_FILE scripts/bootstrap-hub.sh
 ```
 
 You should see `Bootstrapped.` at the end. The prerequisites check it runs first reports the items that the hub

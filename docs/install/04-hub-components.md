@@ -40,7 +40,7 @@ Then create the secrets:
 ```sh
 oc config use-context "$HUB_CONTEXT"
 AI_GRID_GIT_TOKEN_FILE=CATALOG_TOKEN_FILE KEYCLOAK_NAMESPACE=tenant-idp KEYCLOAK_REALM=tenants \
-  bash ../library/apps/console/create-secrets.sh
+  scripts/create-console-secrets.sh
 ```
 
 Replace `CATALOG_TOKEN_FILE` with the file that holds your catalog token, such as `~/.ai-grid/catalog-token`

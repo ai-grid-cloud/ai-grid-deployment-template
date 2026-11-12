@@ -4,7 +4,8 @@
 Usage: scripts/prereqs.py [--library DIR] [--hub-context CONTEXT] [--site-context CONTEXT]
                           [--quay-auth-file FILE] [--catalog-token-file FILE]
 
-Runs from your deployment repository; the library checkout is ../library by default.
+Runs from your deployment repository; the library is .library/, which make prereqs fetches
+at your pin (scripts/library.sh).
 
 Each option also reads an environment variable: HUB_CONTEXT, SITE_CONTEXT,
 QUAY_AUTH_FILE, CATALOG_TOKEN_FILE and LIBRARY. A check whose input you haven't set
@@ -23,9 +24,9 @@ import stat
 import subprocess
 import sys
 
-# This script lives in your deployment repository; the library is cloned next to it (page 2).
+# This script lives in your deployment repository; scripts/library.sh fetches the library into .library/.
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-LIB = os.environ.get("LIBRARY") or os.path.join(REPO, "..", "library")
+LIB = os.environ.get("LIBRARY") or os.path.join(REPO, ".library")
 MIN_OPENSHIFT = (4, 21)
 OC_TIMEOUT = "--request-timeout=10s"
 
@@ -132,7 +133,7 @@ def check_library(deployment):
     pin = m.group(1)
     lib = os.path.relpath(LIB)
     if not os.path.exists(os.path.join(LIB, ".git")):
-        report("FAIL", "library at your pin", f"no library checkout at {lib}: clone it (page 2, part 1)")
+        report("FAIL", "library at your pin", f"no library checkout at {lib}: run scripts/library.sh")
         return
     rc, out, _ = run(["git", "-C", LIB, "rev-parse", "HEAD"], timeout=5)
     head = out.strip()
@@ -322,7 +323,7 @@ def main():
     p = argparse.ArgumentParser(
         description="Report which AI Grid install prerequisites you have. Never blocks; always exits 0.")
     p.add_argument("--deployment", default=REPO, help="your deployment repository (default: this one)")
-    p.add_argument("--library", default=LIB, help="your library checkout (default: ../library) [LIBRARY]")
+    p.add_argument("--library", default=LIB, help="your library checkout (default: .library) [LIBRARY]")
     p.add_argument("--hub-context", default=os.environ.get("HUB_CONTEXT"), help="hub kubeconfig context [HUB_CONTEXT]")
     p.add_argument("--site-context", default=os.environ.get("SITE_CONTEXT"), help="site kubeconfig context [SITE_CONTEXT]")
     p.add_argument("--quay-auth-file", default=os.environ.get("QUAY_AUTH_FILE"),

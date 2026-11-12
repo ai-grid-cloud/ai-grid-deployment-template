@@ -36,7 +36,7 @@ podman login quay.io
 set:
 
 ```sh
-RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1 KUBECONFIG="$HUB_KUBECONFIG" RHOAI_QUAY_AUTH_FILE=QUAY_AUTH_FILE ../library/scripts/bootstrap-hub.sh --deployment .
+RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1 KUBECONFIG="$HUB_KUBECONFIG" RHOAI_QUAY_AUTH_FILE=QUAY_AUTH_FILE scripts/bootstrap-hub.sh
 ```
 
 ## The root reports `missing input: NAME` or `invalid input: NAME`
@@ -46,7 +46,7 @@ RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1 KUBECONFIG="$HUB_KUBECONFIG" RHOAI_QUAY_AUTH_FI
 **Fix:** set it in `root/kustomization.yaml` ([inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/2a96b90291a23a9fbd044ca2e3decdba1e09fae4/docs/install/appendix-a-inputs.md#inputs)), check it, and push:
 
 ```sh
-../library/scripts/check-deployment.sh .
+scripts/check-deployment.sh
 ```
 
 To read the message on the hub:
