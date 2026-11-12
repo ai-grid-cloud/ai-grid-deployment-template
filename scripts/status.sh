@@ -3,7 +3,9 @@
 # Applications that aren't Synced and Healthy, the MultiClusterHub's phase,
 # Argo CD's application controller (restarts, and OOMKilled or
 # CrashLoopBackOff called out), the tenant Keycloak's Application, and the
-# provider console's Route. Read-only; always exits 0 once it reaches the hub.
+# provider console's Route; then, for each site in clusters.yaml, OpenShift
+# AI's DataScienceCluster phase and its GridSite. Read-only; always exits 0
+# once it reaches the hub.
 #
 # Runs against the hub in clusters.yaml, with its login (.config/NAME/kubeconfig).
 #
@@ -88,4 +90,18 @@ echo "tenant-idp: ${idp:-not created yet}"
 
 host=$(oc get route ai-grid-provider-console -n ai-grid-provider-console -o jsonpath='{.spec.host}' 2>/dev/null)
 if [ -n "$host" ]; then echo "Console: https://$host"; else echo "Console: no Route yet"; fi
+
+# Each site, through its own login: OpenShift AI's DataScienceCluster phase and
+# the site's GridSite (Available or not).
+for s in $(site_names); do
+  echo
+  if ! cluster_login_ok "$s" 2>/dev/null; then echo "Site $s: no working login (make login NAME=$s)"; continue; fi
+  sk=$(cluster_kubeconfig "$s")
+  echo "Site $s ($(cluster_field "$s" role))"
+  dsc=$(KUBECONFIG=$sk oc get datasciencecluster -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
+  echo "  OpenShift AI (DataScienceCluster): ${dsc:-not created yet}"
+  gs=$(KUBECONFIG=$sk oc get gridsites -A -o json 2>/dev/null |
+    jq -r '.items[] | "\(.metadata.name) Available=\([.status.conditions[]? | select(.type == "Available") | .status][0] // "Unknown")"' 2>/dev/null)
+  echo "  GridSite: ${gs:-not created yet}"
+done
 exit 0

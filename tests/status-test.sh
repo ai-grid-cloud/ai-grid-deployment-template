@@ -30,6 +30,8 @@ case "$a" in
   *" get multiclusterhub "*) ans mch ;;
   *" get pods "*) ans pods.json ;;
   *" get placements."*) ans placements.json ;;
+  *" get datasciencecluster "*) ans dsc ;;
+  *" get gridsites "*) ans gridsites.json ;;
   *" get route "*) ans route ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
@@ -101,6 +103,20 @@ printf 'console.apps.hub.example.com' > "$W/route"
 t "done: all Applications ready" "^Applications: all 2 Synced and Healthy$"
 t "done: no warning" "^Argo CD controller: .*0 restarts, last termination -$" "!!"
 t "done: console URL" "^Console: https://console.apps.hub.example.com$"
+# Sites: each one's DataScienceCluster phase and GridSite, through its login.
+D="$T/repo-sites"; mkdir -p "$D/.config/hub" "$D/.config/site-b"; cp -R "$SRC/scripts" "$D/"
+: > "$D/.config/hub/kubeconfig"; : > "$D/.config/site-b/kubeconfig"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n  - {name: site-c, role: inference, location: us-west, api: "https://api.site-c.example.com:6443"}\n' > "$D/clusters.yaml"
+W="$T/sites"; mkdir -p "$W"
+t "site not installed yet" "^  OpenShift AI \(DataScienceCluster\): not created yet$"
+t "  ... no GridSite yet" "^  GridSite: not created yet$"
+t "a site without a login" "^Site site-c: no working login \(make login NAME=site-c\)$"
+printf 'Ready' > "$W/dsc"
+echo '{"items":[{"metadata":{"name":"site-b"},"status":{"conditions":[{"type":"Available","status":"True"}]}}]}' > "$W/gridsites.json"
+t "site ready" "^  OpenShift AI \(DataScienceCluster\): Ready$"
+t "  ... GridSite available" "^  GridSite: site-b Available=True$"
+t "  ... named with its role" "^Site site-b \(combined\)$"
+
 total=$((total+1))
 if grep -qwE 'apply|create|delete|patch|edit|label|annotate|replace|scale|rollout' "$T"/*/argv.log; then
   fails=$((fails+1)); echo "   FAIL oc got a write verb"; else echo "   ok   oc calls are read-only"; fi

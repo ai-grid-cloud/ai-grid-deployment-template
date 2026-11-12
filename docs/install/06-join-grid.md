@@ -45,34 +45,24 @@ scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops 
 ```
 
 You should see `rhoai-SITE-…`, `cluster-config-SITE-…`, `acm-submariner-SITE`, `maas-db-SITE` and `SITE-maas-tls`.
-OpenShift AI takes 45 to 60 minutes.
+OpenShift AI takes up to an hour on a new cluster, and less on one that ran OpenShift AI before.
 
 ## 3. Verify
 
-1. OpenShift AI is ready, and the site is in the grid:
+1. Check the hub and the site:
 
    ```sh
-   scripts/with-cluster.sh site oc get datasciencecluster -o jsonpath='{.items[0].status.phase}{"\n"}'
-   scripts/with-cluster.sh site oc get gridnetworks,gridsites -A
+   make status
    ```
 
-   You should see `Ready`, the GridNetwork, and the site's GridSite `Available`. If the phase flips between `Ready`
-   and not, see [troubleshooting](troubleshooting.md#kserveready-flaps-false-on-a-site).
+   Run it again every few minutes until you see, under the site, `OpenShift AI (DataScienceCluster): Ready` and its
+   GridSite `Available=True`, and on the hub no Application listed as not `Synced` and `Healthy`. If the phase flips between `Ready` and not, see
+   [troubleshooting](troubleshooting.md#kserveready-flaps-false-on-a-site).
 
-2. Every hub Application is `Synced` and `Healthy`, including the three that waited for the first site:
-
-   ```sh
-   scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops \
-     -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status}{"\n"}{end}' \
-     | grep -v ' Synced Healthy$'
-   ```
-
-   You should see no output.
-
-3. The MaaS hostname answers with a trusted certificate:
+2. The MaaS hostname answers with a trusted certificate:
 
    ```sh
-   curl -sS -o /dev/null -w '%{http_code}\n' "https://maas.$APPS_DOMAIN/v1/models"
+   curl -sS -o /dev/null -w '%{http_code}\n' "https://maas.$(scripts/with-cluster.sh site oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')/v1/models"
    ```
 
    You should see `401` (no token yet) and no certificate error.
@@ -80,7 +70,7 @@ OpenShift AI takes 45 to 60 minutes.
 ## Checkpoint
 
 - The site's DataScienceCluster is `Ready` and its GridSite `Available`.
-- Every hub Application is `Synced` and `Healthy`.
+- `make status` lists no hub Application as not `Synced` and `Healthy`.
 - `https://maas.SITE_APPS_DOMAIN` answers `401` over trusted TLS.
 
 Next: [7. First use](07-first-use.md)
