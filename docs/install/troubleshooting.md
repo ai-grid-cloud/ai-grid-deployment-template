@@ -48,10 +48,11 @@ make bootstrap ALLOW_GENERIC_LOGIN=1
 scripts/check-deployment.sh
 ```
 
-To read the message on the hub:
+To read the message on the hub, show the hub's status. The message is on the line that starts with
+`!! The root ApplicationSet apps`:
 
 ```sh
-oc get applicationset apps -n openshift-gitops -o jsonpath='{.status.conditions}'
+make status
 ```
 
 ## Nothing installs on the hub; the Argo CD controller restarts with `OOMKilled`
