@@ -54,6 +54,9 @@ You should see `deployment-root: Synced`, followed by its health, under the hub'
 `make status` again until it's `Synced`. For `missing input: NAME` or `invalid input: NAME`, see
 [troubleshooting](troubleshooting.md#the-root-reports-missing-input-name-or-invalid-input-name).
 
+If you're reinstalling with a repository that already has a site's files, the `!! The root ApplicationSet apps` line
+says that site's cluster, `.../SITE`, is not found, until you import the site again on page 5. You can go on.
+
 ## Checkpoint
 
 - `make bootstrap` printed `Bootstrapped.`, and its hub check showed `OK` for everything except object storage.

@@ -61,10 +61,18 @@ Argo CD controller: its last termination is `OOMKilled`, or it's in `CrashLoopBa
 
 **Cause:** Argo CD's application controller runs out of memory before the hub's settings raise its limit.
 
-**Fix:** run the bootstrap again. It sets the controller's memory, and reapplies the same root and registry logins:
+**Fix:** run the bootstrap again, with the same `make bootstrap` command you ran on
+[page 3](03-prepare-hub.md#1-install-openshift-gitops-and-apply-your-root). It sets the controller's memory, and
+reapplies the same root and registry logins:
 
 ```sh
 make bootstrap
+```
+
+If your auth file has a general `quay.io` login, allow it as on page 3:
+
+```sh
+make bootstrap ALLOW_GENERIC_LOGIN=1
 ```
 
 Then run `make status` again: the restarts stop and the Applications progress within a few minutes.
