@@ -124,7 +124,8 @@ mkdir -p "$d/.config/hub" "$T/ocbin"; : > "$d/.config/hub/kubeconfig"
 cat > "$T/ocbin/oc" <<STUB
 #!/bin/bash
 echo "oc \$*" >> "$T/oc.log"
-case "\$1" in kustomize) exec "$(command -v oc)" "\$@" ;; whoami) echo https://api.hub.example.com:6443 ;; esac
+case "\$1" in kustomize|label) exec "$(command -v oc)" "\$@" ;; whoami) echo https://api.hub.example.com:6443 ;; esac
+case "\$*" in *"get argocd openshift-gitops"*) echo Available ;; esac
 STUB
 chmod +x "$T/ocbin/oc"
 printf '{"auths":{"quay.io":{"auth":"dTpw"}}}' > "$T/generic.json"
@@ -135,5 +136,12 @@ t "  ... and made no oc apply" 0 "^ok$" bash -c '! grep -q " apply" "$0" && echo
 printf 'not json' > "$T/bad.json"
 t "bootstrap-hub refuses an unreadable auth file" 1 "can't read .*bad.json" \
   env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/bad.json" bash scripts/bootstrap-hub.sh --deployment "$d"
+
+# On a fresh hub the controller needs the library's memory before the root fans
+# out (gitops-config can't apply it until ACM exists): the patch comes first.
+printf '{"auths":{"quay.io/rhoai":{"auth":"dTpw"}}}' > "$T/rhoai.json"; : > "$T/oc.log"
+env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/rhoai.json" bash scripts/bootstrap-hub.sh --deployment "$d" >/dev/null 2>&1 || true
+t "bootstrap-hub sets the controller's memory from the library" 0 '"limits":\{"memory":"8Gi"\}' grep "patch argocd openshift-gitops" "$T/oc.log"
+t "  ... before it applies the root" 0 "^ok$" bash -c 'p=$(grep -n "patch argocd" "$0" | head -1 | cut -d: -f1); r=$(grep -n "apply -f -" "$0" | head -1 | cut -d: -f1); [ -n "$p" ] && [ -n "$r" ] && [ "$p" -lt "$r" ] && echo ok' "$T/oc.log"
 
 echo "deployment-scripts tests: $((total-fails)) ok, $fails failed"; exit "$fails"

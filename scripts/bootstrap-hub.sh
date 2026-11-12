@@ -89,6 +89,14 @@ for _ in $(seq 1 120); do
   [ "$(oc -n openshift-gitops get argocd openshift-gitops -o jsonpath='{.status.phase}' 2>/dev/null)" = Available ] && break; sleep 5
 done
 oc apply -f "$lib/bootstrap/openshift-gitops-admin.yaml"
+# Give Argo CD's application controller the memory the library's gitops-config sets
+# (apps/gitops-config/manifests/argocd.yaml), before the root fans out. On a fresh hub
+# gitops-config can't apply it until ACM is installed, and with the operator's default
+# limit the controller runs out of memory first, so ACM never finishes. Same values,
+# so gitops-config's server-side apply takes them over without a conflict.
+patch=$(KUBECONFIG=/dev/null oc label --local -f "$lib/apps/gitops-config/manifests/argocd.yaml" ai-grid.dev/read=true -o json |
+  jq -c '{spec: {controller: {resources: .spec.controller.resources}}}')
+oc patch argocd openshift-gitops -n openshift-gitops --type merge -p "$patch"
 printf "%s\n" "$DEPLOYMENT_ROOT" | oc apply -f -
 
 bash "$lib/apps/rhoai-prerequisites/create-hub-secret.sh"
