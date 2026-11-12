@@ -157,32 +157,26 @@ apps domains through your cluster logins, prints each value it sets, and then ru
 The `REQUIRED-libraryRepoURL` and `REQUIRED-libraryRevision` in the root's `op: test` lines stay: they check the
 library's files, not yours. A value that's already set is kept, so you can run the script again.
 
+You should see `root renders; every input is set; every repository is an input.` at the end. If you see
+`unset inputs:` or `placeholders left in your files:`, set the values it names and run `scripts/check-deployment.sh`.
+
 Keep every other value. Each one is a tested choice: for what it means and how to change it, see
 [Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/appendix-a-inputs.md) and
 [Hub components](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/hub/README.md#select-components).
 
-## 5. Check and push
+## 5. Commit and push
 
-1. Check your repository:
+Commit your clusters file and the files `scripts/set-inputs.sh` changed, and push:
 
-   ```sh
-   scripts/check-deployment.sh
-   ```
+```sh
+git add clusters.yaml root tenant-idp && git commit -m "deployment: set our names" && git push origin HEAD:main
+```
 
-   You should see `root renders; every input is set; every repository is an input.` If you see
-   `unset inputs:` or `placeholders left in your files:`, set the values it names and run it again.
-
-2. Commit your clusters file and the files `scripts/set-inputs.sh` changed, and push:
-
-   ```sh
-   git add clusters.yaml root tenant-idp && git commit -m "deployment: set our names" && git push origin HEAD:main
-   ```
-
-   Run `git status` first if you changed anything else.
+Run `git status` first if you changed anything else.
 
 ## Checkpoint
 
-- `scripts/check-deployment.sh` prints `root renders; every input is set; every repository is an input.`
+- `scripts/set-inputs.sh` ended with `root renders; every input is set; every repository is an input.`
 - Your deployment repository is pushed, your catalog repository has a `main` branch, and your catalog token is in
   `~/.ai-grid/catalog-token`.
 
