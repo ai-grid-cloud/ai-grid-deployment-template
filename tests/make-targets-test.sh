@@ -34,6 +34,7 @@ case " $* " in
   *" get managedcluster "*) echo '{"status":{"conditions":[{"type":"ManagedClusterJoined","status":"True"},{"type":"ManagedClusterConditionAvailable","status":"True"}]}}' ;;
   *" get applications.argoproj.io "*) echo '{"items":[{"metadata":{"name":"rhoai-site-b-x"},"spec":{"destination":{"name":"site-b"}},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"}}},{"metadata":{"name":"rhoai-site-c-x"},"spec":{"destination":{"name":"site-c"}},"status":{"sync":{"status":"OutOfSync"},"health":{"status":"Missing"}}}]}' ;;
   *" get ingresses.config.openshift.io "*) echo apps.example.invalid ;;
+  *" get datasciencecluster "*) [ -f "$STUB_LOG.no-dsc" ] || echo datasciencecluster.datasciencecluster.opendatahub.io/default-dsc ;;
   *" get llminferenceservices,"*) echo "NAMESPACE   NAME           READY"; echo "models      smollm2-chat   True" ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
@@ -54,6 +55,10 @@ t "site-status with one site uses it" 0 "ManagedCluster: JOINED=True AVAILABLE=T
 t "  ... lists its hub Applications only" 0 "^ok$" bash -c 'out=$(PATH="$1:$PATH" make -s -C "$0" site-status 2>&1); grep -q rhoai-site-b-x <<<"$out" && ! grep -q rhoai-site-c-x <<<"$out" && echo ok' "$one" "$T/bin"
 t "  ... reads the MaaS host and the site's models" 0 "smollm2-chat" m "$one" site-status
 t "  ... and only reads" 0 "^ok$" bash -c '! grep -E " oc (apply|label|patch|delete|create)" "$0" && echo ok' "$STUB_LOG"
+touch "$STUB_LOG.no-dsc"; : > "$STUB_LOG"
+t "site-status before OpenShift AI: MaaS not installed yet" 0 "^MaaS: not installed yet \(page 6\)$" m "$one" site-status
+t "  ... and no HTTP check" 0 "^ok$" bash -c '! grep -q "ingresses.config" "$0" && echo ok' "$STUB_LOG"
+rm "$STUB_LOG.no-dsc"
 t "site-status with several sites lists them" 2 "name a site: site-b, site-c" m "$two" site-status
 : > "$STUB_LOG"
 t "site-status SITE= picks one" 0 "rhoai-site-c-x" m "$two" site-status SITE=site-c

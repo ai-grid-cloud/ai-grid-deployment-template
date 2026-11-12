@@ -4,7 +4,8 @@
 #   - its ManagedCluster on the hub: JOINED and AVAILABLE
 #   - the hub's Applications for the site: sync and health
 #   - for a combined or ingress site, the HTTP status of its MaaS hostname
-#     (401 without a token, over trusted TLS)
+#     (401 without a token, over trusted TLS), or "not installed yet" while it
+#     has no DataScienceCluster
 #   - the models, subscriptions and auth policies on the site
 #
 #   scripts/site-status.sh [NAME]    NAME defaults to the only site in clusters.yaml
@@ -35,9 +36,13 @@ if ! cluster_login_ok "$name"; then exit 0; fi
 s() { KUBECONFIG=$(cluster_kubeconfig "$name") oc "$@"; }
 case "$(cluster_field "$name" role)" in
   combined|ingress)
-    url="https://maas.$(s get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')/v1/models"
-    code=$(curl -sS -o /dev/null -w '%{http_code}' "$url" 2>&1) || true
-    echo "MaaS $url: $code (expect 401 with no token)" ;;
+    if [ -z "$(s get datasciencecluster -o name 2>/dev/null || true)" ]; then
+      echo "MaaS: not installed yet (page 6)"
+    else
+      url="https://maas.$(s get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')/v1/models"
+      code=$(curl -sS -o /dev/null -w '%{http_code}' "$url" 2>&1) || true
+      echo "MaaS $url: $code (expect 401 with no token)"
+    fi ;;
 esac
 out=$(s get llminferenceservices,maassubscriptions,maasauthpolicies -A 2>&1 || true)
 if [ -n "$out" ]; then echo "Models, subscriptions and auth policies:"; sed 's/^/  /' <<<"$out"; fi
