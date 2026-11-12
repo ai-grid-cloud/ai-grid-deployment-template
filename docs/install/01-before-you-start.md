@@ -5,7 +5,7 @@ Gather the following before you run anything.
 > **Note:** Pre-release builds only. This template installs a pre-release (nightly) OpenShift AI 3.6 build: every
 > cluster pulls it from `quay.io/rhoai`, and model runtime images from `registry.stage.redhat.io`. Those registries
 > need logins that Red Hat gives only to early-access partners; ask your Red Hat contact. A released OpenShift AI
-> build won't need them, but the library can't install one yet ([known gaps](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/known-gaps.md)).
+> build won't need them, but the library can't install one yet ([known gaps](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/known-gaps.md)).
 
 ## 1. Clusters
 
@@ -15,7 +15,7 @@ Gather the following before you run anything.
 | Site (combined) | 4.21 or later | A default StorageClass; capacity for its models (the CPU sample model in [first use](07-first-use.md) requests 4 CPU and 8 GiB); GPU nodes for GPU models |
 
 Every cluster, the hub included, needs two worker nodes that Submariner can use as gateways
-([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/hub/01-acm.md#submariner)). On compact clusters and single-node OpenShift you label them by hand.
+([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/hub/01-acm.md#submariner)). On compact clusters and single-node OpenShift you label them by hand.
 
 ## 2. Network
 
@@ -29,7 +29,7 @@ Every cluster, the hub included, needs two worker nodes that Submariner can use 
 | Ingress sites | Tenant identity provider's issuer URL | 443 | Token validation |
 
 Every router name must answer `AAAA` queries with an address or an empty answer, never `NXDOMAIN`; otherwise every
-GridSite stays `Connecting` ([site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/spokes/networking.md#dns)).
+GridSite stays `Connecting` ([site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/spokes/networking.md#dns)).
 
 ## 3. Accounts and credentials
 

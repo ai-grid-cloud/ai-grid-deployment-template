@@ -59,7 +59,7 @@ step deletes last. If your own apps leave something behind, add a line for it th
 
 So a reinstall starts with no models or subscriptions, remove them from your catalog repository. In the provider
 console, delete each subscription, then each model
-([remove a subscription, model or organization](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/56635b7ef08fcc5684272f4edc46d41903a3071a/docs/install/operate.md#remove-a-subscription-model-or-organization)).
+([remove a subscription, model or organization](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/8a3eaabb96cdf73649aeb484c130541c7e825fb5/docs/install/operate.md#remove-a-subscription-model-or-organization)).
 Or empty it in git:
 
 ```sh
