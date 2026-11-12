@@ -22,7 +22,10 @@ t() { # name want_rc expect_grep reject_grep input [args...]: runs import-site.s
 mkdir -p "$T/lib/docs/acm/cluster-onboarding" "$T/bin"
 cat > "$T/lib/docs/acm/cluster-onboarding/import-managed-cluster.sh" <<'LIB'
 echo "summary for $*"
-case " $* " in *" --yes "*) echo "IMPORTED" ;; *) echo "No changes were made. Rerun with --yes to import the cluster." ;; esac
+case " $* " in *" --yes "*)
+  printf 'Please log onto the hub cluster and run the following command:\n\n    clusteradm accept --clusters site-b\n\n'
+  for i in 1 2 3 4 5 6 7; do printf 'Waiting for Argo CD cluster secret s (%s/60)...\n' "$i" >&2; done
+  echo "IMPORTED" ;; *) echo "No changes were made. Rerun with --yes to import the cluster." ;; esac
 LIB
 git -c init.defaultBranch=main -C "$T/lib" init -q && git -C "$T/lib" add -A &&
   git -c core.hooksPath=/dev/null -c user.name=t -c user.email=t@example.com -C "$T/lib" commit -qm lib
@@ -50,6 +53,9 @@ t "previews by default" 0 "summary for --hub-context hub --spoke-context site --
 t "  ... and names the make target that imports" 0 "^No changes were made. To import, run: make site-import CONFIRM=1$" "Rerun with --yes" ""
 t "  ... without asking" 0 "summary for" "\[y/N\]" $'y\n'
 t "--yes imports" 0 "IMPORTED" "To import, run" "" --yes
+t "  ... without clusteradm's accept hint" 0 "IMPORTED" "Please log onto the hub|clusteradm accept" "" --yes
+t "  ... with the first wait line" 0 "^Waiting for Argo CD cluster secret s \(1/60\)\.\.\.$" "" "" --yes
+t "  ... then one every 30 seconds" 0 "\(6/60\)" "\((2|3|4|5|7)/60\)" "" --yes
 t "a name and --yes" 0 "--cluster-name site-b --yes" "" "" site-b --yes
 
 printf 'True True' > "$T/mc-state"

@@ -27,5 +27,13 @@ run_import() {
   KUBECONFIG="$tmp/kubeconfig" bash "$LIB/docs/acm/cluster-onboarding/import-managed-cluster.sh" \
     --hub-context hub --spoke-context site --cluster-name "$name" "$@"
 }
-case " $* " in *" --yes "*) run_import "$@"; exit ;; esac
+# The import's output, less clusteradm's hint to run "clusteradm accept" (the
+# library script runs it), and its 5-second wait lines thinned to one every 30.
+quiet() {
+  awk '/Please log onto the hub cluster and run the following command/ || /^[[:space:]]*clusteradm accept --clusters/ {next}
+    match($0, /\(([0-9]+)\/[0-9]+\)\.\.\.$/) && /^Waiting for / {
+      n = substr($0, RSTART + 1) + 0; if (n != 1 && n % 6 != 0) next }
+    {print; fflush()}'
+}
+case " $* " in *" --yes "*) run_import "$@" 2>&1 | quiet; exit ;; esac
 run_import "$@" | sed 's/^No changes were made\. Rerun with --yes to import the cluster\.$/No changes were made. To import, run: make site-import CONFIRM=1/'
