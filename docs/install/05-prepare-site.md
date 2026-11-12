@@ -52,14 +52,14 @@ You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass` and `p
 
 ## 2. Import the site into ACM
 
-`scripts/import-site.sh` runs the library's import script, which runs `clusteradm` against both clusters. It prints a
-summary and changes nothing without `--yes`:
+Import the site:
 
 ```sh
 scripts/import-site.sh
 ```
 
-Read the summary, then run the same command with `--yes` added.
+It runs the library's import script, which runs `clusteradm` against both clusters. It prints a summary of what it
+will do and asks `Import SITE now? [y/N]`; read the summary and answer `y`. Any other answer changes nothing.
 
 The site joins ACM, and the hub's Argo CD registers it. Nothing AI Grid installs yet: that waits for the labels you
 add on the next page.
