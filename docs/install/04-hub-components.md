@@ -13,9 +13,10 @@ make status
 
 It prints the Applications that aren't `Synced` and `Healthy` yet, the MultiClusterHub's phase, Argo CD's
 application controller with its restarts, the tenant Keycloak's Application, and the console's address once its Route
-exists. It changes nothing. Run it again every few minutes. Every Application appears within a few minutes, and ACM
-takes longest: the install is done when `MultiClusterHub: Running` shows, about 20 minutes after the bootstrap, and
-no Application is listed as not `Synced` and `Healthy`.
+exists. It changes nothing. Run it again every few minutes. Every Application appears within a few minutes. The
+install takes about 20 minutes after the bootstrap, mostly for the tenant Keycloak: it's done when `make status`
+shows `tenant-idp: Synced Healthy`, `MultiClusterHub: Running`, and no Application listed as not `Synced` and
+`Healthy`.
 
 If nothing changes for 10 minutes, or `make status` prints a line starting with `!!`, see
 [troubleshooting](troubleshooting.md#nothing-installs-on-the-hub-the-argo-cd-controller-restarts-with-oomkilled).
