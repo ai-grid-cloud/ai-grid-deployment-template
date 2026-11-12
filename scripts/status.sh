@@ -78,9 +78,13 @@ if [ -z "$pod" ]; then
   echo "Argo CD controller: no pod yet"
 else
   IFS=$'\t' read -r name restarts last waiting <<<"$pod"
-  echo "Argo CD controller: $name, $restarts restarts, last termination $last"
+  line="Argo CD controller: $name, $restarts restarts"
+  [ "$last" = - ] || line+=", last termination $last"
+  echo "$line"
   if [ "$last" = OOMKilled ] || [ "$waiting" = CrashLoopBackOff ]; then
-    echo "  !! The controller failed (last termination $last, now $waiting); while it does, Applications don't progress: $fix."
+    why=""; [ "$last" = - ] || why="last termination $last"
+    [ "$waiting" = - ] || why+="${why:+, }now $waiting"
+    echo "  !! The controller failed ($why); while it does, Applications don't progress: $fix."
   fi
 fi
 

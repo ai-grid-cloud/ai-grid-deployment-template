@@ -101,7 +101,7 @@ echo "{\"items\":[$(app acm Synced Healthy),$(app tenant-idp Synced Healthy)]}" 
 printf 'Running' > "$W/mch"; pods 0 > "$W/pods.json"; printf 'Synced Healthy' > "$W/tenant-idp"
 printf 'console.apps.hub.example.com' > "$W/route"
 t "done: all Applications ready" "^Applications: all 2 Synced and Healthy$"
-t "done: no warning" "^Argo CD controller: .*0 restarts, last termination -$" "!!"
+t "done: no warning, no empty termination" "^Argo CD controller: openshift-gitops-application-controller-0, 0 restarts$" "!!"
 t "done: console URL" "^Console: https://console.apps.hub.example.com$"
 # Sites: each one's DataScienceCluster phase and GridSite, through its login.
 D="$T/repo-sites"; mkdir -p "$D/.config/hub" "$D/.config/site-b"; cp -R "$SRC/scripts" "$D/"
