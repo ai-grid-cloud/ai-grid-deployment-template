@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Show how the hub's install is going, in one go (install guide, pages 3 and 4):
 # deployment-root's sync and health and any error the root ApplicationSet apps
-# reports, the Applications that aren't Synced and Healthy, the
-# MultiClusterHub's phase, Argo CD's application controller (restarts, and
-# OOMKilled or CrashLoopBackOff called out), the tenant Keycloak's Application, and the
-# provider console's Route; then, for each site in clusters.yaml, OpenShift
+# reports, the Applications that aren't Synced and Healthy and those whose sync
+# waits for its next retry, the MultiClusterHub's phase, Argo CD's application
+# controller (restarts, and OOMKilled or CrashLoopBackOff called out), the
+# tenant Keycloak's Application, and the provider console's Route; then, for each site in clusters.yaml, OpenShift
 # AI's DataScienceCluster phase and its GridSite. Read-only; always exits 0
 # once it reaches the hub.
 #
@@ -46,8 +46,8 @@ unmatched=$(oc get placements.cluster.open-cluster-management.io -A -o json 2>/d
 # whose health Argo CD reports as not Healthy is one. Also "site" when its sync
 # keeps retrying because every failed task is a Placement that matches no
 # ManagedCluster, so the later waves wait.
-apps=$(oc get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null |
-  jq -r --argjson u "${unmatched:-[]}" '.items[] | [.metadata.name, (.status.sync.status // "Unknown"),
+appsjson=$(oc get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null || true)
+apps=$(jq -r --argjson u "${unmatched:-[]}" '.items[] | [.metadata.name, (.status.sync.status // "Unknown"),
       (.status.health.status // "Unknown"),
       ([.status.resources[]? | select(.kind == "Placement") | "\(.namespace)/\(.name)" | select(IN($u[]))] as $waiting
        | [.status.resources[]? | select(.health != null and .health.status != "Healthy")
@@ -57,7 +57,7 @@ apps=$(oc get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null |
          then "site"
          elif ($failed | length > 0) and all($failed[]; .kind == "Placement"
            and ((.message // "") | contains("No ManagedCluster matches")))
-         then "site" else "-" end)] | @tsv' 2>/dev/null)
+         then "site" else "-" end)] | @tsv' <<<"$appsjson" 2>/dev/null)
 if [ -z "$apps" ]; then
   echo "Applications: none yet"
 else
@@ -77,6 +77,16 @@ else
     printf '%s' "$problems"
   fi
   [ -z "$waiting" ] || echo "Waiting for a site to join (expected until page 6):$waiting"
+  # Syncs waiting for their next retry: a wait, not an error. The message's clock
+  # time is UTC with no date, and not when the retry runs, so it isn't shown.
+  jq -r '.items[] | select(.status.operationState.phase == "Running"
+      and ((.status.operationState.message // "") | contains("Retrying attempt")))
+    | [.metadata.name, ((.status.operationState.message | capture("Retrying attempt #(?<n>[0-9]+)").n)
+      // (.status.operationState.retryCount // "?" | tostring))] | @tsv' <<<"$appsjson" 2>/dev/null |
+    while IFS=$'\t' read -r name attempt; do
+      case "$waiting " in *" $name "*) continue ;; esac
+      echo "  $name: waiting for sync retry #$attempt (Argo CD retries with a backoff of up to 30 minutes)"
+    done
 fi
 
 phase=$(oc get multiclusterhub -A -o jsonpath='{.items[0].status.phase}' 2>/dev/null)

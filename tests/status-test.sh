@@ -116,7 +116,7 @@ t "no Placements readable: nothing waits" "^  models +Synced +Degraded$"
 W="$T/retrying"; mkdir -p "$W"
 appop() { # name sync health task-json...
   local n=$1 sy=$2 h=$3; shift 3; local IFS=,
-  printf '{"metadata":{"name":"%s"},"status":{"sync":{"status":"%s"},"health":{"status":"%s"},"operationState":{"phase":"Running","message":"one or more synchronization tasks completed unsuccessfully. Retrying attempt #3","syncResult":{"resources":[%s]}}}}' "$n" "$sy" "$h" "$*"
+  printf '{"metadata":{"name":"%s"},"status":{"sync":{"status":"%s"},"health":{"status":"%s"},"operationState":{"phase":"Running","message":"one or more synchronization tasks completed unsuccessfully. Retrying attempt #3 at 6:49PM","syncResult":{"resources":[%s]}}}}' "$n" "$sy" "$h" "$*"
 }
 task() { # group kind name status hookPhase message, as Argo CD records a sync task
   printf '{"group":"%s","kind":"%s","namespace":"x","name":"%s","status":"%s","hookPhase":"%s","message":"%s"}' "$@"; }
@@ -128,6 +128,9 @@ echo "{\"items\":[$(appop rhoai OutOfSync Degraded "$(task $pl Placement p1 Sync
   > "$W/apps.json"
 t "a sync retrying only on no-match Placements waits for a site" "^Waiting for a site to join \(expected until page 6\): rhoai$" "^  rhoai "
 t "  ... another failed task is a problem" "^  odd +OutOfSync +Degraded$"
+t "a sync retry is named, with its attempt" "^  odd: waiting for sync retry #3 \(Argo CD retries with a backoff of up to 30 minutes\)$"
+t "  ... once, not for an Application already waiting for a site" "^  odd: waiting" "rhoai: waiting"
+t "  ... without the message's clock time" "^  odd: waiting" "PM|AM"
 
 # Done: everything ready, the controller healthy, the console up.
 W="$T/done"; mkdir -p "$W"
