@@ -3,6 +3,11 @@
 # role and location from clusters.yaml. The hub then installs the site.
 #
 #   scripts/join-site.sh [NAME]     NAME defaults to the only site in clusters.yaml
+#
+# First it checks that your commits are pushed, and waits until the hub's
+# deployment-root has synced origin/main's commit, so the site's files are on
+# the hub before its labels: up to JOIN_WAIT_SECONDS (default 600), checking
+# every JOIN_WAIT_INTERVAL seconds (default 15). JOIN_SITE_NO_WAIT=1 skips both.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/clusters.sh"
@@ -14,5 +19,28 @@ role=$(cluster_field "$name" role)
 location=$(cluster_field "$name" location)
 hub=$(hub_name)
 cluster_login_ok "$hub"
-KUBECONFIG=$(cluster_kubeconfig "$hub") oc label managedcluster "$name" \
+export KUBECONFIG; KUBECONFIG=$(cluster_kubeconfig "$hub")
+
+if [ "${JOIN_SITE_NO_WAIT:-}" != 1 ]; then
+  repo="$here/.."
+  git -C "$repo" fetch -q origin main || { echo "error: can't fetch origin main" >&2; exit 1; }
+  unpushed=$(git -C "$repo" rev-list --count origin/main..HEAD)
+  [ "$unpushed" = 0 ] || { echo "error: $unpushed commit(s) not pushed yet; push first: git push origin HEAD:main" >&2; exit 1; }
+  want=$(git -C "$repo" rev-parse origin/main)
+  timeout=${JOIN_WAIT_SECONDS:-600} interval=${JOIN_WAIT_INTERVAL:-15} waited=0 last=""
+  while :; do
+    got=$(oc get applications.argoproj.io deployment-root -n openshift-gitops \
+      -o jsonpath='{.status.sync.status} {.status.sync.revision}' 2>/dev/null || true)
+    [ "$got" = "Synced $want" ] && break
+    if [ "$waited" -ge "$timeout" ]; then
+      echo "error: the hub hasn't synced ${want:0:7} after $((timeout / 60)) minutes (deployment-root: ${got:-not found})." >&2
+      echo "Run make status, or check deployment-root in Argo CD." >&2
+      exit 1
+    fi
+    [ "$got" = "$last" ] || echo "Waiting for the hub to sync ${want:0:7} (deployment-root: ${got:-not found})."
+    last=$got; sleep "$interval"; waited=$((waited + interval))
+  done
+  echo "The hub has synced ${want:0:7}."
+fi
+oc label managedcluster "$name" \
   ai-grid/enabled=true ai-grid/role="$role" location="$location" --overwrite

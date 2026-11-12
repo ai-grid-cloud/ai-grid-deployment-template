@@ -33,7 +33,9 @@ The site's labels on the hub make it a grid site, in the role and location from 
 scripts/join-site.sh
 ```
 
-The console shows the location. For `ingress` and `inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/spokes/README.md#what-you-choose-per-site).
+It first checks that your commits are pushed, and waits until the hub's `deployment-root` has synced your latest
+commit, up to 10 minutes, so the site's files are on the hub before its labels. The console shows the location.
+For `ingress` and `inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/f5dfd38e2f7c949b2d198476a4e3c5602186aee7/docs/install/spokes/README.md#what-you-choose-per-site).
 
 You should see `managedcluster.cluster.open-cluster-management.io/SITE labeled`. Within a minute the hub creates the
 site's Applications:

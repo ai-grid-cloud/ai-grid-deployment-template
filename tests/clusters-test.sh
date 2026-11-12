@@ -97,11 +97,11 @@ t "login skips working logins" 0 "hub: already logged in" bash -c 'PATH="$1:$PAT
 t "login leaves a working hub login alone" 1 "^0$" grep -c "login --server https://api.hub" "$STUB_LOG"
 : > "$STUB_LOG"
 t "join-site labels from the file" 0 "oc label managedcluster site-c ai-grid/enabled=true ai-grid/role=inference location=us-west --overwrite" \
-  bash -c 'PATH="$1:$PATH" "$0/scripts/join-site.sh" site-c; cat "$STUB_LOG"' "$d" "$T/bin"
-t "join-site with several sites needs a name" 1 "name a site: site-b, site-c" env PATH="$T/bin:$PATH" "$d/scripts/join-site.sh"
+  bash -c 'PATH="$1:$PATH" JOIN_SITE_NO_WAIT=1 "$0/scripts/join-site.sh" site-c; cat "$STUB_LOG"' "$d" "$T/bin"
+t "join-site with several sites needs a name" 1 "name a site: site-b, site-c" env PATH="$T/bin:$PATH" JOIN_SITE_NO_WAIT=1 "$d/scripts/join-site.sh"
 mkdir -p "$d1/.config/hub" "$d1/.config/site-b"; : > "$d1/.config/hub/kubeconfig"; : > "$d1/.config/site-b/kubeconfig"; : > "$STUB_LOG"
 t "join-site with one site needs no name" 0 "oc label managedcluster site-b ai-grid/enabled=true ai-grid/role=combined location=us-east" \
-  bash -c 'PATH="$1:$PATH" "$0/scripts/join-site.sh"; cat "$STUB_LOG"' "$d1" "$T/bin"
+  bash -c 'PATH="$1:$PATH" JOIN_SITE_NO_WAIT=1 "$0/scripts/join-site.sh"; cat "$STUB_LOG"' "$d1" "$T/bin"
 t "with-cluster site is the only site" 0 "KUBECONFIG=$d1/.config/site-b/kubeconfig oc get nodes" \
   bash -c 'PATH="$1:$PATH" "$0/scripts/with-cluster.sh" site oc get nodes; cat "$STUB_LOG"' "$d1" "$T/bin"
 t "with-cluster site with several sites" 1 "name a site: site-b, site-c" env PATH="$T/bin:$PATH" "$d/scripts/with-cluster.sh" site oc get nodes
@@ -114,7 +114,7 @@ t "site check with one site needs no name" 0 "KUBECONFIG=$d1/.config/site-b/kube
   bash -c 'PATH="$1:$PATH" "$0/scripts/check-prerequisites.sh" --step spoke; cat "$STUB_LOG"' "$d1" "$T/bin"
 t "check-revisions without a hub login" 1 "no login for hub|login expired" env PATH="$T/bin:$PATH" LIBRARY=/nonexistent bash -c 'rm -f "$0/.config/hub/kubeconfig"; "$0/scripts/check-revisions.sh"' "$d"
 : > "$d/.config/hub/kubeconfig"
-t "join-site refuses the hub" 1 "hub is the hub" env PATH="$T/bin:$PATH" "$d/scripts/join-site.sh" hub
+t "join-site refuses the hub" 1 "hub is the hub" env PATH="$T/bin:$PATH" JOIN_SITE_NO_WAIT=1 "$d/scripts/join-site.sh" hub
 
 # import-site.sh merges two kubeconfigs whose names collide (both "admin")
 # into contexts hub and site, each keeping its own server and credentials.
