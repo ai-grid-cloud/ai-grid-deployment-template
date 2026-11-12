@@ -32,12 +32,12 @@ The provider console needs your catalog token for its git writer, and an admin l
 goes in git. Create the secrets:
 
 ```sh
-AI_GRID_GIT_TOKEN_FILE=CATALOG_TOKEN_FILE KEYCLOAK_NAMESPACE=tenant-idp KEYCLOAK_REALM=tenants \
-  scripts/create-console-secrets.sh
+make console-secrets
 ```
 
-Replace `CATALOG_TOKEN_FILE` with the file that holds your catalog token, such as `~/.ai-grid/catalog-token`
-([set up your deployment repository](02-repositories.md#2-create-your-catalog-repository-and-its-token)). The script prints no secret value, and
+It reads your catalog token from `~/.ai-grid/catalog-token`
+([set up your deployment repository](02-repositories.md#2-create-your-catalog-repository-and-its-token)), or from
+`CATALOG_TOKEN_FILE` if you set it, and uses your tenant Keycloak in `tenant-idp`. It prints no secret value, and
 restarts the console to read the new Secrets. It first waits until the tenant Keycloak's Application `tenant-idp` is
 `Synced` and `Healthy` and the console's Route exists, printing what it waits for, for up to 30 minutes; if it times
 out, run `make status`. For every variable, and for a hub whose ingress certificate isn't

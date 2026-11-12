@@ -46,7 +46,7 @@ m() { env PATH="$T/bin:$PATH" make -s -C "$@"; }
 one=$(repo one site-b:combined)
 two=$(repo two site-b:combined site-c:inference)
 
-t "make help lists every guide target" 0 "site-check.*site-wipe.*site-import.*site-add.*site-join.*site-status.*tenant-user.*tenant-call.*uninstall-site.*uninstall-hub.*uninstall-check" \
+t "make help lists every guide target" 0 "console-secrets.*site-check.*site-wipe.*site-import.*site-add.*site-join.*site-status.*tenant-user.*tenant-call.*uninstall-site.*uninstall-hub.*uninstall-check" \
   bash -c 'make -s -C "$0" help | tr "\n" " "' "$one"
 
 : > "$STUB_LOG"

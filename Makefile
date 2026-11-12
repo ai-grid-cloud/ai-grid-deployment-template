@@ -5,11 +5,14 @@
 
 # Optional. QUAY_AUTH_FILE defaults to ~/.config/containers/auth.json, else
 # $XDG_RUNTIME_DIR/containers/auth.json; ALLOW_GENERIC_LOGIN=1 lets bootstrap
-# use a general quay.io login.
-export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN
+# use a general quay.io login. CATALOG_TOKEN_FILE defaults to
+# ~/.ai-grid/catalog-token; KEYCLOAK_NAMESPACE and KEYCLOAK_REALM to the
+# template's tenant-idp and tenants (console-secrets).
+export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
-.PHONY: help login prereqs bootstrap status test update site-check site-wipe site-import site-add site-join \
-  site-status tenant-user tenant-call uninstall-site uninstall-hub uninstall-check
+.PHONY: help login prereqs bootstrap status console-secrets test update \
+  site-check site-wipe site-import site-add site-join site-status tenant-user tenant-call \
+  uninstall-site uninstall-hub uninstall-check
 
 # The site targets work on the only site in clusters.yaml; with several, set
 # SITE=NAME. Targets that change a cluster without asking preview by default;
@@ -32,6 +35,9 @@ bootstrap: ## Install OpenShift GitOps on the hub and apply root/ (page 3)
 
 status: ## Show how the hub's install is going; read-only (page 4)
 	@scripts/status.sh
+
+console-secrets: ## Create the console's secrets from your catalog token (page 4)
+	@scripts/create-console-secrets.sh
 
 test: ## Run the scripts' tests
 	@for t in tests/*-test.sh; do bash "$$t" || exit 1; done
@@ -63,7 +69,8 @@ tenant-user: ## Create a test tenant user: ORG=... TENANT_USER=... PASSWORD_FILE
 	  --user "$(TENANT_USER)" --password-file "$(PASSWORD_FILE)"
 
 tenant-call: ## Call a model as that user: TENANT_USER, PASSWORD_FILE, SUBSCRIPTION, MODEL (page 7)
-	@$(call need,TENANT_USER,TENANT_USER)$(call need,PASSWORD_FILE,PASSWORD_FILE)$(call need,SUBSCRIPTION,SUBSCRIPTION_ID)$(call need,MODEL,MODEL_NAME)
+	@$(call need,TENANT_USER,TENANT_USER)$(call need,PASSWORD_FILE,PASSWORD_FILE)
+	@$(call need,SUBSCRIPTION,SUBSCRIPTION_ID)$(call need,MODEL,MODEL_NAME)
 	@scripts/tenant-call.sh --user "$(TENANT_USER)" --password-file "$(PASSWORD_FILE)" --subscription "$(SUBSCRIPTION)" \
 	  --model "$(MODEL)" $(if $(SITE),--site $(SITE))
 
