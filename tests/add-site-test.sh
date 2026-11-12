@@ -48,22 +48,35 @@ check "  ... and the MaaS hostname" grep -q -- '- maas.apps.site-b.example.com$'
 check "Application for the site" grep -q 'path: sites/site-b/maas-tls' "$D/apps/site-b-maas-tls.yaml"
 check "values for the site" test -f "$D/values/clusters/site-b/rhoai.yaml"
 check "no placeholder left" bash -c '! grep -rqE "SITE|APPS_DOMAIN|DNS01_ISSUER" "$0/apps" "$0/sites" "$0/values"' "$D"
-t "runs the check and prints the git commands" 0 "git add apps/site-b-maas-tls.yaml sites/site-b values/clusters/site-b"
-t "a second run keeps the files" 0 "kept +apps/site-b-maas-tls.yaml"
+t "runs the check and prints the git commands" 0 "git add apps/site-b-maas-tls.yaml sites/site-b/maas-tls/certificate.yaml values/clusters/site-b/rhoai.yaml"
+t "a second run keeps the files" 0 "kept +apps/site-b-maas-tls.yaml \(exists\)"
 echo "# my edit" >> "$D/values/clusters/site-b/rhoai.yaml"
-t "a changed file isn't overwritten" 1 "values/clusters/site-b/rhoai.yaml exists and differs"
+t "a changed file is kept as it is" 0 "kept +values/clusters/site-b/rhoai.yaml"
+check "  ... with your edit" grep -q "# my edit" "$D/values/clusters/site-b/rhoai.yaml"
+rm "$D/sites/site-b/maas-tls/certificate.yaml"
+t "a missing file is written again" 0 "wrote +sites/site-b/maas-tls/certificate.yaml"
 
 W="$T/two"; mkdir -p "$W"; echo "{\"items\":[$(issuer le-dns dns01),$(issuer le-dns-staging dns01)]}" > "$W/issuers.json"
 D=$(repo two "$B")
 t "two DNS-01 issuers: lists them" 1 "^  le-dns-staging$"
 t "  ... and says how to choose one" 1 "scripts/add-site.sh site-b ISSUER"
 t "an issuer named" 0 "certificate from ClusterIssuer le-dns-staging" site le-dns-staging
+rm -rf "$D/apps" "$D/sites" "$D/values"
 t "an issuer that isn't DNS-01" 1 "le-http isn't a DNS-01 ClusterIssuer" site le-http
 
 W="$T/none"; mkdir -p "$W"; echo "{\"items\":[$(issuer le-http http01)]}" > "$W/issuers.json"
 D=$(repo none "$B")
 t "no DNS-01 issuer" 1 "has no DNS-01 ClusterIssuer"
 
+# All files present: no issuer needed (this site has no DNS-01 one), and nothing to commit
+# once they're committed.
+D=$(repo all-there "$B")
+for f in apps/site-b-maas-tls.yaml sites/site-b/maas-tls/certificate.yaml values/clusters/site-b/rhoai.yaml; do
+  mkdir -p "$D/$(dirname "$f")"; echo "x: 1" > "$D/$f"; done
+t "all files there: no issuer needed" 0 "kept +values/clusters/site-b/rhoai.yaml \(exists\)"
+git -c init.defaultBranch=main -C "$D" init -q && git -C "$D" add -A &&
+  git -c core.hooksPath=/dev/null -c user.name=t -c user.email=t@example.com -C "$D" commit -qm all
+t "  ... and nothing to commit" 0 "^Nothing to commit: the site's files are already committed.$"
 D=$(repo inference "$I")
 t "an inference site needs no files" 0 "site-i is an inference site: it needs no MaaS files"
 

@@ -19,7 +19,8 @@ scripts/add-site.sh
 It reads the site's apps domain, uses the site's DNS-01 ClusterIssuer, writes the three files, runs
 `scripts/check-deployment.sh`, and prints the commands to commit and push them. If the site has several DNS-01
 ClusterIssuers, it lists them: run it again with the one that issues publicly trusted certificates for the site's
-apps domain, such as `scripts/add-site.sh site ISSUER_NAME`. An `inference` site needs no files.
+apps domain, such as `scripts/add-site.sh site ISSUER_NAME`. It keeps files that already exist, and needs the
+issuer only to write a missing one. An `inference` site needs no files.
 
 You should see `root renders; every input is set; every repository is an input.` Then run the `git add`,
 `git commit` and `git push` commands it printed. What the files do, and other ways to get the certificate:
