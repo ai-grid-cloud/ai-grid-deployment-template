@@ -18,6 +18,8 @@ d=$STUB_DIR
 case "$args" in
   *" get clusterversion version "*) cat "$d/version" 2>/dev/null ;;
   *" get storageclass "*) cat "$d/storageclasses" 2>/dev/null ;;
+  *" whoami "*) echo admin ;;
+  *" get managedcluster "*) [ -f "$d/mc" ] || exit 1; cat "$d/mc" ;;
   *" get namespace "*)
     name=${args##* get namespace }; name=${name%% *}
     grep -qx "$name" "$d/namespaces" 2>/dev/null || exit 1; echo "namespace/$name" ;;
@@ -108,5 +110,27 @@ w=$(world lib-idp)
 t "library Keycloak needs no RHBK" 0 "^OK +default StorageClass" "$w" --step spoke --expect-idp library
 w=$(world spoke-ok2)
 t "bad step" 2 "^Usage:" "$w" --step nope
+
+# Cluster mode: a klusterlet from your own hub is your install, not a previous one.
+D="$T/repo"; mkdir -p "$D/.config/hub" "$D/.config/site-b"; cp -R "$HERE/../scripts" "$D/"
+: > "$D/.config/hub/kubeconfig"; : > "$D/.config/site-b/kubeconfig"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
+tc() { # name want_rc expect_grep world: --step spoke on the only site, through clusters.yaml
+  local name=$1 want=$2 expect=$3 w=$4 rc out; total=$((total+1))
+  out=$(env PATH="$T/bin:$PATH" STUB_DIR="$w" bash "$D/scripts/check-prerequisites.sh" --step spoke 2>&1) && rc=0 || rc=$?
+  if [ "$rc" -eq "$want" ] && grep -qE "$expect" <<<"$out"; then printf '   ok   %s\n' "$name"
+  else printf '   FAIL %s (rc=%s, wanted %s; output:)\n%s\n' "$name" "$rc" "$want" "$out"; fails=$((fails+1)); fi
+}
+w=$(world installed); echo open-cluster-management-agent > "$w/namespaces"
+echo "datasciencecluster.datasciencecluster.opendatahub.io/default-dsc" > "$w/dsc"
+echo "gridsite.grid.praxis.fast/site-b" > "$w/grid"
+echo "True https://api.site-b.example.com:6443" > "$w/mc"
+tc "a site of this hub is OK" 0 "^OK +previous AI Grid install +already a site of this hub" "$w"
+echo "True https://api.other.example.com:6443" > "$w/mc"
+tc "a ManagedCluster with another API URL isn't this cluster" 1 "^FOUND +previous AI Grid install +klusterlet" "$w"
+echo "False https://api.site-b.example.com:6443" > "$w/mc"
+tc "not joined to this hub" 1 "^FOUND +previous AI Grid install" "$w"
+rm "$w/mc"
+tc "no ManagedCluster on this hub: another hub" 1 "^FOUND +previous AI Grid install +klusterlet .*another hub" "$w"
 
 echo "check-prerequisites tests: $((total-fails)) ok, $fails failed"; exit "$fails"

@@ -15,7 +15,8 @@ Let the site check tell you whether you need this section:
 scripts/check-prerequisites.sh --step spoke
 ```
 
-If its `previous AI Grid install` line is `OK` (`none`, or `leftover CRDs only; safe`), skip to part 1. If it's
+If its `previous AI Grid install` line is `OK` (`none`, `leftover CRDs only; safe`, or `already a site of this hub`
+when you rerun it after the import), skip to part 1. If it's
 `FOUND`, it names what it found, such as a klusterlet (another hub manages the cluster) or a DataScienceCluster;
 follow these steps first:
 

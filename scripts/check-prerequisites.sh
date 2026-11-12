@@ -111,14 +111,24 @@ if [ "$step" = spoke ]; then
   # A previous install: a klusterlet (another hub manages the cluster), a
   # DataScienceCluster, the OpenShift AI operator's Subscription, or grid
   # objects. Leftover CRDs alone are harmless.
-  found=()
-  oc_ get namespace open-cluster-management-agent -o name >/dev/null 2>&1 &&
-    found+=("klusterlet (namespace open-cluster-management-agent: a hub manages this cluster)")
+  found=() ours=false
+  if oc_ get namespace open-cluster-management-agent -o name >/dev/null 2>&1; then
+    # Your own hub, when it has this cluster as a joined ManagedCluster of the
+    # same name whose API URL is this cluster's api in clusters.yaml.
+    if [ -n "$cluster" ] && hub=$(hub_name) && cluster_login_ok "$hub" 2>/dev/null; then
+      mc=$(oc --kubeconfig "$(cluster_kubeconfig "$hub")" get managedcluster "$cluster" \
+        -o jsonpath='{.status.conditions[?(@.type=="ManagedClusterJoined")].status} {.spec.managedClusterClientConfigs[0].url}' 2>/dev/null || true)
+      [ "$mc" = "True $(cluster_field "$cluster" api | sed 's#/*$##')" ] || [ "$mc" = "True $(cluster_field "$cluster" api)" ] && ours=true
+    fi
+    $ours || found+=("klusterlet (namespace open-cluster-management-agent: another hub, or one this check can't match, manages this cluster)")
+  fi
   [ -n "$(oc_ get datascienceclusters -A -o name 2>/dev/null || true)" ] && found+=("DataScienceCluster")
   oc_ get subscriptions.operators.coreos.com rhods-operator -n redhat-ods-operator -o name >/dev/null 2>&1 &&
     found+=("Subscription redhat-ods-operator/rhods-operator")
   [ -n "$(oc_ get gridnetworks,gridsites -A -o name 2>/dev/null || true)" ] && found+=("GridNetwork or GridSite")
-  if [ ${#found[@]} -gt 0 ]; then
+  if $ours; then
+    report OK "previous AI Grid install" "already a site of this hub"
+  elif [ ${#found[@]} -gt 0 ]; then
     report FOUND "previous AI Grid install" \
       "$(IFS=,; echo "${found[*]}" | sed 's/,/, /g'); follow \"Reuse a cluster from another hub\" (page 5) first"
   elif oc_ get crds -o name 2>/dev/null | grep -qE 'opendatahub\.io|kserve\.io|grid\.praxis\.fast'; then
