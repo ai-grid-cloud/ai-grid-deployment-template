@@ -5,17 +5,20 @@ Keycloak. On this page you wait for them, create the console's secrets, and chec
 
 ## 1. Watch the components install
 
-```sh
-watch -n 30 scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops
-```
-
-Every Application appears within a few minutes. ACM takes longer:
+Check how the install is going:
 
 ```sh
-scripts/with-cluster.sh hub oc get multiclusterhub -A
+make status
 ```
 
-You should see the MultiClusterHub with status `Running`, about 20 minutes after the bootstrap.
+It prints the Applications that aren't `Synced` and `Healthy` yet, the MultiClusterHub's phase, Argo CD's
+application controller with its restarts, the tenant Keycloak's Application, and the console's address once its Route
+exists. It changes nothing. Run it again every few minutes. Every Application appears within a few minutes, and ACM
+takes longest: the install is done when `MultiClusterHub: Running` shows, about 20 minutes after the bootstrap, and
+only the three Applications below are listed.
+
+If nothing changes for 10 minutes, or `make status` prints a line starting with `!!`, see
+[troubleshooting](troubleshooting.md#nothing-installs-on-the-hub-the-argo-cd-controller-restarts-with-oomkilled).
 
 These three wait for the first site to [join the grid](06-join-grid.md), and aren't a problem until then:
 
@@ -28,12 +31,7 @@ These three wait for the first site to [join the grid](06-join-grid.md), and are
 ## 2. Create the console's secrets
 
 The provider console needs your catalog token for its git writer, and an admin login for the tenant Keycloak. Neither
-goes in git. Wait until the tenant Keycloak is `Healthy` and the console's Route exists:
-
-```sh
-scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops tenant-idp
-scripts/with-cluster.sh hub oc get route ai-grid-provider-console -n ai-grid-provider-console
-```
+goes in git. Wait until `make status` shows `tenant-idp: Synced Healthy` and a `Console:` address.
 
 Then create the secrets:
 
@@ -50,25 +48,22 @@ publicly trusted, see
 
 ## 3. Verify
 
-1. Every Application is `Synced` and `Healthy`, except the three in part 1:
+1. Check the hub:
 
    ```sh
-   scripts/with-cluster.sh hub oc get applications.argoproj.io -n openshift-gitops \
-     -o jsonpath='{range .items[*]}{.metadata.name} {.status.sync.status} {.status.health.status}{"\n"}{end}' \
-     | grep -v ' Synced Healthy$'
+   make status
    ```
 
-   You should see only the Applications listed in part 1.
+   You should see only the three Applications from part 1, marked `waits for a site`, `MultiClusterHub: Running`,
+   no `!!` line, and `Console: https://CONSOLE_HOST`.
 
-2. The console is up:
+2. Check that the console pod is up:
 
    ```sh
    scripts/with-cluster.sh hub oc get pods -n ai-grid-provider-console
-   scripts/with-cluster.sh hub oc get route -n ai-grid-provider-console -o jsonpath='{.items[0].spec.host}{"\n"}'
    ```
 
-   You should see the console pod `3/3 Running` and its hostname, `CONSOLE_HOST`. Open `https://CONSOLE_HOST` and
-   sign in as a cluster admin.
+   You should see the console pod `3/3 Running`. Open `https://CONSOLE_HOST` and sign in as a cluster admin.
 
 ## Checkpoint
 

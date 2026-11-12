@@ -8,7 +8,7 @@
 # use a general quay.io login.
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN
 
-.PHONY: help login prereqs bootstrap test update
+.PHONY: help login prereqs bootstrap status test update
 
 help: ## Show the targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /: /'
@@ -22,6 +22,9 @@ prereqs: ## Report what is installed and what isn't found; never blocks
 
 bootstrap: ## Install OpenShift GitOps on the hub and apply root/ (page 3)
 	@scripts/bootstrap-hub.sh
+
+status: ## Show how the hub's install is going; read-only (page 4)
+	@scripts/status.sh
 
 test: ## Run the scripts' tests
 	@for t in tests/*-test.sh; do bash "$$t" || exit 1; done

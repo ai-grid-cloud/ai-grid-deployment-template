@@ -100,4 +100,4 @@ oc patch argocd openshift-gitops -n openshift-gitops --type merge -p "$patch"
 printf "%s\n" "$DEPLOYMENT_ROOT" | oc apply -f -
 
 bash "$lib/apps/rhoai-prerequisites/create-hub-secret.sh"
-echo "Bootstrapped. Watch: scripts/with-cluster.sh $hub oc get applications.argoproj.io -n openshift-gitops"
+echo "Bootstrapped. Check progress with: make status"

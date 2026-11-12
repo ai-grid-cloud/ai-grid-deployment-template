@@ -54,6 +54,21 @@ To read the message on the hub:
 oc get applicationset apps -n openshift-gitops -o jsonpath='{.status.conditions}'
 ```
 
+## Nothing installs on the hub; the Argo CD controller restarts with `OOMKilled`
+
+**Symptom:** `make status` shows the same Applications for 10 minutes or more, or a line starting with `!!` about the
+Argo CD controller: its last termination is `OOMKilled`, or it's in `CrashLoopBackOff`.
+
+**Cause:** Argo CD's application controller runs out of memory before the hub's settings raise its limit.
+
+**Fix:** run the bootstrap again. It sets the controller's memory, and reapplies the same root and registry logins:
+
+```sh
+make bootstrap
+```
+
+Then run `make status` again: the restarts stop and the Applications progress within a few minutes.
+
 ## Hub Applications for Submariner, `limitador-redis` or the MaaS database stay unhealthy
 
 **Cause:** they wait for the first site to join.
