@@ -201,7 +201,9 @@ def check_registry(auth_file):
     if has("registry.stage.redhat.io"):
         report("ok", "registry.stage.redhat.io login", "entry present (model runtime images)")
     else:
-        report("MISSING", "registry.stage.redhat.io login", "sites can't pull registry.redhat.io/rhaii* images")
+        report("MISSING", "registry.stage.redhat.io login",
+               "page 7's model runtime images (registry.redhat.io/rhaii*, mirrored to registry.stage.redhat.io) "
+               "won't pull; add this login to the auth file before page 3 (page 2)")
 
     image = pinned_catalog_image()
     if not image:
