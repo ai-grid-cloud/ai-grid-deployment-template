@@ -15,18 +15,15 @@ It prints the Applications that aren't `Synced` and `Healthy` yet, the MultiClus
 application controller with its restarts, the tenant Keycloak's Application, and the console's address once its Route
 exists. It changes nothing. Run it again every few minutes. Every Application appears within a few minutes, and ACM
 takes longest: the install is done when `MultiClusterHub: Running` shows, about 20 minutes after the bootstrap, and
-only the three Applications below are listed.
+no Application is listed as not `Synced` and `Healthy`.
 
 If nothing changes for 10 minutes, or `make status` prints a line starting with `!!`, see
 [troubleshooting](troubleshooting.md#nothing-installs-on-the-hub-the-argo-cd-controller-restarts-with-oomkilled).
 
-These three wait for the first site to [join the grid](06-join-grid.md), and aren't a problem until then:
-
-| Application | State | Why |
-|---|---|---|
-| `acm-submariner-local-cluster` | Progressing or Degraded | Submariner has no peer to connect to yet. |
-| `limitador-redis` | OutOfSync or Degraded | Its ServiceExport CRD comes with Submariner. |
-| `maas-db-local-cluster` | Degraded (ServiceExport) | No Globalnet address until a peer joins. |
+Some Applications wait for the first site to [join the grid](06-join-grid.md), and aren't a problem until then:
+`make status` lists them on one line, `Waiting for a site to join`. They're the Submariner, `limitador-redis` and MaaS
+database Applications, which need a peer cluster, and any Application whose only unhealthy resources are ACM
+Placements that match no ManagedCluster yet.
 
 ## 2. Create the console's secrets
 
@@ -54,8 +51,8 @@ publicly trusted, see
    make status
    ```
 
-   You should see only the three Applications from part 1, marked `waits for a site`, `MultiClusterHub: Running`,
-   no `!!` line, and `Console: https://CONSOLE_HOST`.
+   You should see no Application listed as not `Synced` and `Healthy` (the ones on the `Waiting for a site to join`
+   line are fine), `MultiClusterHub: Running`, no `!!` line, and `Console: https://CONSOLE_HOST`.
 
 2. Check that the console pod is up:
 
@@ -67,7 +64,7 @@ publicly trusted, see
 
 ## Checkpoint
 
-- Every Application is `Synced` and `Healthy`, apart from the three that wait for a site.
+- Every Application is `Synced` and `Healthy`, apart from the ones that wait for a site.
 - The MultiClusterHub is `Running`.
 - The console opens and you can sign in.
 

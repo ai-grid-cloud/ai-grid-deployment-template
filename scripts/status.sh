@@ -15,29 +15,51 @@ clusters_load "$here/.." || exit 1
 hub=$(hub_name)
 cluster_login_ok "$hub" || exit 1
 KUBECONFIG=$(cluster_kubeconfig "$hub"); export KUBECONFIG
-# These wait for the first site to join (page 6), so they're expected until then.
+# Applications that wait for the first site to join (page 6), expected until
+# then: these three by name, and any whose only unhealthy resources are ACM
+# Placements that match no ManagedCluster yet.
 waits_for_site=" acm-submariner-local-cluster limitador-redis maas-db-local-cluster "
 fix="see docs/install/troubleshooting.md, \"Nothing installs on the hub\""
 
 echo "Hub $hub ($(oc whoami --show-server 2>/dev/null))"
 
 echo
+# Placements that match no ManagedCluster yet, as "namespace/name". Argo CD may not
+# keep each resource's health in the Application, so read the Placements themselves.
+unmatched=$(oc get placements.cluster.open-cluster-management.io -A -o json 2>/dev/null |
+  jq -c '[.items[] | select(any(.status.conditions[]?; .type == "PlacementSatisfied" and .status == "False"
+      and ((.message // "") | contains("No ManagedCluster matches any of the cluster predicate"))))
+    | "\(.metadata.namespace)/\(.metadata.name)"]' 2>/dev/null)
+# One row per Application: name, sync, health, and "site" when it's Synced and
+# what keeps it from Healthy is such a Placement: it has one, and every resource
+# whose health Argo CD reports as not Healthy is one.
 apps=$(oc get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null |
-  jq -r '.items[] | [.metadata.name, (.status.sync.status // "Unknown"), (.status.health.status // "Unknown")] | @tsv' 2>/dev/null)
+  jq -r --argjson u "${unmatched:-[]}" '.items[] | [.metadata.name, (.status.sync.status // "Unknown"),
+      (.status.health.status // "Unknown"),
+      ([.status.resources[]? | select(.kind == "Placement") | "\(.namespace)/\(.name)" | select(IN($u[]))] as $waiting
+       | [.status.resources[]? | select(.health != null and .health.status != "Healthy")
+          | select((.kind == "Placement" and ("\(.namespace)/\(.name)" | IN($u[]))) | not)] as $other
+       | if .status.sync.status == "Synced" and ($waiting | length > 0) and ($other | length == 0)
+         then "site" else "-" end)] | @tsv' 2>/dev/null)
 if [ -z "$apps" ]; then
   echo "Applications: none yet"
 else
   n=$(wc -l <<<"$apps" | tr -d ' ')
-  not_ok=$(awk -F'\t' '!($2 == "Synced" && $3 == "Healthy")' <<<"$apps")
-  if [ -z "$not_ok" ]; then
-    echo "Applications: all $n Synced and Healthy"
+  waiting="" problems=""
+  while IFS=$'\t' read -r name sync health why; do
+    [ "$sync $health" = "Synced Healthy" ] && continue
+    case "$waits_for_site" in *" $name "*) why=site ;; esac
+    if [ "$why" = site ]; then waiting+=" $name"
+    else problems+=$(printf '  %-40s %-10s %s' "$name" "$sync" "$health")$'\n'; fi
+  done <<<"$apps"
+  if [ -z "$problems" ]; then
+    if [ -z "$waiting" ]; then echo "Applications: all $n Synced and Healthy"
+    else echo "Applications: none of $n has a problem"; fi
   else
-    echo "Applications not Synced and Healthy ($(wc -l <<<"$not_ok" | tr -d ' ') of $n):"
-    while IFS=$'\t' read -r name sync health; do
-      note=""; case "$waits_for_site" in *" $name "*) note="  (waits for a site; expected until page 6)" ;; esac
-      printf '  %-40s %-10s %s%s\n' "$name" "$sync" "$health" "$note"
-    done <<<"$not_ok"
+    echo "Applications not Synced and Healthy ($(grep -c . <<<"$problems") of $n):"
+    printf '%s' "$problems"
   fi
+  [ -z "$waiting" ] || echo "Waiting for a site to join (expected until page 6):$waiting"
 fi
 
 phase=$(oc get multiclusterhub -A -o jsonpath='{.items[0].status.phase}' 2>/dev/null)

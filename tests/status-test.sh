@@ -29,6 +29,7 @@ case "$a" in
   *" get applications.argoproj.io "*) ans apps.json ;;
   *" get multiclusterhub "*) ans mch ;;
   *" get pods "*) ans pods.json ;;
+  *" get placements."*) ans placements.json ;;
   *" get route "*) ans route ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
@@ -61,14 +62,36 @@ printf 'Installing' > "$W/mch"
 pods 3 OOMKilled CrashLoopBackOff > "$W/pods.json"
 printf 'Synced Progressing' > "$W/tenant-idp"
 t "lists the Applications not ready" "^  acm +Synced +Progressing$" "^  console "
-t "counts them" "^Applications not Synced and Healthy \(2 of 3\):$"
-t "marks the ones that wait for a site" "^  limitador-redis +OutOfSync +Degraded +\(waits for a site"
+t "counts them" "^Applications not Synced and Healthy \(1 of 3\):$"
+t "the ones that wait for a site on one line" "^Waiting for a site to join \(expected until page 6\): limitador-redis$" "^  limitador-redis"
 t "MultiClusterHub phase" "^MultiClusterHub: Installing$"
 t "controller restarts and last termination" "^Argo CD controller: openshift-gitops-application-controller-0, 3 restarts, last termination OOMKilled$"
 t "OOMKilled called out with the fix" "^  !! The controller failed .*OOMKilled.*troubleshooting"
 t "tenant-idp state" "^tenant-idp: Synced Progressing$"
 pods 2 Error CrashLoopBackOff > "$W/pods.json"
 t "CrashLoopBackOff called out" "^  !! The controller failed .*CrashLoopBackOff"
+
+# Applications Degraded only by Placements that match no ManagedCluster wait
+# for a site; one with another unhealthy resource, or an unrelated Placement,
+# is a problem.
+W="$T/placements"; mkdir -p "$W"
+res() { # kind namespace name [health]
+  local h=""; [ -z "${4:-}" ] || h=",\"health\":{\"status\":\"$4\"}"
+  printf '{"kind":"%s","namespace":"%s","name":"%s"%s}' "$1" "$2" "$3" "$h"
+}
+appr() { printf '{"metadata":{"name":"%s"},"status":{"sync":{"status":"%s"},"health":{"status":"%s"},"resources":[%s]}}' "$@"; }
+echo "{\"items\":[$(appr models Synced Degraded "$(res Placement acm-models models-site)"),$(appr spokes Synced Degraded "$(res Placement ai-grid-spokes p1 Degraded),$(res Deployment ai-grid-spokes d1 Healthy)"),$(appr broken Synced Degraded "$(res Placement ai-grid-spokes p1 Degraded),$(res Deployment x d2 Degraded)"),$(appr other Synced Degraded "$(res Placement x matched)")]}" > "$W/apps.json"
+cat > "$W/placements.json" <<'JSON'
+{"items":[
+ {"metadata":{"namespace":"acm-models","name":"models-site"},"status":{"conditions":[{"type":"PlacementSatisfied","status":"False","reason":"NoManagedClusterMatched","message":"No ManagedCluster matches any of the cluster predicate"}]}},
+ {"metadata":{"namespace":"ai-grid-spokes","name":"p1"},"status":{"conditions":[{"type":"PlacementSatisfied","status":"False","reason":"NoManagedClusterMatched","message":"No ManagedCluster matches any of the cluster predicate"}]}},
+ {"metadata":{"namespace":"x","name":"matched"},"status":{"conditions":[{"type":"PlacementSatisfied","status":"True","message":"Placement pending"}]}}]}
+JSON
+t "placement-only Applications wait for a site" "^Waiting for a site to join \(expected until page 6\): models spokes$"
+t "another unhealthy resource is a problem" "^  broken +Synced +Degraded$"
+t "a Placement that matches is a problem" "^  other +Synced +Degraded$"
+rm "$W/placements.json"
+t "no Placements readable: nothing waits" "^  models +Synced +Degraded$"
 
 # Done: everything ready, the controller healthy, the console up.
 W="$T/done"; mkdir -p "$W"
