@@ -11,7 +11,7 @@ If the cluster ran an AI Grid hub before, uninstall that hub first ([uninstall](
 RHOAI_QUAY_PULL_SECRET_FILE=QUAY_AUTH_FILE scripts/check-prerequisites.sh --step hub --cluster hub
 ```
 
-Replace `QUAY_AUTH_FILE` with your container auth file with both pre-release registry logins
+Replace `QUAY_AUTH_FILE` with your container auth file with your `quay.io` login
 ([before you start](01-before-you-start.md)), such as
 `~/.config/containers/auth.json`. The check only checks that the file exists.
 

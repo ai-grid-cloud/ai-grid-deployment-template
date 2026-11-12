@@ -13,9 +13,9 @@ Submariner gateway nodes: check those yourself.
 - **Network:** Submariner creates a LoadBalancer Service on each cluster for its gateways, so each cluster needs a
   load-balancer provider. Each cluster reaches the other's load balancer on UDP 4500 and 4490, and every router name
   answers `AAAA` queries without `NXDOMAIN` ([site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9cb50e9afcc069669aff57d2bf25d0b759b85ece/docs/install/spokes/networking.md)).
-- **Registry logins:** this template installs a pre-release (nightly) OpenShift AI 3.6 build, so you need a container
-  auth file with `quay.io/rhoai` and `registry.stage.redhat.io` logins. Red Hat gives them to early-access partners;
-  ask your Red Hat contact. A general `quay.io` login also works for `quay.io/rhoai`
+- **A `quay.io/rhoai` login:** this template installs a pre-release (nightly) OpenShift AI 3.6 build from
+  `quay.io/rhoai`, so you need a container auth file with a login for it. Red Hat gives `quay.io/rhoai` robot tokens
+  to early-access partners; ask your Red Hat contact. A general `quay.io` login also works
   ([general `quay.io` login](troubleshooting.md#bootstrap-hubsh-refuses-a-general-quayio-login)).
 - **Tools:** `oc`, `git`, `jq`, `curl`, `openssl`, `python3`, `clusteradm` and `make`.
 

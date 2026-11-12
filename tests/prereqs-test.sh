@@ -116,7 +116,7 @@ t "quay.io/rhoai and stage" '^ok +registry.stage.redhat.io login' "$T/bin" "$w" 
 G=$(authfile generic quay.io registry.stage.redhat.io)
 t "general quay.io login: ok with the note" '^ok +quay.io/rhoai login +general quay.io entry: page 3 needs RHOAI_QUAY_ALLOW_GENERIC_LOGIN=1' "$T/bin" "$w" --quay-auth-file "$G"
 N=$(authfile nostage quay.io/rhoai)
-t "no stage login" '^MISSING +registry.stage.redhat.io login +page 7.s model runtime .*registry.redhat.io/rhaii.* add this login to the auth file before page 3' "$T/bin" "$w" --quay-auth-file "$N"
+t "no stage login: ok, optional" '^ok +registry.stage.redhat.io login +none; optional: only nightly-only runtime images need it' "$T/bin" "$w" --quay-auth-file "$N"
 O=$(authfile other docker.io)
 t "no quay login" '^MISSING +quay.io/rhoai login' "$T/bin" "$w" --quay-auth-file "$O"
 t "auth file not found" '^MISSING +auth file' "$T/bin" "$w" --quay-auth-file "$T/nope.json"

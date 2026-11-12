@@ -203,11 +203,10 @@ def check_registry(auth_file):
     else:
         report("MISSING", "quay.io/rhoai login", "no quay.io/rhoai or quay.io entry with an auth value")
     if has("registry.stage.redhat.io"):
-        report("ok", "registry.stage.redhat.io login", "entry present (model runtime images)")
+        report("ok", "registry.stage.redhat.io login", "entry present (optional: nightly-only runtime images)")
     else:
-        report("MISSING", "registry.stage.redhat.io login",
-               "page 7's model runtime images (registry.redhat.io/rhaii*, mirrored to registry.stage.redhat.io) "
-               "won't pull; add this login to the auth file before page 3 (page 2)")
+        report("ok", "registry.stage.redhat.io login",
+               "none; optional: only nightly-only runtime images need it")
 
     image = pinned_catalog_image()
     if not image:
@@ -370,7 +369,7 @@ def main():
     p.add_argument("--deployment", default=REPO, help="your deployment repository (default: this one)")
     p.add_argument("--library", default=LIB, help="your library checkout (default: .library) [LIBRARY]")
     p.add_argument("--quay-auth-file", default=os.environ.get("QUAY_AUTH_FILE") or default_auth_file(),
-                   help="container auth file with the pre-release registry logins [QUAY_AUTH_FILE]")
+                   help="container auth file with your quay.io login [QUAY_AUTH_FILE]")
     p.add_argument("--catalog-token-file",
                    default=(os.environ.get("CATALOG_TOKEN_FILE")
                             or first_existing(os.path.expanduser("~/.ai-grid/catalog-token"))),

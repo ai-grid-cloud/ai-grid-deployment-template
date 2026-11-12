@@ -132,16 +132,6 @@ Nothing was changed; fix these before the page that needs them.
 
 Install any tool marked `MISSING` before you continue.
 
-If `registry.stage.redhat.io login` is `MISSING`, add that login to the auth file before page 3: the hub copies
-your logins to the sites when you bootstrap it, and the model you deploy on page 7 pulls its runtime image through
-it. To add it:
-
-```sh
-podman login --authfile AUTH_FILE registry.stage.redhat.io
-```
-
-Replace `AUTH_FILE` with the auth file that `make prereqs` names on its `auth file` line.
-
 ## 4. Set your names
 
 Find each cluster's apps domain:
