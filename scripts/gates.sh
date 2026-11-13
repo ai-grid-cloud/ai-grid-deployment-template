@@ -17,6 +17,8 @@
 #   app_healthy NAME             Argo CD Application NAME is Synced and Healthy
 #   apps_healthy [EXCEPT...]     every Application is Synced and Healthy, except
 #                                the names given and those waiting for a site
+#   apps_healthy --strict        every Application is Synced and Healthy, none
+#                                excepted, not even those waiting for a site
 #   root_synced_to REV           Application deployment-root is Synced at REV
 #   mch_running                  the MultiClusterHub's phase is Running
 #   managedcluster_available NAME  ManagedCluster NAME is joined and available
@@ -104,15 +106,16 @@ app_healthy() { # NAME
   [ "$s" = "Synced Healthy" ] || { echo "Application $1: $s"; return 1; }
 }
 
-apps_healthy() { # [EXCEPT...]
-  local json rows name sync health why bad="" n=0
+apps_healthy() { # [--strict | EXCEPT...]
+  local json rows name sync health why bad="" n=0 strict=""
+  [ "${1:-}" != --strict ] || { strict=1; shift; }
   json=$(oc get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null) ||
     { echo "Applications: can't read them"; return 1; }
   rows=$(app_rows "$json" "$(unmatched_placements || true)" || true)
   [ -n "$rows" ] || { echo "Applications: none yet"; return 1; }
   while IFS=$'\t' read -r name sync health why; do
     [ "$sync $health" = "Synced Healthy" ] && continue
-    [ "$why" = site ] && continue
+    [ "$why" = site ] && [ -z "$strict" ] && continue
     case " $* " in *" $name "*) continue ;; esac
     n=$((n + 1)); bad+="${bad:+, }$name ($sync $health)"
   done <<<"$rows"
