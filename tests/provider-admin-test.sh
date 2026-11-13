@@ -34,7 +34,10 @@ case "$a" in
     echo clusterrole.rbac.authorization.k8s.io/ai-grid-provider-admin ;;
   *" apply "*) cat >> "$d/applied.yaml"; echo "applied" ;;
   *" create token provider-admin "*) echo SENTINEL ;;
-  *" get route "*) printf 'console.apps.hub.example.com' ;;
+  *" get route "*)
+    if [ -f "$d/no-route" ]; then
+      case "$a" in *"items[0]"*) echo 'error: error executing jsonpath "{.items[0].spec.host}": array index out of bounds' >&2; exit 1 ;; esac
+    else printf 'console.apps.hub.example.com'; fi ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
 STUB
@@ -73,8 +76,17 @@ W="$T/norole"; mkdir -p "$W"; touch "$W/no-clusterrole"; rm -f "$TOK"; run
 t "no ClusterRole: stops" 1 "ClusterRole ai-grid-provider-admin" \
   '[ ! -f "$TOK" ]' '! grep -q "create token" "$W/argv.log"' '[ ! -f "$W/curl.log" ]'
 
-W="$T/refused"; mkdir -p "$W"; printf 401 > "$W/code"; run
-t "call refused: stops with the code" 1 "HTTP 401.*didn't accept the ServiceAccount token"
+W="$T/refused"; mkdir -p "$W"; printf 401 > "$W/code"; rm -f "$TOK"; run
+t "call refused: stops with the code, saves no token" 1 "HTTP 401.*didn't accept the ServiceAccount token" \
+  '[ ! -f "$TOK" ]'
+
+W="$T/refused-old"; mkdir -p "$W"; printf 401 > "$W/code"; printf 'OLD\n' > "$TOK"; run
+t "call refused: the previous token stays as it was" 1 "HTTP 401" \
+  'grep -qx OLD "$TOK"' '! grep -q SENTINEL "$TOK"'
+
+W="$T/noroute"; mkdir -p "$W"; touch "$W/no-route"; rm -f "$TOK"; run
+t "no console Route: stops with the friendly message" 1 "no console Route on hub yet" \
+  '[ ! -f "$TOK" ]' '[ ! -f "$W/curl.log" ]'
 
 W="$T/rerun"; mkdir -p "$W"; run; run
 t "rerun: apply is idempotent" 0 "console accepted" \

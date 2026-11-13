@@ -10,9 +10,10 @@
 #
 # It applies, so a second run changes nothing: namespace ai-grid-test,
 # ServiceAccount ai-grid-test/provider-admin, and ClusterRoleBinding
-# ai-grid-test-provider-admin. It writes a new token each run, then proves it with
-# one call to the console's ai_grid.v1.Clusters/List and expects HTTP 200. It
-# exits 1 when the ClusterRole doesn't exist yet (the console isn't installed) or
+# ai-grid-test-provider-admin. It makes a new token each run, proves it with one
+# call to the console's ai_grid.v1.Clusters/List (HTTP 200), and only then saves
+# it. It exits 1, leaving any previous token file as it was, when the ClusterRole
+# doesn't exist yet (the console isn't installed), there's no console Route, or
 # the console refuses the token. The token goes from oc straight to the file and
 # to curl through a header file: never on a command line or in the output.
 set -euo pipefail
@@ -55,22 +56,25 @@ subjects:
 EOF
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-mkdir -p "$CLUSTERS_DIR/.config"
+# The new token stays in $tmp until the console accepts it, so a refused token
+# never replaces a working one.
 ( umask 077
   oc create token "$sa" -n "$ns" --duration="${PROVIDER_ADMIN_TOKEN_DURATION:-168h}" > "$tmp/token"
   [ -s "$tmp/token" ] || { echo "error: oc create token gave no token" >&2; exit 1; }
-  mv "$tmp/token" "$token_file"
-  { printf 'Authorization: Bearer '; tr -d '\r\n' < "$token_file"; printf '\n'; } > "$tmp/auth" )
-chmod 600 "$token_file"
-echo "Wrote the provider-admin token to $token_file"
+  { printf 'Authorization: Bearer '; tr -d '\r\n' < "$tmp/token"; printf '\n'; } > "$tmp/auth" )
 
-console=$(oc get route -n ai-grid-provider-console -o jsonpath='{.items[0].spec.host}')
+console=$(oc get route -n ai-grid-provider-console -o jsonpath='{.items[*].spec.host}' 2>/dev/null || true)
+console=${console%% *}
 [ -n "$console" ] || { echo "error: no console Route on $hub yet: see make status" >&2; exit 1; }
 code=$(curl -sS -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
   -H 'Connect-Protocol-Version: 1' --data-binary '{}' -w '%{http_code}' \
   "https://$console/ai_grid.v1.Clusters/List") || code=000
 if [ "$code" != 200 ]; then
-  echo "error: HTTP $code from https://$console/ai_grid.v1.Clusters/List: the console didn't accept the ServiceAccount token" >&2
+  echo "error: HTTP $code from https://$console/ai_grid.v1.Clusters/List: the console didn't accept the ServiceAccount token; $token_file is unchanged" >&2
   exit 1
 fi
+mkdir -p "$CLUSTERS_DIR/.config"
+mv "$tmp/token" "$token_file"
+chmod 600 "$token_file"
 echo "The console accepted the provider-admin token (ai_grid.v1.Clusters/List: HTTP 200)"
+echo "Wrote the provider-admin token to $token_file"
