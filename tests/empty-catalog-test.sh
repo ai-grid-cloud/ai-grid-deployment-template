@@ -31,6 +31,7 @@ t "previews what it removes" 0 "clusters/site-b/model.yaml" make -s -C "$D" empt
 t "  ... and keeps README.md" 0 "^ok$" bash -c '! make -s -C "$0" empty-catalog | grep -q "  README.md" && echo ok' "$D"
 t "  ... says it's a preview" 0 "CONFIRM=1" make -s -C "$D" empty-catalog
 t "  ... and changes nothing" 0 "subscriptions.yaml" files
+t "--check on a non-empty catalog exits 1" 1 "isn't empty.*|clusters/site-b/model.yaml" "$D/scripts/empty-catalog.sh" --check
 t "CONFIRM=1 commits and pushes" 0 "catalog: empty for uninstall" bash -c 'make -s -C "$0" empty-catalog CONFIRM=1 >/dev/null && git --git-dir="$1" log -1 --format=%s main' "$D" "$T/catalog.git"
 t "  ... leaving only README.md" 0 "^README.md $" files
 t "an empty catalog has nothing to remove" 0 "already empty" make -s -C "$D" empty-catalog CONFIRM=1
