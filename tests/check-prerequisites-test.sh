@@ -129,13 +129,21 @@ tc() { # name want_rc expect_grep world: --step spoke on the only site, through 
 w=$(world installed); echo open-cluster-management-agent > "$w/namespaces"
 echo "datasciencecluster.datasciencecluster.opendatahub.io/default-dsc" > "$w/dsc"
 echo "gridsite.grid.praxis.fast/site-b" > "$w/grid"
-echo "True https://api.site-b.example.com:6443" > "$w/mc"
+# The stub prints what the script's jsonpath asks for: "<name> <client URL>".
+echo "site-b https://api.site-b.example.com:6443" > "$w/mc"
 tc "a site of this hub is OK" 0 "^OK +previous AI Grid install +already a site of this hub" "$w"
-echo "True https://api.other.example.com:6443" > "$w/mc"
+echo "site-b https://api.site-b.example.com:6443/" > "$w/mc"
+tc "  ... with a trailing slash on the client URL" 0 "^OK +previous AI Grid install +already a site of this hub" "$w"
+echo "site-b https://api.other.example.com:6443" > "$w/mc"
 tc "a ManagedCluster with another API URL isn't this cluster" 1 "^FOUND +previous AI Grid install +klusterlet" "$w"
-echo "False https://api.site-b.example.com:6443" > "$w/mc"
-tc "not joined to this hub" 1 "^FOUND +previous AI Grid install" "$w"
+# A half-imported site (klusterlet applied, ManagedCluster not yet accepted or
+# joined) is this hub's, so a re-run reaches import-site.sh and finishes it.
+# Joined status isn't in the query, so this world is the same as the joined one.
+echo "site-b https://api.site-b.example.com:6443" > "$w/mc"
+tc "ManagedCluster exists, not joined: site-check OK" 0 "^OK +previous AI Grid install +already a site of this hub" "$w"
+echo "site-b " > "$w/mc"
+tc "ManagedCluster with no client config yet: ours, with a note" 0 "^OK +previous AI Grid install +already a site of this hub .*no client URL yet" "$w"
 rm "$w/mc"
-tc "no ManagedCluster on this hub: another hub" 1 "^FOUND +previous AI Grid install +klusterlet .*another hub" "$w"
+tc "klusterlet but no ManagedCluster on this hub: still FOUND" 1 "^FOUND +previous AI Grid install +klusterlet .*another hub" "$w"
 
 echo "check-prerequisites tests: $((total-fails)) ok, $fails failed"; exit "$fails"

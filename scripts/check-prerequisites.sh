@@ -112,14 +112,23 @@ if [ "$step" = spoke ]; then
   # A previous install: a klusterlet (another hub manages the cluster), a
   # DataScienceCluster, the OpenShift AI operator's Subscription, or grid
   # objects. Leftover CRDs alone are harmless.
-  found=() ours=false
+  found=() ours=false ours_note=""
   if oc_ get namespace open-cluster-management-agent -o name >/dev/null 2>&1; then
-    # Your own hub, when it has this cluster as a joined ManagedCluster of the
-    # same name whose API URL is this cluster's api in clusters.yaml.
+    # Your own hub, when it has a ManagedCluster of this cluster's name whose
+    # client URL is this cluster's api in clusters.yaml, joined or not: a
+    # half-imported site is this hub's, and import-site.sh finishes it. A
+    # ManagedCluster of that name with no client URL yet counts as ours too.
     if [ -n "$cluster" ] && hub=$(hub_name) && cluster_login_ok "$hub" 2>/dev/null; then
       mc=$(oc --kubeconfig "$(cluster_kubeconfig "$hub")" get managedcluster "$cluster" \
-        -o jsonpath='{.status.conditions[?(@.type=="ManagedClusterJoined")].status} {.spec.managedClusterClientConfigs[0].url}' 2>/dev/null || true)
-      [ "$mc" = "True $(cluster_field "$cluster" api | sed 's#/*$##')" ] || [ "$mc" = "True $(cluster_field "$cluster" api)" ] && ours=true
+        -o jsonpath='{.metadata.name} {.spec.managedClusterClientConfigs[0].url}' 2>/dev/null || true)
+      read -r mc_name mc_url _ <<<"$mc" || true
+      if [ "${mc_name:-}" = "$cluster" ]; then
+        if [ -z "${mc_url:-}" ]; then
+          ours=true ours_note=" (ManagedCluster $cluster has no client URL yet; import-site.sh finishes it)"
+        elif [ "${mc_url%/}" = "$(cluster_field "$cluster" api | sed 's#/*$##')" ]; then
+          ours=true
+        fi
+      fi
     fi
     $ours || found+=("klusterlet (namespace open-cluster-management-agent: another hub, or one this check can't match, manages this cluster)")
   fi
@@ -132,7 +141,7 @@ if [ "$step" = spoke ]; then
   for ns in $(oc_ get namespaces -o jsonpath='{range .items[?(@.status.phase=="Terminating")]}{.metadata.name}{"\n"}{end}' 2>/dev/null |
     grep -E "$INSTALL_NS_RE" || true); do found+=("namespace $ns in Terminating"); done
   if $ours; then
-    report OK "previous AI Grid install" "already a site of this hub"
+    report OK "previous AI Grid install" "already a site of this hub$ours_note"
   elif [ ${#found[@]} -gt 0 ]; then
     report FOUND "previous AI Grid install" \
       "$(IFS=,; echo "${found[*]}" | sed 's/,/, /g'); follow \"Reuse a cluster from another hub\" (page 5) first"
