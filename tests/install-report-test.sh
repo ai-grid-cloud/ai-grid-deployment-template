@@ -26,6 +26,9 @@ cat > "$T/bin/oc" <<'STUB'
 d=$STUB_DIR; echo "$*" >> "$d/argv.log"; a=" $* "
 ans() { [ -f "$d/$1" ] || { echo "NotFound" >&2; exit 1; }; cat "$d/$1"; }
 case "$a" in
+  *" get "*) [ ! -f "$d/fail" ] || { echo "error: You must be logged in to the server (Unauthorized)" >&2; exit 1; } ;;
+esac
+case "$a" in
   *" whoami --show-server "*) echo https://api.hub.example.com:6443 ;;
   *" whoami "*) echo admin ;;
   *" get applications.argoproj.io -n openshift-gitops "*) ans apps.json ;;
@@ -71,5 +74,36 @@ else fails=$((fails+1)); echo "   FAIL report.txt written (stdout and .install/r
 total=$((total+1))
 if grep -qwE 'apply|create|delete|patch|edit|label|annotate|replace|scale|rollout|secrets?' "$T"/*/argv.log; then
   fails=$((fails+1)); echo "   FAIL oc got a write verb or read a Secret"; else echo "   ok   oc calls are read-only and read no Secret"; fi
+
+# oc fails: the report says it couldn't read, never "none" or "not created yet".
+W="$T/unauth"; mkdir -p "$W"; : > "$W/fail"
+t "oc error: says it can't read Applications" 0 $'could not read Applications: oc error: .*Unauthorized' "^none$" hub-apps
+t "oc error: says it can't read the ManagedCluster" 0 $'could not read ManagedCluster site-b: oc error: .*Unauthorized' "^  not created yet$" site-site-b-import
+
+# 25 stuck Applications, one with a 2000-character message, and limitador-redis,
+# which waits for a site.
+W="$T/many"; mkdir -p "$W"
+long=$(printf 'x%.0s' $(seq 2000))
+{ echo '{"items":['
+  echo '{"metadata":{"name":"limitador-redis"},"status":{"sync":{"status":"Synced"},"health":{"status":"Progressing"}}},'
+  for i in $(seq -w 1 24); do
+    m=short; [ "$i" != 01 ] || m=$long
+    echo "{\"metadata\":{\"name\":\"app-$i\"},\"status\":{\"sync\":{\"status\":\"OutOfSync\"},\"health\":{\"status\":\"Degraded\"},\"conditions\":[{\"type\":\"SyncError\",\"message\":\"$m\"}]}}$([ "$i" = 24 ] || echo ,)"
+  done
+  echo ']}'; } > "$W/apps.json"
+t "many apps: lists 20, then +5 more" 0 $'^Application limitador-redis \\(Synced Progressing\\) \\(waits for a site\\)$\n^Application app-19 \n^\\+5 more not Synced and Healthy$\nx…$' "^Application app-20 " hub-apps
+total=$((total+1))
+out=$(env PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/install-report.sh" hub-apps 2>&1) || true
+if [ "$(grep -c '^Application ' <<<"$out")" = 20 ] && ! awk 'length > 600 { bad=1 } END { exit !bad }' <<<"$out"; then
+  echo "   ok   many apps: 20 listed, no line over 600 characters"
+else fails=$((fails+1)); echo "   FAIL many apps: 20 listed, no line over 600 characters"; fi
+
+# No gate recorded: an existing report.txt is left as it was.
+rm -f "$D/.install/failed-gate"; echo "EARLIER REPORT" > "$D/.install/report.txt"
+W="$T/stuck"
+t "no failed gate: says so (with a report.txt)" 0 "^no failed gate recorded" "FAILED GATE"
+total=$((total+1))
+if [ "$(cat "$D/.install/report.txt")" = "EARLIER REPORT" ]; then echo "   ok   no failed gate: report.txt unchanged"
+else fails=$((fails+1)); echo "   FAIL no failed gate: report.txt unchanged"; fi
 
 echo "install-report tests: $((total-fails)) ok, $fails failed"; exit "$fails"
