@@ -5,7 +5,7 @@ and call it as a tenant. The provider console writes the model and subscription 
 CD delivers them to the site.
 
 Steps 2 to 4 use the console. To script them instead, take the JSON bodies from
-[call the console's API](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/hub/05-console-and-model-delivery.md#call-the-consoles-api)
+[call the console's API](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/ee0eb3755609a93ff305ea3e1278bee8c96301f3/docs/install/hub/05-console-and-model-delivery.md#call-the-consoles-api)
 and send them with this repository's `scripts/console-call.sh METHOD 'JSON'`, which signs in with your hub login; its
 flags differ from the library script's of the same name.
 
@@ -98,8 +98,8 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
    hostname, and prints no password or token. You should see a short reply, `HTTP 200` and `x-grid-site: SITE`.
 
 Tenants normally call with an API key, and create keys in the Org UI at `https://maas.SITE_APPS_DOMAIN/maas-portal`.
-For API keys, refusal checks and revoking a key, see [tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/tenant-access.md). To remove what you created,
-see [operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/operate.md#remove-a-subscription-model-or-organization).
+For API keys, refusal checks and revoking a key, see [tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/ee0eb3755609a93ff305ea3e1278bee8c96301f3/docs/install/tenant-access.md). To remove what you created,
+see [operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/ee0eb3755609a93ff305ea3e1278bee8c96301f3/docs/install/operate.md#remove-a-subscription-model-or-organization).
 
 ## Checkpoint
 

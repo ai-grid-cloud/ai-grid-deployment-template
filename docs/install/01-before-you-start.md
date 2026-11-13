@@ -5,14 +5,14 @@ Submariner gateway nodes: check those yourself.
 
 - **Two clusters on OpenShift 4.21 or later:** a hub and a site, each with a default StorageClass and two nodes for
   Submariner's gateways. Any two worker nodes do: the hub labels them. On a compact cluster or single-node OpenShift,
-  you label them by hand ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/hub/01-acm.md#submariner)). Size the site for its models; GPU models need
+  you label them by hand ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/ee0eb3755609a93ff305ea3e1278bee8c96301f3/docs/install/hub/01-acm.md#submariner)). Size the site for its models; GPU models need
   GPU nodes.
 - **A `cluster-admin` sign-in to each cluster,** and its API URL.
 - **On the site, a cert-manager ClusterIssuer** that issues publicly trusted certificates by DNS-01. If the site has
   several, note which one issues publicly trusted certificates: page 6 asks for it, and `make prereqs` lists them.
 - **Network:** Submariner creates a LoadBalancer Service on each cluster for its gateways, so each cluster needs a
   load-balancer provider. Each cluster reaches the other's load balancer on UDP 4500 and 4490, and every router name
-  answers `AAAA` queries without `NXDOMAIN` ([site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/spokes/networking.md)).
+  answers `AAAA` queries without `NXDOMAIN` ([site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/ee0eb3755609a93ff305ea3e1278bee8c96301f3/docs/install/spokes/networking.md)).
 - **A `quay.io/rhoai` login:** this template installs a pre-release (nightly) OpenShift AI 3.6 build from
   `quay.io/rhoai`, so you need a container auth file with a login for it. Red Hat gives `quay.io/rhoai` robot tokens
   to early-access partners; ask your Red Hat contact. A general `quay.io` login also works

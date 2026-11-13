@@ -23,7 +23,7 @@ issuer only to write a missing one. An `inference` site needs no files.
 
 You should see `root renders; every input is set; every repository is an input.` Then run the `git add`,
 `git commit` and `git push` commands it printed. What the files do, and other ways to get the certificate:
-[MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/spokes/maas-certificate.md).
+[MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/ee0eb3755609a93ff305ea3e1278bee8c96301f3/docs/install/spokes/maas-certificate.md).
 
 ## 2. Label the site
 
@@ -36,7 +36,7 @@ make site-join
 It first checks that your commits are pushed, and waits until the hub's `deployment-root` has synced your latest
 commit, up to 10 minutes, so the site's files are on the hub before its labels. If the site already has those
 labels, it says `labels already set` and changes nothing. The console shows the location.
-For `ingress` and `inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/spokes/README.md#what-you-choose-per-site).
+For `ingress` and `inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/ee0eb3755609a93ff305ea3e1278bee8c96301f3/docs/install/spokes/README.md#what-you-choose-per-site).
 
 You should see `managedcluster.cluster.open-cluster-management.io/SITE labeled`. The hub then creates the site's
 Applications. Show them:

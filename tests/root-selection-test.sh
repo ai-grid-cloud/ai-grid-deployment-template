@@ -40,7 +40,7 @@ render() { oc kustomize "$D/root" > "$T/root.yaml"; }
 t "renders: kustomize build root succeeds" render
 # The ApplicationSet as JSON: kubectl parses the YAML offline, as clusters.sh does.
 AS="$T/appset.json"
-{ KUBECONFIG=/dev/null oc label --local -f "$T/root.yaml" ai-grid.dev/read=true -o json 2>/dev/null || echo '{}'; } |
+KUBECONFIG=/dev/null oc label --local -f "$T/root.yaml" ai-grid.dev/read=true -o json |
   jq -s '[.[] | if .kind == "List" then .items[] else . end | select(.kind == "ApplicationSet")][0] // {}' > "$AS"
 files() { jq -er '.spec.generators[0].git.files[].path' "$AS"; }
 

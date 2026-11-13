@@ -89,9 +89,11 @@ patches:
         path: /spec/generators/1/matrix/generators/0/git/values
         value: *inputs
       # This deployment's own apps: one Application per apps/*.yaml here. The
-      # library's templatePatch needs the same values on every generator.
+      # library's templatePatch needs the same values on every generator. Added
+      # at index 2, not appended, so the replacements below (spec.generators.2)
+      # always reach it; the test after it checks it landed there.
       - op: add
-        path: /spec/generators/-
+        path: /spec/generators/2
         value:
           git:
             # Generator fields can't take @inputs@; these aliases reuse the
@@ -101,6 +103,7 @@ patches:
             files:
               - path: apps/*.yaml
             values: *inputs
+      - { op: test, path: /spec/generators/2/git/files/0/path, value: apps/*.yaml }
 # Your inputs, from inputs.env. local-config keeps the ConfigMap out of the
 # render; a missing inputs.env, or a name missing from it, fails the render.
 configMapGenerator:
