@@ -7,6 +7,7 @@ SRC=$(pwd -P)
 T=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$T"' EXIT
 total=0 fails=0
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 g() { git -c init.defaultBranch=main -c core.hooksPath=/dev/null "$@"; }
 t() { # name condition...: passes when the condition (a command) succeeds
   local name=$1; shift
@@ -26,7 +27,7 @@ g clone -q --bare "$work" "$T/lib.git"
 # A deployment copy whose root names the bare library and pins the old commit.
 D="$T/deploy"; mkdir -p "$D"; cp -R "$SRC/scripts" "$SRC/root" "$D/"
 k="$D/root/kustomization.yaml"
-sed -i.bak -E -e "s#https://github.com/ai-grid-cloud/ai-grid-cluster-gitops\.git#$T/lib.git#g" \
+sed -i.bak -E -e "s#https://github.com/ai-grid-cloud/ai-grid-cluster-gitops\.git#file://$T/lib.git#g" \
   -e "s#https://github.com/ai-grid-cloud/ai-grid-cluster-gitops//#file://$T/lib.git//#g" \
   -e "s/[0-9a-f]{40}/$old/g" "$k"; rm "$k.bak"
 
@@ -49,7 +50,7 @@ comments() { grep -c '^ *#' "$k"; }
 c0=$(comments)
 run feat/next
 t "branch: pins its SHA in all three places" \
-  eval '[ "$rc" = 0 ] && [ "$(count "$new")" = 3 ] && [ "$(count "$old")" = 0 ] && grep -qF "pinned $T/lib.git at $new (feat/next)" <<<"$out"'
+  eval '[ "$rc" = 0 ] && [ "$(count "$new")" = 3 ] && [ "$(count "$old")" = 0 ] && grep -qF "pinned file://$T/lib.git at $new (feat/next)" <<<"$out"'
 t "  ... the remote base, the generator revision and values.libraryRevision" \
   eval 'grep -q "//bootstrap/hub?ref=$new\$" "$k" && grep -q "path: /spec/generators/0/git/revision, value: $new }" "$k" && grep -q "libraryRevision: $new\$" "$k"'
 t "  ... keeps every comment and still parses as YAML" eval '[ "$(comments)" = "$c0" ] && yaml_ok'
@@ -60,5 +61,13 @@ t "same pin: already pinned" eval '[ "$rc" = 0 ] && grep -q "already pinned" <<<
 
 run no/such-branch
 t "unknown revision: stops" eval '[ "$rc" = 1 ] && grep -q "no/such-branch" <<<"$out" && [ "$(cksum < "$k")" = "$sum" ]'
+
+run "${new:0:7}"
+t "short SHA: asks for a full 40-character SHA" eval '[ "$rc" = 1 ] && grep -q "use a full 40-character SHA" <<<"$out" && [ "$(cksum < "$k")" = "$sum" ]'
+
+sed -i.bak -E "s#file://$T/lib\.git//bootstrap#https://example.com/other/repo//bootstrap#" "$k"; rm "$k.bak"; sum=$(cksum < "$k")
+run feat/next
+t "remote base names another repository: stops and names both" \
+  eval '[ "$rc" = 1 ] && grep -qF "https://example.com/other/repo" <<<"$out" && grep -qF "file://$T/lib.git" <<<"$out" && [ "$(cksum < "$k")" = "$sum" ]'
 
 echo "set-library tests: $((total-fails)) ok, $fails failed"; exit "$fails"

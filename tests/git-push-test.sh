@@ -48,6 +48,11 @@ run() { # MESSAGE PATH...: runs git-push.sh in $D; sets rc and out
 }
 all_out=""
 
+echo v1b > "$D/site.yaml"
+run "before any site" site.yaml sites
+t "missing path: commits and pushes the paths that exist" \
+  eval '[ "$rc" = 0 ] && [ "$(g -C "$T/origin.git" log -1 --format=%s main)" = "before any site" ] && [ "$(g -C "$T/origin.git" show main:site.yaml)" = v1b ]'
+
 echo v2 > "$D/site.yaml"; mkdir -p "$D/sites"; echo new > "$D/sites/b.yaml"
 run "add site b" site.yaml sites
 t "changes: commits and pushes" \
@@ -62,7 +67,7 @@ g -C "$other" add -A && g -C "$other" commit -qm theirs && g -C "$other" push -q
 echo v3 > "$D/site.yaml"
 run "change site" site.yaml
 t "push rejected: stops and names the remote" \
-  eval '[ "$rc" = 1 ] && grep -q origin <<<"$out" && grep -q rejected <<<"$out" && [ "$(g -C "$T/origin.git" log -1 --format=%s main)" = theirs ]'
+  eval '[ "$rc" = 1 ] && grep -q origin <<<"$out" && grep -q rejected <<<"$out" && grep -qF "pull --rebase origin main, then run make install again" <<<"$out" && [ "$(g -C "$T/origin.git" log -1 --format=%s main)" = theirs ]'
 
 t "token never in argv or output" \
   eval '[ -s "$T/argv.log" ] && ! grep -qF "$SENTINEL" "$T/argv.log" && ! grep -qF "$SENTINEL" <<<"$all_out"'

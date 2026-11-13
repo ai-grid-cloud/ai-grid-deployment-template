@@ -11,7 +11,8 @@
 #
 # Prints "nothing to push" when the paths have no changes and origin already
 # has HEAD. On a rejected push (origin moved, or the token can't write) it
-# exits 1 with git's reason; it never retries.
+# exits 1 with git's reason and the next step; it never retries. PATHs that
+# don't exist and aren't tracked are skipped.
 #
 # Usage: scripts/git-push.sh MESSAGE PATH...
 set -euo pipefail
@@ -34,9 +35,15 @@ printf '#!/bin/bash\ncase "$1" in Username*) echo x-access-token ;; *) head -n1 
 export GIT_ASKPASS=$askpass
 gitc() { git -c credential.helper= "$@"; }
 
-if [ -n "$(git status --porcelain -- "$@")" ]; then
-  git add -- "$@"
-  git commit -q -m "$msg" -- "$@"
+# Only the paths that exist or are tracked: a site directory that doesn't
+# exist yet would make git add fail on the rest.
+paths=()
+for p in "$@"; do
+  if [ -e "$p" ] || git ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then paths+=("$p"); fi
+done
+if [ ${#paths[@]} -gt 0 ] && [ -n "$(git status --porcelain -- "${paths[@]}")" ]; then
+  git add -- "${paths[@]}"
+  git commit -q -m "$msg" -- "${paths[@]}"
   echo "committed $(git rev-parse --short HEAD): $msg"
 fi
 
@@ -47,6 +54,7 @@ if [ "${remote%%[[:space:]]*}" = "$(git rev-parse HEAD)" ]; then echo "nothing t
 if ! out=$(gitc push --porcelain origin "HEAD:refs/heads/$branch" 2>&1); then
   echo "$out" >&2
   echo "error: push to origin ($branch) was rejected; git's reason is above. Nothing was retried." >&2
+  echo "next: git pull --rebase origin $branch, then run make install again" >&2
   exit 1
 fi
 echo "pushed $(git rev-parse --short HEAD) to origin $branch"

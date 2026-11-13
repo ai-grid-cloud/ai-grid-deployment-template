@@ -13,7 +13,8 @@
 # yourself, or with scripts/git-push.sh.
 #
 # Usage: scripts/set-library.sh REVISION
-# Exit 1 when REVISION isn't in the library, 2 on a usage error.
+# Exit 1 when REVISION isn't in the library or the remote base names another
+# repository than libraryRepoURL, 2 on a usage error.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 dir="$(cd "$here/.." && pwd)"
@@ -22,9 +23,13 @@ rev=$1
 k="$dir/root/kustomization.yaml"
 url=$(sed -n -E 's/^[[:space:]]*libraryRepoURL:[[:space:]]*([^[:space:]#]+).*/\1/p' "$k" | head -n1)
 [ -n "$url" ] || { echo "error: no libraryRepoURL in $k" >&2; exit 1; }
+base=$(sed -n -E 's#^[[:space:]]*-[[:space:]]+([^[:space:]]+)//bootstrap/hub\?ref=.*#\1#p' "$k" | head -n1)
+if [ -n "$base" ] && [ "${base%.git}" != "${url%.git}" ]; then
+  echo "error: the remote base in $k names $base, but libraryRepoURL is $url; make them the same repository" >&2; exit 1
+fi
 export GIT_TERMINAL_PROMPT=0
 
-refs=$(git ls-remote "$url" 2>&1) || { echo "error: can't read the library at $url: $refs" >&2; exit 1; }
+refs=$(git ls-remote "$url" 2>&1) || { echo "error: can't read the library at $url: $(tail -n1 <<<"$refs")" >&2; exit 1; }
 # A tag's commit (peeled) first, then the tag, then a branch, then a full ref name.
 sha=$(awk -v r="$rev" '
   $2 == "refs/tags/" r "^{}" { p[1] = $1 } $2 == "refs/tags/" r { p[2] = $1 }
@@ -35,11 +40,16 @@ if [ -z "$sha" ] && [[ "$rev" =~ ^[0-9a-f]{40}$ ]]; then
     sha=$rev
   else # not a ref tip: prove the commit exists by fetching it
     tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-    git init -q "$tmp" && git -C "$tmp" fetch -q --depth 1 "$url" "$rev" 2>/dev/null &&
+    git init -q "$tmp" && reason=$(git -C "$tmp" fetch -q --depth 1 "$url" "$rev" 2>&1) &&
       git -C "$tmp" cat-file -e "$rev^{commit}" 2>/dev/null && sha=$rev
   fi
 fi
-[ -n "$sha" ] || { echo "error: $rev isn't a branch, tag or commit in the library at $url" >&2; exit 1; }
+if [ -z "$sha" ]; then
+  why=""
+  [ -n "${reason:-}" ] && why=": $(tail -n1 <<<"$reason")"
+  [[ "$rev" =~ ^[0-9a-f]{4,39}$ ]] && why="$why; if it's a commit, use a full 40-character SHA"
+  echo "error: $rev isn't a branch, tag or commit in the library at $url$why" >&2; exit 1
+fi
 
 python3 - "$k" "$sha" "$url" "$rev" <<'PY'
 import os, re, sys
