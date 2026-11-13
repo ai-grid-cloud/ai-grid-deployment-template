@@ -37,6 +37,7 @@ case "$a" in
   *" get multiclusterhub "*) ans mch.json ;;
   *" get secret ai-grid-backend-git "*) ans console-secret ;;
   *" get secret rhoai-quay-pull-secret -n rhoai-prerequisites "*) ans hub-pull-secret ;;
+  *" get managedclusters.cluster.open-cluster-management.io "*) set -- $*; ans "mc-$3.json" ;;
   *" get placements."*) echo '{"items":[]}' ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
@@ -46,6 +47,8 @@ chmod +x "$T/bin/oc"
 # A fake for each script install.sh calls. bootstrap-hub.sh creates
 # deployment-root, Synced at HEAD, and the hub pull secret; git-push.sh
 # commits, as a push would, unless $STUB_DIR/nothing-to-push exists.
+# site-check.sh NAME exits with $STUB_DIR/site-check-NAME.rc when it exists;
+# import-site.sh NAME creates ManagedCluster NAME, joined and available.
 fake() { # NAME [EXTRA]
   cat > "$D/scripts/$1" <<EOF
 #!/bin/bash
@@ -56,6 +59,7 @@ exit \$(cat "\$STUB_DIR/$1.rc" 2>/dev/null || echo 0)
 EOF
   chmod +x "$D/scripts/$1"
 }
+mc_available='{"status":{"conditions":[{"type":"ManagedClusterJoined","status":"True"},{"type":"ManagedClusterConditionAvailable","status":"True"}]}}'
 root_at_head='{"metadata":{"name":"deployment-root"},"status":{"sync":{"status":"Synced","revision":"@HEAD@"},"health":{"status":"Healthy"}}}'
 
 setup() { # NAME: a deployment repository $D and a stub directory $W, for one case
@@ -65,6 +69,9 @@ setup() { # NAME: a deployment repository $D and a stub directory $W, for one ca
       create-console-secrets.sh install-report.sh; do fake "$s"; done
   fake git-push.sh 'if [ -f "$STUB_DIR/nothing-to-push" ]; then echo "nothing to push"
     else git -C "$REPO" -c core.hooksPath=/dev/null commit -q --allow-empty -m pushed; fi'
+  fake site-check.sh '[ ! -f "$STUB_DIR/site-check-$1.out" ] || cat "$STUB_DIR/site-check-$1.out"
+    [ ! -f "$STUB_DIR/site-check-$1.rc" ] || exit "$(cat "$STUB_DIR/site-check-$1.rc")"'
+  fake import-site.sh "[ -f \"\$STUB_DIR/mc-\$1.json\" ] || printf '%s' '$mc_available' > \"\$STUB_DIR/mc-\$1.json\""
   fake bootstrap-hub.sh "printf '%s' '$root_at_head' > \"\$STUB_DIR/deployment-root\"; echo '{}' > \"\$STUB_DIR/hub-pull-secret\""
   printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n- {name: site-a, role: combined, location: us-east, api: "https://api.site-a.example.com:6443"}\n' > "$D/clusters.yaml"
   cat > "$D/install.env" <<'EOF'
@@ -96,7 +103,7 @@ all_out=""
 
 setup fresh; run
 t "fresh: runs every hub step in order" eval '[ "$rc" = 0 ] &&
-  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;" ]'
+  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;site-check.sh site-a;import-site.sh site-a --yes;" ]'
 
 setup rerun
 printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secret"; echo '{}' > "$W/hub-pull-secret"
@@ -170,6 +177,34 @@ GATE_ROOT_SECONDS=0 run
 t "rerun, nothing to push: no new commit, hub-root gates on HEAD" eval '[ "$rc" = 0 ] &&
   grep -q "nothing to push" <<<"$out" && [ "$(git -C "$D" rev-parse HEAD)" = "$before" ] &&
   grep -q "gate hub-root: passed" <<<"$out"'
+
+two_sites() { # adds site-b, an inference site, to clusters.yaml
+  printf '%s\n' '- {name: site-b, role: inference, location: us-west, api: "https://api.site-b.example.com:6443"}' >> "$D/clusters.yaml"
+  g -C "$D" commit -qam "site-b"
+}
+
+setup twosites; two_sites; run
+t "two sites: check, import and gate each, in order" eval '[ "$rc" = 0 ] &&
+  [ "$(grep -E "^(site-check|import-site)" "$W/calls.log" | sed "s/ *\$//" | tr "\n" ";")" = "site-check.sh site-a;import-site.sh site-a --yes;site-check.sh site-b;import-site.sh site-b --yes;" ] &&
+  [ "$(grep -E "^(== site |gate (site-|hub-apps-final))" <<<"$out" | sed -E "s/ after .*//" | tr "\n" ";")" = "== site site-a;gate site-site-a-import: passed;== site site-b;gate site-site-b-import: passed;gate hub-apps-final: passed;" ] &&
+  grep -q "make install: done" <<<"$out"'
+
+setup siterun
+printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secret"; echo '{}' > "$W/hub-pull-secret"
+printf '%s' "$mc_available" > "$W/mc-site-a.json"
+echo "site-a is already imported; nothing to do." > "$W/import-site.sh.out"
+GATE_SITE_IMPORT_SECONDS=0 run
+t "rerun: site already imported" eval '[ "$rc" = 0 ] && grep -q "already imported" <<<"$out" &&
+  grep -q "gate site-site-a-import: passed" <<<"$out" && grep -q "gate hub-apps-final: passed" <<<"$out"'
+
+setup sitecheck; two_sites
+echo 1 > "$W/site-check-site-b.rc"
+echo "FOUND    previous AI Grid install            namespace ai-grid-site" > "$W/site-check-site-b.out"
+run
+t "site-check fails: stops and names the site" eval '[ "$rc" = 1 ] && grep -q "FOUND    previous AI Grid install" <<<"$out" &&
+  grep -qx "make install stopped at site site-b. Fix the cause, then run make install again." <<<"$out" &&
+  grep -q "^import-site.sh site-a --yes" "$W/calls.log" && ! grep -q "^import-site.sh site-b" "$W/calls.log" &&
+  ! grep -q "hub-apps-final" <<<"$out"'
 
 t "no token value in any output" eval '[ -n "$all_out" ] && ! grep -qF "$SENTINEL" <<<"$all_out" &&
   ! grep -rqF "$SENTINEL" "$T"/*/repo/.install "$T"/*/stub/calls.log "$T"/*/stub/argv.log 2>/dev/null'

@@ -30,7 +30,11 @@
 #                    ai-grid-provider-console/ai-grid-backend-git exists
 #   hub-apps         gate hub-apps: every hub Application Synced and Healthy,
 #                    except those waiting for a site
-# Then the sites phase (sites_phase below), unless --hub-only.
+# Then the sites phase, unless --hub-only. For each site in clusters.yaml order:
+#   site NAME        scripts/site-check.sh NAME, scripts/import-site.sh NAME --yes,
+#                    then gate site-NAME-import: ManagedCluster NAME available
+# and last, gate hub-apps-final: every hub Application Synced and Healthy,
+# except those waiting for a site.
 #
 # Before any cluster call it also checks that this checkout is on the branch
 # root/inputs.env names as deploymentRevision (default main), the one the hub
@@ -230,10 +234,26 @@ hub_phase() {
 
 # --- sites phase -------------------------------------------------------------
 
-# Tasks D1 and D2 add the sites here: each site's files and issuer check, its
-# import, and its gate, in clusters.yaml order.
+step_site() { # NAME: check the site, import it into the hub's ACM, wait until it's available
+  local name=$1
+  step "site $name"
+  # site-check.sh prints its own OK, MISSING or FOUND lines, a previous install
+  # included; they stay above the stop line.
+  run_step "site $name" site-check.sh "$name"
+  # import-site.sh leaves a site that is already joined and available alone.
+  run_step "site $name" import-site.sh "$name" --yes
+  hub_gate "site-$name-import" "$GATE_SITE_IMPORT_SECONDS" managedcluster_available "$name"
+}
+
+# Each site from clusters.yaml, in file order, then the hub's Applications
+# again. hub-apps-final still lets through the Applications that wait for a
+# site (no --strict): the ready check (scripts/ready-check.sh) is the strict
+# one. The acceptance run (Z1) records which Applications, if any, still wait
+# for a site at this point.
 sites_phase() {
-  :
+  local name
+  for name in $(site_names); do step_site "$name"; done
+  hub_gate hub-apps-final "$GATE_HUB_APPS_SECONDS" apps_healthy
 }
 
 # --- main --------------------------------------------------------------------
