@@ -25,7 +25,9 @@ mkdir -p "$T/bin"
 cat > "$T/bin/oc" <<'STUB'
 #!/bin/bash
 d=$STUB_DIR; echo "$*" >> "$d/argv.log"; a=" $* "
-ans() { [ -f "$d/$1" ] || { echo "Error from server (NotFound): $1" >&2; exit 1; }; cat "$d/$1"; }
+ans() { # NAME: NAME.err is an oc error, a missing NAME is NotFound
+  [ ! -f "$d/$1.err" ] || { cat "$d/$1.err" >&2; exit 1; }
+  [ -f "$d/$1" ] || { echo "Error from server (NotFound): $1" >&2; exit 1; }; cat "$d/$1"; }
 case "$a" in
   *" whoami "*) echo admin ;;
   *" get applications.argoproj.io deployment-root "*)
@@ -34,6 +36,7 @@ case "$a" in
   *" get applications.argoproj.io "*) ans apps.json ;;
   *" get multiclusterhub "*) ans mch.json ;;
   *" get secret ai-grid-backend-git "*) ans console-secret ;;
+  *" get secret rhoai-quay-pull-secret -n rhoai-prerequisites "*) ans hub-pull-secret ;;
   *" get placements."*) echo '{"items":[]}' ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
@@ -41,7 +44,8 @@ STUB
 chmod +x "$T/bin/oc"
 
 # A fake for each script install.sh calls. bootstrap-hub.sh creates
-# deployment-root, Synced at HEAD; git-push.sh commits, as a push would.
+# deployment-root, Synced at HEAD, and the hub pull secret; git-push.sh
+# commits, as a push would, unless $STUB_DIR/nothing-to-push exists.
 fake() { # NAME [EXTRA]
   cat > "$D/scripts/$1" <<EOF
 #!/bin/bash
@@ -59,8 +63,9 @@ setup() { # NAME: a deployment repository $D and a stub directory $W, for one ca
   cp -R "$SRC/scripts" "$D/"
   for s in login.sh set-library.sh set-inputs.sh check-deployment.sh empty-catalog.sh \
       create-console-secrets.sh install-report.sh; do fake "$s"; done
-  fake git-push.sh 'git -C "$REPO" -c core.hooksPath=/dev/null commit -q --allow-empty -m pushed'
-  fake bootstrap-hub.sh "printf '%s' '$root_at_head' > \"\$STUB_DIR/deployment-root\""
+  fake git-push.sh 'if [ -f "$STUB_DIR/nothing-to-push" ]; then echo "nothing to push"
+    else git -C "$REPO" -c core.hooksPath=/dev/null commit -q --allow-empty -m pushed; fi'
+  fake bootstrap-hub.sh "printf '%s' '$root_at_head' > \"\$STUB_DIR/deployment-root\"; echo '{}' > \"\$STUB_DIR/hub-pull-secret\""
   printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n- {name: site-a, role: combined, location: us-east, api: "https://api.site-a.example.com:6443"}\n' > "$D/clusters.yaml"
   cat > "$D/install.env" <<'EOF'
 # The install's choices.
@@ -74,7 +79,8 @@ EOF
   for f in deployment-token catalog-token; do printf '%s\n' "$SENTINEL" > "$D/.config/$f"; done
   printf '{"auths":{"quay.io/rhoai":{"auth":"%s"}}}\n' "$SENTINEL" > "$D/.config/quay-auth.json"
   mkdir -p "$D/.config/hub"; printf "users:\n- user: {token: '%s'}\n" "$SENTINEL" > "$D/.config/hub/kubeconfig"
-  g -C "$D" init -q && g -C "$D" add clusters.yaml install.env && g -C "$D" commit -qm seed
+  mkdir -p "$D/root"; printf '%s\n' deploymentRevision=main 'catalogRepoURL=git@github.com:acme/catalog' > "$D/root/inputs.env"
+  g -C "$D" init -q && g -C "$D" add clusters.yaml install.env root && g -C "$D" commit -qm seed
   echo '{"items":[{"status":{"phase":"Running"}}]}' > "$W/mch.json"
   echo '{"items":[{"metadata":{"name":"acm"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"}}}]}' > "$W/apps.json"
   : > "$W/calls.log"; : > "$W/argv.log"
@@ -93,7 +99,7 @@ t "fresh: runs every hub step in order" eval '[ "$rc" = 0 ] &&
   [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;" ]'
 
 setup rerun
-printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secret"
+printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secret"; echo '{}' > "$W/hub-pull-secret"
 run
 t "rerun: every step already done" eval '[ "$rc" = 0 ] && ! grep -qE "^(bootstrap-hub|create-console-secrets)" "$W/calls.log" &&
   grep -q "^== bootstrap" <<<"$out"'
@@ -117,6 +123,53 @@ echo "error: the catalog https://github.com/acme/catalog.git (main) isn't empty"
 run
 t "catalog not empty: stops" eval '[ "$rc" = 1 ] && grep -q "isn.t empty" <<<"$out" &&
   grep -q "stopped at catalog" <<<"$out" && ! grep -q "^bootstrap-hub" "$W/calls.log"'
+
+setup partial
+printf '%s' "$root_at_head" > "$W/deployment-root"
+run
+t "partial bootstrap: deployment-root but no hub pull secret reruns bootstrap" eval '[ "$rc" = 0 ] &&
+  grep -q "^bootstrap-hub.sh" "$W/calls.log"'
+
+setup catalogurl
+sed -i.bak 's#^catalogRepoURL=.*#catalogRepoURL=https://github.com/acme/other.git#' "$D/root/inputs.env"; rm "$D/root/inputs.env.bak"
+run
+t "changed CATALOG_REPO_URL: stops and names both" eval '[ "$rc" = 1 ] &&
+  grep -q "https://github.com/acme/other.git" <<<"$out" && grep -q "https://github.com/acme/catalog.git" <<<"$out" &&
+  grep -q "root/inputs.env" <<<"$out" && ! grep -q "^git-push.sh" "$W/calls.log"'
+
+setup quoted
+printf '%s\n' 'CATALOG_REPO_URL="https://github.com/acme/catalog.git #frag" # a comment' >> "$D/install.env"
+sed -i.bak 's#^catalogRepoURL=.*#catalogRepoURL=https://github.com/acme/catalog.git \#frag#' "$D/root/inputs.env"; rm "$D/root/inputs.env.bak"
+run
+t "install.env: a quoted value keeps its #" eval '[ "$rc" = 0 ] &&
+  grep -qF "set-inputs.sh https://github.com/acme/catalog.git #frag" "$W/calls.log"'
+
+setup gatevalue
+echo 'GATE_ROOT_SECONDS=5x' >> "$D/install.env"
+run
+t "install.env: GATE_ROOT_SECONDS=5x stops" eval '[ "$rc" = 1 ] && grep -q "GATE_ROOT_SECONDS" <<<"$out" && [ ! -s "$W/calls.log" ]'
+
+setup ocerror
+printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/hub-pull-secret"
+echo "error: You must be logged in to the server (Unauthorized)" > "$W/console-secret.err"
+run
+t "oc error: stops with the make install line" eval '[ "$rc" = 1 ] && grep -q "Unauthorized" <<<"$out" &&
+  grep -qx "make install stopped at console-secrets. Fix the cause, then run make install again." <<<"$out"'
+
+setup branch
+g -C "$D" checkout -qb feature
+run
+t "checkout not on deploymentRevision: stops with both names" eval '[ "$rc" = 1 ] &&
+  grep -q "feature" <<<"$out" && grep -q "main" <<<"$out" && [ ! -s "$W/calls.log" ]'
+
+setup nopush
+printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secret"; echo '{}' > "$W/hub-pull-secret"
+: > "$W/nothing-to-push"
+before=$(git -C "$D" rev-parse HEAD)
+GATE_ROOT_SECONDS=0 run
+t "rerun, nothing to push: no new commit, hub-root gates on HEAD" eval '[ "$rc" = 0 ] &&
+  grep -q "nothing to push" <<<"$out" && [ "$(git -C "$D" rev-parse HEAD)" = "$before" ] &&
+  grep -q "gate hub-root: passed" <<<"$out"'
 
 t "no token value in any output" eval '[ -n "$all_out" ] && ! grep -qF "$SENTINEL" <<<"$all_out" &&
   ! grep -rqF "$SENTINEL" "$T"/*/repo/.install "$T"/*/stub/calls.log "$T"/*/stub/argv.log 2>/dev/null'

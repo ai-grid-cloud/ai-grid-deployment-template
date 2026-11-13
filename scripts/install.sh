@@ -16,13 +16,15 @@
 # The hub phase, each step printing "== STEP":
 #   login            scripts/login.sh --non-interactive
 #   inputs           scripts/set-library.sh LIBRARY_REVISION (when set),
-#                    scripts/set-inputs.sh CATALOG_REPO_URL, then
+#                    scripts/set-inputs.sh CATALOG_REPO_URL, a check that
+#                    root/inputs.env names the same catalog, then
 #                    scripts/git-push.sh of root/ and the tenant IdP settings
 #   catalog          scripts/empty-catalog.sh --check: the catalog repository
 #                    must hold nothing but its README; the install never empties it
 #   bootstrap        scripts/bootstrap-hub.sh, unless Application deployment-root
-#                    exists; then gate hub-root: deployment-root Synced at the
-#                    pushed commit
+#                    and the hub pull secret it seeds last
+#                    (rhoai-prerequisites/rhoai-quay-pull-secret) both exist;
+#                    then gate hub-root: deployment-root Synced at the pushed commit
 #   acm              gate hub-acm: the MultiClusterHub is Running
 #   console-secrets  scripts/create-console-secrets.sh, unless Secret
 #                    ai-grid-provider-console/ai-grid-backend-git exists
@@ -30,9 +32,13 @@
 #                    except those waiting for a site
 # Then the sites phase (sites_phase below), unless --hub-only.
 #
+# Before any cluster call it also checks that this checkout is on the branch
+# root/inputs.env names as deploymentRevision (default main), the one the hub
+# syncs.
+#
 # On a failed gate it runs scripts/install-report.sh, prints
 # "make install stopped at GATE. Fix the cause, then run make install again."
-# and exits 1. A failed step stops the same way, naming the step.
+# and exits 1. A failed step, or an oc error, stops the same way, naming the step.
 #
 # Usage: scripts/install.sh [--hub-only]
 set -Eeuo pipefail
@@ -46,7 +52,8 @@ case "${1:-}" in
 esac
 
 die() { echo "error: $*" >&2; exit 1; }
-step() { echo "== $1"; }
+current=""
+step() { current=$1; echo "== $1"; }
 stopped() { # NAME: a step or gate stopped the install
   echo "make install stopped at $1. Fix the cause, then run make install again."
   exit 1
@@ -73,13 +80,42 @@ read_install_env() { # reads $dir/install.env into exported variables; stops on 
       die "install.env line $n isn't NAME=VALUE"
     key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]}
     known_setting "$key" || die "install.env line $n: unknown setting $key"
-    value=${value%%[[:space:]]#*}                                          # a trailing comment
-    value=${value#"${value%%[![:space:]]*}"}; value=${value%"${value##*[![:space:]]}"}
-    [[ "$value" =~ ^\"(.*)\"$ || "$value" =~ ^\'(.*)\'$ ]] && value=${BASH_REMATCH[1]}
+    value=${value#"${value%%[![:space:]]*}"}
+    if [[ "$value" =~ ^\"([^\"]*)\"[[:space:]]*(#.*)?$ || "$value" =~ ^\'([^\']*)\'[[:space:]]*(#.*)?$ ]]; then
+      value=${BASH_REMATCH[1]}                                             # quoted: kept as is
+    else
+      value=${value%%[[:space:]]#*}                                        # a trailing comment
+      value=${value%"${value##*[![:space:]]}"}
+    fi
+    [[ "$key" != GATE_* || "$value" =~ ^[0-9]+$ ]] ||
+      die "install.env line $n: $key must be a number of seconds"
     case "$value" in *REQUIRED-*) left+="${left:+, }$key" ;; esac
     printf -v "$key" '%s' "$value"; export "${key?}"
   done < "$f"
   [ -z "$left" ] || die "set these in install.env: $left"
+}
+
+inputs_value() { # NAME: its value in root/inputs.env, empty when unset
+  [ -f "$dir/root/inputs.env" ] && sed -n "s/^$1=//p" "$dir/root/inputs.env" | tail -n1 || true
+}
+
+https_url() { # a git remote URL -> https://HOST/OWNER/REPO.git, as scripts/set-inputs.sh writes it
+  local u=${1%/}
+  case "$u" in
+    git@*:*) u="${u#git@}"; u="https://${u/://}" ;;
+    ssh://git@*) u="https://${u#ssh://git@}" ;;
+  esac
+  u=$(sed -E 's#^https://[^@/]+@#https://#' <<<"$u")
+  [ "${u%.git}" = "$u" ] && u="$u.git"
+  echo "$u"
+}
+
+check_branch() { # this checkout must be on deploymentRevision, the branch the hub syncs
+  local want branch
+  want=$(inputs_value deploymentRevision); want=${want:-main}
+  branch=$(git -C "$dir" symbolic-ref --quiet --short HEAD) || branch="a detached HEAD"
+  [ "$branch" = "$want" ] ||
+    die "this checkout is on $branch, but root/inputs.env's deploymentRevision is $want, the branch the hub syncs: check out $want, or set deploymentRevision"
 }
 
 abs_path() { # PATH: absolute, relative to this repository; ~/ is your home
@@ -120,7 +156,8 @@ exists() { # oc get ARG...: 0 when the object exists, 1 when not; stops on an oc
   local out rc
   out=$(oc_read get "$@" -o name) && return 0 || rc=$?
   [ "$rc" = 1 ] && return 1
-  die "can't read the hub: ${out#oc error: }"
+  echo "error: can't read the hub: ${out#oc error: }" >&2
+  stopped "$current"
 }
 
 step_login() {
@@ -133,6 +170,12 @@ step_inputs() {
   step inputs
   [ -z "${LIBRARY_REVISION:-}" ] || run_step inputs set-library.sh "$LIBRARY_REVISION"
   run_step inputs set-inputs.sh "$CATALOG_REPO_URL"
+  local have want
+  have=$(https_url "$(inputs_value catalogRepoURL)") want=$(https_url "$CATALOG_REPO_URL")
+  if [ "$have" != "$want" ]; then
+    echo "error: root/inputs.env names the catalog $have, but install.env's CATALOG_REPO_URL is $want; set-inputs.sh keeps a value that's set. Edit catalogRepoURL in root/inputs.env, or delete that line so set-inputs.sh writes it again." >&2
+    stopped inputs
+  fi
   run_step inputs git-push.sh "install: inputs and library pin" root/ tenant-idp/manifests/settings.yaml
   pushed=$(git -C "$dir" rev-parse HEAD)
 }
@@ -144,8 +187,12 @@ step_catalog() {
 
 step_bootstrap() {
   step bootstrap
-  if exists applications.argoproj.io deployment-root -n openshift-gitops; then
-    echo "deployment-root exists: the hub is bootstrapped."
+  # bootstrap-hub.sh seeds the pull secret (the library's
+  # apps/rhoai-prerequisites/create-hub-secret.sh) after it applies
+  # deployment-root, so both must exist for a finished bootstrap.
+  if exists applications.argoproj.io deployment-root -n openshift-gitops &&
+      exists secret rhoai-quay-pull-secret -n rhoai-prerequisites; then
+    echo "deployment-root and the hub pull secret exist: the hub is bootstrapped."
   else
     run_step bootstrap bootstrap-hub.sh
   fi
@@ -194,6 +241,7 @@ sites_phase() {
 cd "$dir"
 read_install_env
 check_install_env
+check_branch
 . "$here/clusters.sh"
 clusters_load "$dir"
 . "$here/gates.sh"   # after install.env, so its GATE_* values win
