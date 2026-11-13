@@ -62,7 +62,7 @@ fi
 export KUBECONFIG; KUBECONFIG=$(cluster_kubeconfig "$hub")
 route_host() { oc get route "$2" -n "$1" -o json 2>/dev/null | jq -r '.spec.host // empty' 2>/dev/null || true; }
 url() { [ -z "$1" ] || echo "https://$1"; }
-oc_read() { # OC_ARG...: oc's output; empty when the resource or its type doesn't
+ready_read() { # OC_ARG...: oc's output; empty when the resource or its type doesn't
   # exist. Any other error prints oc's last stderr line and returns 1.
   local out err rc=0
   err=$(mktemp); out=$(oc "$@" 2>"$err") || rc=$?
@@ -73,7 +73,7 @@ oc_read() { # OC_ARG...: oc's output; empty when the resource or its type doesn'
 }
 service_ready() { # NAMESPACE NAME: the Service has at least one ready endpoint
   local out n
-  out=$(oc_read get endpointslices.discovery.k8s.io -n "$1" -l "kubernetes.io/service-name=$2" -o json) ||
+  out=$(ready_read get endpointslices.discovery.k8s.io -n "$1" -l "kubernetes.io/service-name=$2" -o json) ||
     { echo "Service $1/$2: $out"; return 1; }
   n=$(jq '[.items[]?.endpoints[]? | select(.conditions.ready != false)] | length' <<<"${out:-{\}}" 2>/dev/null || echo 0)
   [ "${n:-0}" -gt 0 ] || { echo "Service $1/$2: no ready endpoint"; return 1; }
@@ -127,7 +127,7 @@ sites_json='[]' root_checked=""
 for name in $(site_names); do
   role=$(cluster_field "$name" role)
   check "site $name: ManagedCluster available" managedcluster_available "$name"
-  if ! mc=$(oc_read get managedclusters.cluster.open-cluster-management.io "$name" -o json); then
+  if ! mc=$(ready_read get managedclusters.cluster.open-cluster-management.io "$name" -o json); then
     fail "site $name: can't read its labels: $mc"
   else
     labels=$(jq -r '.metadata.labels // {} | keys[] | select(startswith("ai-grid/") or . == "location")' <<<"${mc:-{\}}" 2>/dev/null || true)
@@ -138,7 +138,7 @@ for name in $(site_names); do
   domain=""
   if login=$(cluster_login_ok "$name" 2>&1); then
     sk=$(cluster_kubeconfig "$name")
-    if ! dsc=$(KUBECONFIG=$sk oc_read get datascienceclusters -A -o name); then
+    if ! dsc=$(KUBECONFIG=$sk ready_read get datascienceclusters -A -o name); then
       fail "site $name: can't read its DataScienceClusters: $dsc"
     elif [ -z "$dsc" ]; then ok "site $name: no DataScienceCluster"
     else fail "site $name: has a DataScienceCluster ($(echo $dsc)): OpenShift AI comes with the Add, not the install"; fi
