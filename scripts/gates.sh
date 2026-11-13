@@ -7,22 +7,33 @@
 #       runs CHECK ARG... every GATE_INTERVAL seconds (default 15) until it
 #       exits 0 or TIMEOUT_SECONDS pass. Prints "gate NAME: waiting (REASON)"
 #       at most once a minute, REASON being the check's last line of output,
-#       and "gate NAME: passed after Ns". On timeout prints
+#       and "gate NAME: passed after Ns". On passing it removes
+#       .install/failed-gate, so a passing rerun leaves no stale gate for
+#       scripts/install-report.sh. On timeout, or after GATE_ERROR_LIMIT
+#       consecutive oc errors (default 4), prints
 #       "gate NAME: FAILED after Ns: REASON", writes NAME to
 #       .install/failed-gate, and returns 1. .install/ is in the deployment
 #       repository that clusters_load read (scripts/clusters.sh), or in the
 #       current directory when none was loaded.
 #
-# Checks: each prints one reason line when not ready, and returns 0 when ready.
+# Checks: each prints one reason line and returns 0 when ready, 1 when not
+# ready, and 2 when an oc call failed (an expired login, say): the reason is
+# then "oc error: " and the last line of oc's stderr. A missing object, or a
+# resource type the cluster doesn't have yet, is not ready, not an error.
 #   app_healthy NAME             Argo CD Application NAME is Synced and Healthy
-#   apps_healthy [EXCEPT...]     every Application is Synced and Healthy, except
-#                                the names given and those waiting for a site
-#   root_synced_to REV           Application deployment-root is Synced at REV
+#   apps_healthy [--strict] [EXCEPT...]
+#                                every Application is Synced and Healthy, except
+#                                the names given and those waiting for a site;
+#                                with --strict, those waiting for a site count
+#                                as not ready
+#   root_synced_to REV           Application deployment-root is Synced at REV,
+#                                a full commit SHA (Argo CD reports full SHAs)
 #   mch_running                  the MultiClusterHub's phase is Running
 #   managedcluster_available NAME  ManagedCluster NAME is joined and available
 #   route_answers NAMESPACE NAME [CODES]  https on the Route's host answers one
 #                                of CODES (default 200 302 401 403), with the
-#                                system's CA trust
+#                                system's CA trust; with no answer, the reason
+#                                is curl's error
 #
 # Also used by scripts/status.sh, so the two agree on what waits for a site:
 #   waits_for_site_names         the Applications that wait for a site by name
@@ -33,6 +44,7 @@
 #
 # Time limits, in seconds, each overridable from the environment (install.env):
 : "${GATE_INTERVAL:=15}"
+: "${GATE_ERROR_LIMIT:=4}"            # consecutive oc errors before a gate fails
 : "${GATE_ROOT_SECONDS:=600}"         # deployment-root Synced
 : "${GATE_MCH_SECONDS:=1800}"         # MultiClusterHub Running
 : "${GATE_HUB_APPS_SECONDS:=3600}"    # every hub Application
@@ -42,16 +54,19 @@
 
 gate() { # NAME TIMEOUT_SECONDS CHECK [ARG...]
   local name=$1 timeout=$2; shift 2
-  local start=$SECONDS elapsed out reason="" shown=-60 dir
+  local start=$SECONDS elapsed out rc reason="" shown=-60 errors=0
+  local dir="${CLUSTERS_DIR:-$PWD}/.install"
   while :; do
-    if out=$("$@"); then
+    out=$("$@") && rc=0 || rc=$?
+    if [ "$rc" = 0 ]; then
+      rm -f "$dir/failed-gate"
       echo "gate $name: passed after $((SECONDS - start))s"; return 0
     fi
+    [ "$rc" = 2 ] && errors=$((errors + 1)) || errors=0
     reason=$(grep . <<<"$out" | tail -n 1 || true)
     elapsed=$((SECONDS - start))
-    if [ "$elapsed" -ge "$timeout" ]; then
+    if [ "$elapsed" -ge "$timeout" ] || [ "$errors" -ge "$GATE_ERROR_LIMIT" ]; then
       echo "gate $name: FAILED after ${elapsed}s: ${reason:-no reason given}"
-      dir="${CLUSTERS_DIR:-$PWD}/.install"
       mkdir -p "$dir" && echo "$name" > "$dir/failed-gate"
       return 1
     fi
@@ -96,50 +111,72 @@ app_rows() { # APPS_JSON UNMATCHED
          then "site" else "-" end)] | @tsv' <<<"$1" 2>/dev/null
 }
 
+# oc_read ARG...: runs oc ARG... and prints its output. When oc fails it
+# returns 1 with no output if the object or its resource type doesn't exist,
+# and otherwise prints "oc error: " and the last line of oc's stderr and
+# returns 2. Tokens never travel in argv, so that stderr holds no secret.
+oc_read() {
+  local out err rc
+  err=$(mktemp)
+  out=$(oc "$@" 2>"$err") && rc=0 || rc=$?
+  if [ "$rc" != 0 ]; then
+    if grep -qE 'NotFound|the server doesn.t have a resource type' "$err"; then rc=1
+    else echo "oc error: $(grep . "$err" | tail -n 1)"; rc=2; fi
+    rm -f "$err"; return "$rc"
+  fi
+  rm -f "$err"; printf '%s\n' "$out"
+}
+
 app_healthy() { # NAME
-  local s
-  s=$(oc get applications.argoproj.io "$1" -n openshift-gitops -o json 2>/dev/null |
-    jq -r '"\(.status.sync.status // "Unknown") \(.status.health.status // "Unknown")"' 2>/dev/null)
+  local json s
+  json=$(oc_read get applications.argoproj.io "$1" -n openshift-gitops -o json) ||
+    { [ $? = 2 ] && { echo "$json"; return 2; }; echo "Application $1: not created yet"; return 1; }
+  s=$(jq -r '"\(.status.sync.status // "Unknown") \(.status.health.status // "Unknown")"' <<<"$json" 2>/dev/null)
   [ -n "$s" ] || { echo "Application $1: not created yet"; return 1; }
   [ "$s" = "Synced Healthy" ] || { echo "Application $1: $s"; return 1; }
 }
 
-apps_healthy() { # [EXCEPT...]
-  local json rows name sync health why bad="" n=0
-  json=$(oc get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null) ||
-    { echo "Applications: can't read them"; return 1; }
+apps_healthy() { # [--strict] [EXCEPT...]
+  local json rows name sync health why bad="" n=0 strict=""
+  [ "${1:-}" != --strict ] || { strict=1; shift; }
+  json=$(oc_read get applications.argoproj.io -n openshift-gitops -o json) ||
+    { [ $? = 2 ] && { echo "$json"; return 2; }; echo "Applications: can't read them"; return 1; }
   rows=$(app_rows "$json" "$(unmatched_placements || true)" || true)
   [ -n "$rows" ] || { echo "Applications: none yet"; return 1; }
   while IFS=$'\t' read -r name sync health why; do
     [ "$sync $health" = "Synced Healthy" ] && continue
-    [ "$why" = site ] && continue
+    [ "$why" = site ] && [ -z "$strict" ] && continue
     case " $* " in *" $name "*) continue ;; esac
     n=$((n + 1)); bad+="${bad:+, }$name ($sync $health)"
   done <<<"$rows"
   [ -z "$bad" ] || { echo "$n Application(s) not Synced and Healthy: $bad"; return 1; }
 }
 
+# REV must be a full commit SHA: it's compared as a string with the
+# revisions Argo CD reports, which are full SHAs, so a short SHA never matches.
 root_synced_to() { # REV
-  local s
-  s=$(oc get applications.argoproj.io deployment-root -n openshift-gitops -o json 2>/dev/null |
-    jq -r --arg r "$1" '(.status.sync.status // "Unknown") as $s
+  local json s
+  json=$(oc_read get applications.argoproj.io deployment-root -n openshift-gitops -o json) ||
+    { [ $? = 2 ] && { echo "$json"; return 2; }; echo "Application deployment-root: not created yet"; return 1; }
+  s=$(jq -r --arg r "$1" '(.status.sync.status // "Unknown") as $s
       | ([.status.sync.revision // empty, (.status.sync.revisions[]? // empty)]) as $revs
       | if $s == "Synced" and ($revs | index($r)) then "ok"
-        else "\($s) at \(($revs | join(",")) | if . == "" then "no revision" else . end)" end' 2>/dev/null)
+        else "\($s) at \(($revs | join(",")) | if . == "" then "no revision" else . end)" end' <<<"$json" 2>/dev/null)
   [ -n "$s" ] || { echo "Application deployment-root: not created yet"; return 1; }
   [ "$s" = ok ] || { echo "Application deployment-root: $s, not Synced at $1"; return 1; }
 }
 
 mch_running() {
-  local p
-  p=$(oc get multiclusterhub -A -o json 2>/dev/null | jq -r '.items[0].status.phase // empty' 2>/dev/null)
+  local json p=""
+  json=$(oc_read get multiclusterhub -A -o json) || { [ $? = 2 ] && { echo "$json"; return 2; }; }
+  [ -z "$json" ] || p=$(jq -r '.items[0].status.phase // empty' <<<"$json" 2>/dev/null)
   [ "$p" = Running ] || { echo "MultiClusterHub: ${p:-not created yet}"; return 1; }
 }
 
 managedcluster_available() { # NAME
   local json c s
-  json=$(oc get managedclusters.cluster.open-cluster-management.io "$1" -o json 2>/dev/null) ||
-    { echo "ManagedCluster $1: not created yet"; return 1; }
+  json=$(oc_read get managedclusters.cluster.open-cluster-management.io "$1" -o json) ||
+    { [ $? = 2 ] && { echo "$json"; return 2; }; echo "ManagedCluster $1: not created yet"; return 1; }
   for c in ManagedClusterJoined ManagedClusterConditionAvailable; do
     s=$(jq -r --arg c "$c" '[.status.conditions[]? | select(.type == $c) | .status][0] // "Unknown"' <<<"$json" 2>/dev/null)
     [ "$s" = True ] || { echo "ManagedCluster $1: $c is ${s:-Unknown}"; return 1; }
@@ -147,11 +184,16 @@ managedcluster_available() { # NAME
 }
 
 route_answers() { # NAMESPACE NAME [CODES]
-  local ns=$1 name=$2 host code codes; shift 2
+  local ns=$1 name=$2 json host="" code codes err why; shift 2
   codes=" ${*:-200 302 401 403} "
-  host=$(oc get route "$name" -n "$ns" -o json 2>/dev/null | jq -r '.spec.host // empty' 2>/dev/null)
+  json=$(oc_read get route "$name" -n "$ns" -o json) || { [ $? = 2 ] && { echo "$json"; return 2; }; }
+  [ -z "$json" ] || host=$(jq -r '.spec.host // empty' <<<"$json" 2>/dev/null)
   [ -n "$host" ] || { echo "Route $ns/$name: not created yet"; return 1; }
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://$host/" 2>/dev/null) || true
+  err=$(mktemp)
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "https://$host/" 2>"$err") || true
+  why=$(grep . "$err" | tail -n 1 || true); rm -f "$err"
   case "$codes" in *" ${code:-000} "*) return 0 ;; esac
-  echo "Route $ns/$name: https://$host/ answered ${code:-000}, not one of${codes% }"; return 1
+  if [ -n "$why" ]; then echo "Route $ns/$name: https://$host/ answered ${code:-000}: $why"
+  else echo "Route $ns/$name: https://$host/ answered ${code:-000}, not one of${codes% }"; fi
+  return 1
 }
