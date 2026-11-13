@@ -19,8 +19,8 @@ flags differ from the library script's of the same name.
 2. Click **Clusters**. You should see your site with AI Grid status **Provisioned**, its role and its location. The
    hub (`local-cluster`) shows **Not added**, which is expected.
 
-The **Monitoring** page shows no dashboards, because observability isn't selected
-([troubleshooting](troubleshooting.md#the-monitoring-page-cant-load-dashboards)).
+The **Monitoring** page shows the hub's dashboards. If it can't load them, see
+[troubleshooting](troubleshooting.md#the-monitoring-page-cant-load-dashboards).
 
 ## 2. Create an organization
 
