@@ -8,13 +8,16 @@ total=0 fails=0
 SENTINEL='sha256~SENTINEL'
 
 # The stub oc logs its arguments. whoami answers admin only when $KUBECONFIG
-# holds the sentinel token line, as a cluster that accepts only that token.
+# holds the token $STUB_TOKEN (default the sentinel), as a cluster that accepts
+# only that token. With STUB_X509 set, whoami fails as on an untrusted API certificate.
 mkdir -p "$T/bin"
 cat > "$T/bin/oc" <<'STUB'
 #!/bin/bash
 echo "$*" >> "$STUB_DIR/argv.log"; a=" $* "
 case "$a" in
-  *" whoami "*) grep -qF 'token: sha256~SENTINEL' "${KUBECONFIG:-/dev/null}" 2>/dev/null && echo admin ||
+  *" whoami "*) [ -z "${STUB_X509:-}" ] || { echo "error: tls: failed to verify certificate: x509: certificate signed by unknown authority" >&2; exit 1; }
+               grep -qF "token: '${STUB_TOKEN:-sha256~SENTINEL}'" "${KUBECONFIG:-/dev/null}" 2>/dev/null ||
+               grep -qxF "    token: ${STUB_TOKEN:-sha256~SENTINEL}" "${KUBECONFIG:-/dev/null}" 2>/dev/null && echo admin ||
                 { echo "error: You must be logged in to the server (Unauthorized)" >&2; exit 1; } ;;
   *" login "*) echo "stub oc: login $*" ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
@@ -78,5 +81,22 @@ t "token never in argv" never_in_argv
 new_repo
 run -- hub
 t "without --non-interactive: unchanged" grep -qx 'login --server https://api.hub.example.com:6443 --web' "$W/argv.log"
+
+new_repo; mkdir -p "$D/.config/hub"; printf '%s\n' "$SENTINEL" > "$D/.config/hub/token"
+run STUB_X509=1 -- --non-interactive hub
+x509() { [ "$rc" = 1 ] && grep -q "certificate problem" <<<"$out" && grep -q "x509" <<<"$out" && ! grep -q replace <<<"$out"; }
+t "x509 from whoami: says certificate, not replace the token" x509
+
+new_repo; mkdir -p "$D/.config/hub"; printf '%s\n' "$SENTINEL" > "$D/.config/hub/token"; : > "$D/.config/hub/ca.crt"
+run -- --non-interactive hub
+t "ca.crt: the kubeconfig names it" grep -qx "    certificate-authority: $D/.config/hub/ca.crt" "$D/.config/hub/kubeconfig"
+
+new_repo; mkdir -p "$D/.config/hub"; printf '%s\n' 12345 > "$D/.config/hub/token"
+run STUB_TOKEN=12345 -- --non-interactive hub
+t "all-digit token: written as a quoted string" grep -qx "    token: '12345'" "$D/.config/hub/kubeconfig"
+
+new_repo; mkdir -p "$D/.config/hub"; printf '%s\r\n' "$SENTINEL" > "$D/.config/hub/token"
+run -- --non-interactive hub
+t "token file ending in CRLF: works" working_kubeconfig hub https://api.hub.example.com:6443
 
 echo "login tests: $((total-fails)) ok, $fails failed"; exit "$fails"
