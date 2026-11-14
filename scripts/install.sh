@@ -37,7 +37,8 @@
 #                    one, scripts/add-site.sh NAME; with several, the one named
 #                    by SITE_ISSUER_<NAME> in install.env (the site's name upper-
 #                    cased, - as _, so site-b is SITE_ISSUER_SITE_B); with none,
-#                    it stops. Then one scripts/git-push.sh of apps/ sites/
+#                    it stops. A site whose files exist keeps them, with no
+#                    issuer check. Then one scripts/git-push.sh of apps/ sites/
 #                    values/clusters/ and gate hub-root again at the pushed
 #                    commit. Inference sites need nothing.
 # Then for each site in clusters.yaml order:
@@ -263,8 +264,14 @@ site_issuers() { # NAME: the site's DNS-01 ClusterIssuers, one per line (add-sit
   jq -r '.items[] | select(any(.spec.acme.solvers[]?; .dns01 != null)) | .metadata.name' <<<"$json"
 }
 
+site_files_present() { # NAME: the three files add-site.sh writes all exist, so it reads no issuer
+  [ -e "$dir/apps/$1-maas-tls.yaml" ] && [ -e "$dir/sites/$1/maas-tls/certificate.yaml" ] &&
+    [ -e "$dir/values/clusters/$1/rhoai.yaml" ]
+}
+
 # The MaaS files of every ingress and combined site, committed, pushed and
-# synced to the hub, so a later console Add of the site finds them.
+# synced to the hub, so a later console Add of the site finds them. A site
+# whose files exist keeps them, as add-site.sh does, with no issuer check.
 step_site_files() {
   local name role issuers var chosen n any=""
   step site-files
@@ -272,6 +279,7 @@ step_site_files() {
     role=$(cluster_field "$name" role)
     case "$role" in ingress|combined) ;; *) continue ;; esac
     any=1
+    if site_files_present "$name"; then run_step site-files add-site.sh "$name"; continue; fi
     issuers=$(site_issuers "$name") || stopped site-files
     n=$(grep -c . <<<"$issuers" || true)
     var="SITE_ISSUER_$(tr 'a-z-' 'A-Z_' <<<"$name")"

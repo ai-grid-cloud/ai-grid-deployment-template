@@ -247,6 +247,16 @@ t "two issuers and none chosen: stops and lists them" eval '[ "$rc" = 1 ] &&
   grep -q "acme-staging" <<<"$out" && grep -q "acme-prod" <<<"$out" && grep -q "SITE_ISSUER_SITE_A" <<<"$out" &&
   grep -q "stopped at site-files" <<<"$out" && ! grep -qE "^(add-site|import-site)" "$W/calls.log"'
 
+setup filesthere
+issuers site-a dns01:acme-staging dns01:acme-prod
+mkdir -p "$D/apps" "$D/sites/site-a/maas-tls" "$D/values/clusters/site-a"
+: > "$D/apps/site-a-maas-tls.yaml"; : > "$D/sites/site-a/maas-tls/certificate.yaml"; : > "$D/values/clusters/site-a/rhoai.yaml"
+g -C "$D" add apps sites values && g -C "$D" commit -qm "site-a files"
+run
+t "rerun, site files already there: no issuer check, even with several" eval '[ "$rc" = 0 ] &&
+  grep -qx "add-site.sh site-a" "$W/calls.log" && ! grep -q "clusterissuers" "$W/argv.log" &&
+  grep -q "^import-site.sh site-a --yes" "$W/calls.log"'
+
 setup sitefiles; two_sites
 printf '%s\n' '- {name: site-c, role: ingress, location: eu, api: "https://api.site-c.example.com:6443"}' >> "$D/clusters.yaml"
 g -C "$D" commit -qam site-c
