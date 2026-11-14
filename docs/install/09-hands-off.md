@@ -144,7 +144,7 @@ The steps, in order:
 4. **`bootstrap`:** OpenShift GitOps and your root on the hub ([page 3](03-prepare-hub.md)).
 5. **`acm`:** waits until ACM is running.
 6. **`console-secrets`:** the console's Secrets ([page 4](04-hub-components.md#1-create-the-consoles-secrets)).
-7. **`hub-apps`:** waits until every hub Application is `Synced` and `Healthy`.
+7. **`hub-apps`:** waits until every hub Application is `Synced` and `Healthy`, except those that wait for a site to join the grid.
 8. **`site-files`:** for each `ingress` or `combined` site, its values and MaaS certificate files
    ([page 6, part 1](06-join-grid.md#1-add-the-sites-values)), pushed.
 9. **`site NAME`:** for each site, the infrastructure check and the import into ACM ([page 5](05-prepare-site.md)).
