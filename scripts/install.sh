@@ -26,8 +26,8 @@
 #                    (rhoai-prerequisites/rhoai-quay-pull-secret) both exist;
 #                    then gate hub-root: deployment-root Synced at the pushed commit
 #   acm              gate hub-acm: the MultiClusterHub is Running
-#   console-secrets  scripts/create-console-secrets.sh, unless Secret
-#                    ai-grid-provider-console/ai-grid-backend-git exists
+#   console-secrets  scripts/create-console-secrets.sh, on every run: it's
+#                    safe to rerun
 #   hub-apps         gate hub-apps: every hub Application Synced and Healthy,
 #                    except those waiting for a site
 # Then the sites phase, unless --hub-only. First, what a later console Add needs
@@ -232,11 +232,7 @@ step_acm() {
 
 step_console_secrets() {
   step console-secrets
-  if exists secret ai-grid-backend-git -n ai-grid-provider-console; then
-    echo "The console's Secrets exist."
-  else
-    run_step console-secrets create-console-secrets.sh
-  fi
+  run_step console-secrets create-console-secrets.sh
 }
 
 step_hub_apps() {
@@ -317,10 +313,10 @@ step_site_files() {
 }
 
 # Each site from clusters.yaml, in file order, then the hub's Applications
-# again. hub-apps-final still lets through the Applications that wait for a
-# site (no --strict): the ready check (scripts/ready-check.sh) is the strict
-# one. The acceptance run (Z1) records which Applications, if any, still wait
-# for a site at this point.
+# again. hub-apps-final, like the ready check (scripts/ready-check.sh), lets
+# through the Applications that wait for a site: no site is in the grid yet.
+# The acceptance run (Z1) records which Applications, if any, still wait for a
+# site at this point.
 sites_phase() {
   local name
   step_site_files

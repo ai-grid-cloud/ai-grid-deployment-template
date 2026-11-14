@@ -7,7 +7,8 @@ readiness checks instead of your judgement.
 When it finishes, you have:
 
 - the hub, fully installed: ACM, Argo CD, Keycloak, the MaaS database, the provider console and monitoring, with
-  every hub Application `Synced` and `Healthy`;
+  every hub Application `Synced` and `Healthy`, except those that
+  [wait for a site to join the grid](04-hub-components.md#2-verify). They turn healthy after you add the first site;
 - every site in `clusters.yaml` imported into the hub's ACM and available, but **not added to the grid**: no
   `ai-grid/` or `location` label and no OpenShift AI on it;
 - no organizations, models or subscriptions;
@@ -24,8 +25,9 @@ job can supply the same files.
 ### Clusters
 
 You need the clusters from [before you start](01-before-you-start.md): a hub and one or more sites on OpenShift 4.21
-or later, with nothing of AI Grid on them, and the same network and tools. Each site can have any role: `combined`,
-`ingress` or `inference`.
+or later, with nothing of AI Grid on them, and the same network and tools. Each site has the role `combined`,
+`ingress` or `inference`, and at least one site must be `ingress` or `combined`: `scripts/set-inputs.sh` needs one for
+the tenant portal's sign-in redirect.
 
 If a site has the role `ingress` or `combined`, it needs a cert-manager ClusterIssuer that issues publicly trusted
 certificates by DNS-01, for its MaaS certificate. `make install` checks for one and stops if there's none. An
@@ -175,10 +177,12 @@ make install
 ```
 
 Every step first checks whether its work is done and skips it if so, so the install picks up where it stopped. On a
-finished install, a second run changes nothing and passes the ready check again. `.install/report.txt` can quote
-your manifests: read it before you share it.
+finished install, a second run changes nothing and passes the ready check again, but only before your tests start.
+Once a test adds a site to the grid or creates an organization, model or subscription, the `catalog` step and the ready
+check's label and content checks fail by design. `.install/report.txt` can quote your manifests: read it before you
+share it.
 
-To check the end state again at any time, without changing anything, run:
+To check the end state again, without changing anything, before your tests start, run:
 
 ```sh
 make ready-check
@@ -203,7 +207,8 @@ The ready check writes `.install/outputs.json`, which git ignores. It has these 
 The provider-admin token is in `.config/provider-admin-token`. It belongs to ServiceAccount
 `ai-grid-test/provider-admin`, which is bound to the console's ClusterRole `ai-grid-provider-admin`, so a test suite
 can call the console's API with no browser. Send it as an `Authorization: Bearer` header from a file, never on a
-command line. It lasts 168 hours, or `PROVIDER_ADMIN_TOKEN_DURATION` from `install.env`. To get a new one, run:
+command line. It lasts 168 hours, or `PROVIDER_ADMIN_TOKEN_DURATION`: set it in `install.env` for `make install`, or
+in the environment for `make provider-admin`. To get a new one, run:
 
 ```sh
 make provider-admin

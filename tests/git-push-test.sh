@@ -75,4 +75,14 @@ read -r helper mode < "$T/askpass.path" || true
 t "  ... GIT_ASKPASS gives the token from the file, mode 700, removed after" \
   eval '[ "$(cat "$T/askpass.out")" = "$SENTINEL" ] && [ "$mode" = 700 ] && [ ! -e "$helper" ] && ! grep -qF "$SENTINEL" "$helper" 2>/dev/null'
 
+# A fresh CI runner: no git identity at all (user.useConfigOnly stops git
+# guessing one from the host name).
+D="$T/noid"; g clone -q "$T/origin.git" "$D"; g -C "$D" config core.hooksPath /dev/null
+mkdir -p "$D/.config"; printf '%s\n' "$SENTINEL" > "$D/.config/deployment-token"; echo noid > "$D/site.yaml"
+out=$(cd "$D" && env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL \
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.useConfigOnly GIT_CONFIG_VALUE_0=true \
+  PATH="$T/bin:$PATH" DEPLOYMENT_TOKEN_FILE=.config/deployment-token scripts/git-push.sh "no identity" site.yaml 2>&1) && rc=0 || rc=$?
+t "no git identity: commits as AI Grid install and pushes" \
+  eval '[ "$rc" = 0 ] && [ "$(g -C "$T/origin.git" log -1 --format="%s|%an|%ae" main)" = "no identity|AI Grid install|ai-grid-install@localhost" ]'
+
 echo "git-push tests: $((total-fails)) ok, $fails failed"; exit "$fails"

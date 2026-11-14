@@ -5,15 +5,17 @@
 #   scripts/ready-check.sh
 #
 # Inputs: clusters.yaml, each cluster's login (.config/NAME/kubeconfig, from make
-# login), root/kustomization.yaml (the library pin), origin's main branch (read
-# with git ls-remote and git fetch, with no prompt; when DEPLOYMENT_TOKEN_FILE
-# names a readable file, git reads the token from it through a temporary
-# GIT_ASKPASS helper), and .config/provider-admin-token (scripts/provider-admin.sh)
-# when it exists.
+# login), root/kustomization.yaml (the library pin), the branch root/inputs.env
+# names as deploymentRevision (default main) on origin, read with git ls-remote
+# and git fetch, with no prompt (when DEPLOYMENT_TOKEN_FILE, default
+# .config/deployment-token, names a readable file, git reads the token from it
+# through a temporary GIT_ASKPASS helper), and .config/provider-admin-token
+# (scripts/provider-admin.sh) when it exists.
 #
 # It prints one line per assertion, OK, FAIL or WARN, and exits 1 on any FAIL:
-#   - every hub Application is Synced and Healthy, none excepted, not even those
-#     that wait for a site;
+#   - every hub Application is Synced and Healthy, except those that wait for a
+#     site to join the grid (scripts/gates.sh, app_rows), which a WARN line lists:
+#     they're expected until a site is added;
 #   - the MultiClusterHub is Running;
 #   - the provider console, Keycloak and the Thanos query Routes answer, and the
 #     Perses Service has a ready endpoint (it has no Route: the console reaches it
@@ -22,9 +24,9 @@
 #   - each site is an available ManagedCluster with no ai-grid/ or location
 #     label, and has no DataScienceCluster: imported, not added to the grid (a
 #     missing resource type counts as none; any other API error is a FAIL);
-#   - each ingress or combined site has its files here and on origin's main
-#     (make site-add),
-#     deployment-root is Synced at origin's main, and the certificate's issuer is
+#   - each ingress or combined site has its files here and on origin's
+#     deploymentRevision (make site-add), deployment-root is Synced at that
+#     branch's head, and the certificate's issuer is
 #     a DNS-01 ClusterIssuer on the site;
 #   - the console lists no organizations, models or subscriptions (WARN, not
 #     checked, without the provider-admin token).
@@ -79,11 +81,14 @@ service_ready() { # NAMESPACE NAME: the Service has at least one ready endpoint
   [ "${n:-0}" -gt 0 ] || { echo "Service $1/$2: no ready endpoint"; return 1; }
 }
 
-# origin's main, read from the remote, never from a local ref that may be old.
+# origin's deploymentRevision, read from the remote, never from a local ref that
+# may be old.
 export GIT_TERMINAL_PROMPT=0
 gitc() { git -C "$dir" -c credential.helper= "$@"; }
-token_file=${DEPLOYMENT_TOKEN_FILE:-}
-[ -z "$token_file" ] || case "$token_file" in /*) ;; *) token_file="$dir/$token_file" ;; esac
+token_file=${DEPLOYMENT_TOKEN_FILE:-.config/deployment-token}
+case "$token_file" in /*) ;; *) token_file="$dir/$token_file" ;; esac
+branch=$( { [ -f "$dir/root/inputs.env" ] && sed -n 's/^deploymentRevision=//p' "$dir/root/inputs.env" | tail -n1; } || true)
+branch=${branch:-main}
 main_sha="" main_err="" main_read=""
 read_main() { # sets main_sha, or main_err; reads origin once
   [ -z "$main_read" ] || return 0; main_read=1
@@ -93,19 +98,24 @@ read_main() { # sets main_sha, or main_err; reads origin once
     # The helper holds the file's path, never its contents.
     printf '#!/bin/bash\ncase "$1" in Username*) echo x-access-token ;; *) head -n1 %q ;; esac\n' "$token_file" > "$askpass"
   fi
-  if ! out=$(GIT_ASKPASS=${askpass:-${GIT_ASKPASS:-}} gitc ls-remote origin refs/heads/main 2>&1); then
+  if ! out=$(GIT_ASKPASS=${askpass:-${GIT_ASKPASS:-}} gitc ls-remote origin "refs/heads/$branch" 2>&1); then
     main_err="can't read origin: $(grep . <<<"$out" | tail -n 1)"
-  elif [ -z "$out" ]; then main_err="origin has no main branch"
+  elif [ -z "$out" ]; then main_err="origin has no $branch branch"
   else
     main_sha=${out%%[[:space:]]*}
-    out=$(GIT_ASKPASS=${askpass:-${GIT_ASKPASS:-}} gitc fetch -q origin main 2>&1) ||
-      main_err="can't fetch origin main: $(grep . <<<"$out" | tail -n 1)"
+    out=$(GIT_ASKPASS=${askpass:-${GIT_ASKPASS:-}} gitc fetch -q origin "$branch" 2>&1) ||
+      main_err="can't fetch origin $branch: $(grep . <<<"$out" | tail -n 1)"
   fi
   [ -z "$askpass" ] || rm -f "$askpass"
 }
 
 # The hub.
-check "hub Applications Synced and Healthy" apps_healthy --strict
+check "hub Applications Synced and Healthy, except those that wait for a site" apps_healthy
+if apps=$(oc get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null); then
+  waiting=$(app_rows "$apps" "$(unmatched_placements || true)" |
+    awk -F'\t' '$4 == "site" && $2" "$3 != "Synced Healthy" {print $1}' | paste -sd, - | sed 's/,/, /g' || true)
+  [ -z "$waiting" ] || warn "Applications that wait for a site, expected until a site is added: $waiting"
+fi
 check "MultiClusterHub Running" mch_running
 console_route=$(oc get route -n ai-grid-provider-console -o json 2>/dev/null | jq -r '.items[0].metadata.name // empty' 2>/dev/null || true)
 if [ -n "$console_route" ]; then
@@ -155,13 +165,13 @@ for name in $(site_names); do
       for f in "apps/$name-maas-tls.yaml" "sites/$name/maas-tls/certificate.yaml" "values/clusters/$name/rhoai.yaml"; do
         [ -e "$dir/$f" ] && [ -z "$main_err" ] && git -C "$dir" cat-file -e "$main_sha:$f" 2>/dev/null || missing+="${missing:+, }$f"
       done
-      if [ -n "$main_err" ]; then fail "site $name ($role): its files on origin's main: $main_err"
-      elif [ -z "$missing" ]; then ok "site $name ($role): its files are here and on origin's main"
-      else fail "site $name ($role): missing here or on origin's main: $missing (make site-add SITE=$name, then commit and push)"; fi
+      if [ -n "$main_err" ]; then fail "site $name ($role): its files on origin's $branch: $main_err"
+      elif [ -z "$missing" ]; then ok "site $name ($role): its files are here and on origin's $branch"
+      else fail "site $name ($role): missing here or on origin's $branch: $missing (make site-add SITE=$name, then commit and push)"; fi
       if [ -z "$root_checked" ]; then
         root_checked=1
-        if [ -z "$main_err" ]; then check "deployment-root Synced at origin's main ($main_sha)" root_synced_to "$main_sha"
-        else fail "deployment-root Synced at origin's main: $main_err"; fi
+        if [ -z "$main_err" ]; then check "deployment-root Synced at origin's $branch ($main_sha)" root_synced_to "$main_sha"
+        else fail "deployment-root Synced at origin's $branch: $main_err"; fi
       fi
       issuer=$(sed -n -E '/issuerRef:/,$ s/^[[:space:]]+name:[[:space:]]*([^[:space:]#]+).*/\1/p' \
         "$dir/sites/$name/maas-tls/certificate.yaml" 2>/dev/null | head -n1)

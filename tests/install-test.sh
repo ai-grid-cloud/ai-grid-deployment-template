@@ -134,7 +134,8 @@ t "--hub-only: no sites, no provider-admin, no ready check" eval '[ "$rc" = 0 ] 
 setup rerun
 printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secret"; echo '{}' > "$W/hub-pull-secret"
 run
-t "rerun: every step already done" eval '[ "$rc" = 0 ] && ! grep -qE "^(bootstrap-hub|create-console-secrets)" "$W/calls.log" &&
+t "rerun: every step already done; console-secrets always reruns" eval '[ "$rc" = 0 ] && ! grep -q "^bootstrap-hub" "$W/calls.log" &&
+  grep -q "^create-console-secrets.sh" "$W/calls.log" &&
   grep -q "^== bootstrap" <<<"$out"'
 
 setup required
@@ -183,11 +184,11 @@ run
 t "install.env: GATE_ROOT_SECONDS=5x stops" eval '[ "$rc" = 1 ] && grep -q "GATE_ROOT_SECONDS" <<<"$out" && [ ! -s "$W/calls.log" ]'
 
 setup ocerror
-printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/hub-pull-secret"
-echo "error: You must be logged in to the server (Unauthorized)" > "$W/console-secret.err"
+printf '%s' "$root_at_head" > "$W/deployment-root"
+echo "error: You must be logged in to the server (Unauthorized)" > "$W/hub-pull-secret.err"
 run
 t "oc error: stops with the make install line" eval '[ "$rc" = 1 ] && grep -q "Unauthorized" <<<"$out" &&
-  grep -qx "make install stopped at console-secrets. Fix the cause, then run make install again." <<<"$out"'
+  grep -qx "make install stopped at bootstrap. Fix the cause, then run make install again." <<<"$out"'
 
 setup branch
 g -C "$D" checkout -qb feature

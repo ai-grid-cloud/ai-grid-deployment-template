@@ -12,7 +12,8 @@
 # Prints "nothing to push" when the paths have no changes and origin already
 # has HEAD. On a rejected push (origin moved, or the token can't write) it
 # exits 1 with git's reason and the next step; it never retries. PATHs that
-# don't exist and aren't tracked are skipped.
+# don't exist and aren't tracked are skipped. With no git user.email set, it
+# commits as "AI Grid install" <ai-grid-install@localhost>.
 #
 # Usage: scripts/git-push.sh MESSAGE PATH...
 set -euo pipefail
@@ -43,7 +44,10 @@ for p in "$@"; do
 done
 if [ ${#paths[@]} -gt 0 ] && [ -n "$(git status --porcelain -- "${paths[@]}")" ]; then
   git add -- "${paths[@]}"
-  git commit -q -m "$msg" -- "${paths[@]}"
+  # A fresh CI runner has no git identity: commit as the install then.
+  ident=()
+  [ -n "$(git config user.email || true)" ] || ident=(-c user.name="AI Grid install" -c user.email=ai-grid-install@localhost)
+  git ${ident[@]+"${ident[@]}"} commit -q -m "$msg" -- "${paths[@]}"
   echo "committed $(git rev-parse --short HEAD): $msg"
 fi
 

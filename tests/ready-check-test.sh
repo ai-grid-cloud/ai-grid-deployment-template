@@ -66,7 +66,17 @@ case " $* " in *"/ai_grid.v1."*)
   [ -n "$out" ] && { cat "$STUB_DIR/$svc.json" 2>/dev/null || echo '{}'; } > "$out" ;; esac
 printf 200
 STUB
-chmod +x "$T/bin/oc" "$T/bin/curl"
+# A git wrapper: a local origin never asks for a password, so on ls-remote it
+# asks $GIT_ASKPASS itself, as git would for https, and keeps the answer.
+REAL_GIT=$(command -v git)
+cat > "$T/bin/git" <<STUB
+#!/bin/bash
+if [[ " \$* " == *" ls-remote "* ]] && [ -n "\${GIT_ASKPASS:-}" ]; then
+  "\$GIT_ASKPASS" "Password for 'https://x-access-token@github.com': " > "\$STUB_DIR/askpass.out"
+fi
+exec "$REAL_GIT" "\$@"
+STUB
+chmod +x "$T/bin/oc" "$T/bin/curl" "$T/bin/git"
 
 # A deployment repository: the template's scripts and root, two sites (combined
 # site-b with its files committed, inference site-c), every login, and the
@@ -209,8 +219,33 @@ t "no secret in outputs.json" 0 "^OK " '[ -f "$(OUT)" ]' '! grep -q "$SECRET" "$
   '! grep -rq "$SECRET" "$D/.install"'
 
 W="$T/waiting"; ready "$W"
-echo "{\"items\":[$(app acm Synced Healthy),$(app limitador-redis Synced Progressing)]}" > "$W/hub/apps.json"; rm -f "$(OUT)"; run
-t "an Application waiting for a site: FAIL" 1 "^FAIL .*limitador-redis" '[ ! -f "$(OUT)" ]'
+echo "{\"items\":[$(app acm Synced Healthy),$(app limitador-redis Synced Degraded),$(app maas-db-local-cluster Synced Degraded)]}" > "$W/hub/apps.json"; rm -f "$(OUT)"; run
+t "an Application waiting for a site: WARN, not FAIL" 0 "^WARN .*limitador-redis, maas-db-local-cluster" \
+  '! grep -q "^FAIL" <<<"$out"' 'grep -q "^OK .*hub Applications" <<<"$out"' '[ -f "$(OUT)" ]'
+
+W="$T/degraded"; ready "$W"
+echo "{\"items\":[$(app acm Synced Healthy),$(app tenant-idp Synced Degraded),$(app limitador-redis Synced Degraded)]}" > "$W/hub/apps.json"; rm -f "$(OUT)"; run
+t "a Degraded Application not waiting for a site: FAIL" 1 "^FAIL .*tenant-idp" \
+  '! grep -q "^FAIL .*limitador-redis" <<<"$out"' '[ ! -f "$(OUT)" ]'
+
+# With no DEPLOYMENT_TOKEN_FILE, origin is read with .config/deployment-token.
+D="$T/deftoken"; newrepo "$D"; printf 'SENTINEL-default-token\n' > "$D/.config/deployment-token"
+W="$T/deftoken-w"; ready "$W"
+out=$(env -u DEPLOYMENT_TOKEN_FILE -u GIT_ASKPASS PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?
+t "no DEPLOYMENT_TOKEN_FILE: origin read with .config/deployment-token" 0 "^OK .*deployment-root Synced" \
+  '[ "$(cat "$W/askpass.out" 2>/dev/null)" = SENTINEL-default-token ]' '! grep -q SENTINEL-default-token <<<"$out"'
+
+# deploymentRevision in root/inputs.env names the branch the hub syncs.
+D="$T/rev"; newrepo "$D"
+git -C "$D" -c core.hooksPath=/dev/null -c user.name=test -c user.email=test@example.com commit -q --allow-empty -m release
+git -C "$D" push -q origin HEAD:refs/heads/release; relsha=$(git -C "$D" rev-parse HEAD)
+printf 'deploymentRevision=release\n' > "$D/root/inputs.env"
+W="$T/rev-w"; ready "$W"
+printf '{"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"Healthy"}}}' "$relsha" > "$W/hub/deployment-root.json"
+run
+t "deployment-root compared with deploymentRevision's branch, not main" 0 "^OK .*deployment-root Synced.*$relsha" \
+  '! grep -q "^FAIL" <<<"$out"'
+D="$T/repo"
 
 W="$T/notoken"; ready "$W"; mv "$D/.config/provider-admin-token" "$T/token.bak"; run
 mv "$T/token.bak" "$D/.config/provider-admin-token"
