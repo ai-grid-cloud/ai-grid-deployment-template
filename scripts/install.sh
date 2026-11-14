@@ -39,13 +39,24 @@
 #                    cased, - as _, so site-b is SITE_ISSUER_SITE_B); with none,
 #                    it stops. A site whose files exist keeps them, with no
 #                    issuer check. Then one scripts/git-push.sh of apps/ sites/
-#                    values/clusters/ and gate hub-root again at the pushed
-#                    commit. Inference sites need nothing.
+#                    values/clusters/ and gate hub-root-sites: deployment-root
+#                    Synced at that commit. Inference sites need nothing.
 # Then for each site in clusters.yaml order:
 #   site NAME        scripts/site-check.sh NAME, scripts/import-site.sh NAME --yes,
 #                    then gate site-NAME-import: ManagedCluster NAME available
-# and last, gate hub-apps-final: every hub Application Synced and Healthy,
-# except those waiting for a site.
+# then gate hub-apps-final: every hub Application Synced and Healthy, except
+# those waiting for a site. Last:
+#   provider-admin   scripts/provider-admin.sh: the provider-admin
+#                    ServiceAccount and its token in .config/provider-admin-token
+#   ready            gate ready: scripts/ready-check.sh passes. It's a one-shot
+#                    check, so the gate reruns it until it passes or
+#                    GATE_READY_SECONDS (default 600) pass, for late Routes and
+#                    endpoints. Each run's output goes to .install/ready-check.txt;
+#                    on failure its FAIL lines are printed above the stop line.
+# and prints "Installed. Outputs: .install/outputs.json".
+#
+# With --hub-only it stops after hub-apps: no sites, no provider-admin and no
+# ready check, because the ready check asserts every site is imported.
 #
 # Before any cluster call it also checks that this checkout is on the branch
 # root/inputs.env names as deploymentRevision (default main), the one the hub
@@ -302,7 +313,7 @@ step_site_files() {
   [ -n "$any" ] || { echo "No ingress or combined site: no site files."; return 0; }
   run_step site-files git-push.sh "install: site files" apps/ sites/ values/clusters/
   pushed=$(git -C "$dir" rev-parse HEAD)
-  hub_gate hub-root "$GATE_ROOT_SECONDS" root_synced_to "$pushed"
+  hub_gate hub-root-sites "$GATE_ROOT_SECONDS" root_synced_to "$pushed"
 }
 
 # Each site from clusters.yaml, in file order, then the hub's Applications
@@ -317,6 +328,32 @@ sites_phase() {
   hub_gate hub-apps-final "$GATE_HUB_APPS_SECONDS" apps_healthy
 }
 
+# --- end ---------------------------------------------------------------------
+
+# Its output file is named from ready_out, a global: gate() has a local $dir of
+# its own, which a check it calls would see instead of this script's.
+ready_out="$dir/.install/ready-check.txt"
+ready_now() { # a gate check: scripts/ready-check.sh passes; its output in $ready_out
+  local f=$ready_out n
+  mkdir -p "${ready_out%/*}"
+  "$here/ready-check.sh" > "$f" 2>&1 && return 0
+  n=$(grep -c '^FAIL' "$f" || true)
+  if [ "$n" -gt 0 ]; then echo "$n FAIL; first: $(grep -m 1 '^FAIL' "$f")"
+  else echo "ready-check.sh: $(grep . "$f" | tail -n 1)"; fi
+  return 1
+}
+
+end_phase() {
+  step provider-admin
+  run_step provider-admin provider-admin.sh
+  step ready
+  gate ready "$GATE_READY_SECONDS" ready_now && return 0
+  bash "$here/install-report.sh" ready || true
+  echo "== the ready check's last run (.install/ready-check.txt)"
+  grep -E '^(FAIL|WARN)' "$ready_out" || tail -n 5 "$ready_out"
+  stopped ready
+}
+
 # --- main --------------------------------------------------------------------
 
 cd "$dir"
@@ -329,5 +366,10 @@ clusters_load "$dir"
 pushed=""
 
 hub_phase
-[ -n "$hub_only" ] || sites_phase
-echo "make install: done."
+if [ -n "$hub_only" ]; then
+  echo "make install --hub-only: the hub is installed (hub only: no sites, provider-admin or ready check)."
+  exit 0
+fi
+sites_phase
+end_phase
+echo "Installed. Outputs: .install/outputs.json"

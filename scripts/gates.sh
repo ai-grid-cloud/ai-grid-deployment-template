@@ -51,6 +51,7 @@
 : "${GATE_O11Y_SECONDS:=2700}"        # ODF and the o11y Applications
 : "${GATE_TENANT_IDP_SECONDS:=1800}"  # tenant-idp
 : "${GATE_SITE_IMPORT_SECONDS:=900}"  # a site's import
+: "${GATE_READY_SECONDS:=600}"        # the ready check (make install's last gate)
 
 gate() { # NAME TIMEOUT_SECONDS CHECK [ARG...]
   local name=$1 timeout=$2; shift 2

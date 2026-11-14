@@ -12,7 +12,7 @@ export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NA
 
 .PHONY: help login prereqs bootstrap status console-secrets test update \
   site-check site-wipe site-import site-add site-join site-status tenant-user tenant-call \
-  empty-catalog uninstall-site uninstall-hub uninstall-check
+  empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
 
 # The site targets work on the only site in clusters.yaml; with several, set
 # SITE=NAME. Targets that change a cluster without asking preview by default;
@@ -23,8 +23,8 @@ need = $(if $($(1)),,$(error set $(1), such as: make $@ $(1)=$(2)))
 help: ## Show the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /: /'
 
-login: ## Log in to each cluster in clusters.yaml that needs it; NAME=... for one
-	@scripts/login.sh $(NAME)
+login: ## Log in to each cluster in clusters.yaml that needs it; NAME=... for one; NONINTERACTIVE=1 for no browser
+	@scripts/login.sh $(if $(filter 1,$(NONINTERACTIVE)),--non-interactive) $(NAME)
 
 prereqs: ## Report what is installed and what isn't found; never blocks
 	-@scripts/library.sh >/dev/null
@@ -86,3 +86,12 @@ uninstall-hub: ## Preview the hub's uninstall; CONFIRM=1 runs it (page 8)
 
 uninstall-check: ## After an uninstall, show what is left on each cluster; read-only (page 8)
 	@scripts/uninstall-check.sh
+
+install: ## Install the hub and import every site, unattended (page 9)
+	@scripts/install.sh
+
+provider-admin: ## Create the provider-admin ServiceAccount and its token
+	@scripts/provider-admin.sh
+
+ready-check: ## Check the installed end state and write .install/outputs.json; read-only
+	@scripts/ready-check.sh

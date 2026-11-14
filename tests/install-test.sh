@@ -67,7 +67,8 @@ setup() { # NAME: a deployment repository $D and a stub directory $W, for one ca
   D="$T/$1/repo" W="$T/$1/stub"; mkdir -p "$W" "$D/.config"
   cp -R "$SRC/scripts" "$D/"
   for s in login.sh set-library.sh set-inputs.sh check-deployment.sh empty-catalog.sh \
-      create-console-secrets.sh install-report.sh add-site.sh; do fake "$s"; done
+      create-console-secrets.sh install-report.sh add-site.sh provider-admin.sh; do fake "$s"; done
+  fake ready-check.sh '[ ! -f "$STUB_DIR/ready-check.sh.rc" ] || { echo "OK   hub Applications"; echo "FAIL site site-a: not available"; echo "Not ready: see FAIL above."; }'
   fake git-push.sh 'if [ -f "$STUB_DIR/nothing-to-push" ]; then echo "nothing to push"
     else git -C "$REPO" -c core.hooksPath=/dev/null commit -q --allow-empty -m pushed; fi'
   fake site-check.sh '[ ! -f "$STUB_DIR/site-check-$1.out" ] || cat "$STUB_DIR/site-check-$1.out"
@@ -110,7 +111,25 @@ all_out=""
 
 setup fresh; run
 t "fresh: runs every hub step in order" eval '[ "$rc" = 0 ] &&
-  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;add-site.sh site-a;git-push.sh install: site files apps/ sites/ values/clusters/;site-check.sh site-a;import-site.sh site-a --yes;" ]'
+  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;add-site.sh site-a;git-push.sh install: site files apps/ sites/ values/clusters/;site-check.sh site-a;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
+
+t "end: provider-admin then ready-check, then the outputs line" eval '[ "$rc" = 0 ] &&
+  [ "$(grep -E "^(== (provider-admin|ready)|gate (hub-apps-final|ready))" <<<"$out" | sed -E "s/ after .*//" | tr "\n" ";")" = "gate hub-apps-final: passed;== provider-admin;== ready;gate ready: passed;" ] &&
+  [ "$(grep . <<<"$out" | tail -n 1)" = "Installed. Outputs: .install/outputs.json" ]'
+
+setup readyfail
+echo 1 > "$W/ready-check.sh.rc"
+GATE_READY_SECONDS=0 run
+t "ready check fails: its FAIL lines, the report, exit 1" eval '[ "$rc" = 1 ] &&
+  grep -q "^gate ready: FAILED after 0s: 1 FAIL; first: FAIL site site-a: not available" <<<"$out" &&
+  grep -qx "FAIL site site-a: not available" <<<"$out" && grep -qx "install-report.sh ready" "$W/calls.log" &&
+  grep -qx "make install stopped at ready. Fix the cause, then run make install again." <<<"$out" &&
+  [ "$(cat "$D/.install/failed-gate")" = ready ] && ! grep -q "^Installed" <<<"$out"'
+
+setup hubonly; run --hub-only
+t "--hub-only: no sites, no provider-admin, no ready check" eval '[ "$rc" = 0 ] &&
+  ! grep -qE "^(add-site|site-check|import-site|provider-admin|ready-check)" "$W/calls.log" &&
+  ! grep -q "^Installed" <<<"$out" && grep -q "hub only" <<<"$out"'
 
 setup rerun
 printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secret"; echo '{}' > "$W/hub-pull-secret"
@@ -194,7 +213,7 @@ setup twosites; two_sites; run
 t "two sites: check, import and gate each, in order" eval '[ "$rc" = 0 ] &&
   [ "$(grep -E "^(site-check|import-site)" "$W/calls.log" | sed "s/ *\$//" | tr "\n" ";")" = "site-check.sh site-a;import-site.sh site-a --yes;site-check.sh site-b;import-site.sh site-b --yes;" ] &&
   [ "$(grep -E "^(== site |gate (site-|hub-apps-final))" <<<"$out" | sed -E "s/ after .*//" | tr "\n" ";")" = "== site site-a;gate site-site-a-import: passed;== site site-b;gate site-site-b-import: passed;gate hub-apps-final: passed;" ] &&
-  grep -q "make install: done" <<<"$out"'
+  grep -qx "Installed. Outputs: .install/outputs.json" <<<"$out"'
 
 setup siterun
 printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secret"; echo '{}' > "$W/hub-pull-secret"
@@ -264,7 +283,7 @@ issuers site-c dns01:other
 run
 t "site files pushed once, then the root gate" eval '[ "$rc" = 0 ] &&
   [ "$(grep -E "^(add-site|git-push.sh install: site|site-check)" "$W/calls.log" | sed "s/ *\$//" | tr "\n" ";")" = "add-site.sh site-a;add-site.sh site-c;git-push.sh install: site files apps/ sites/ values/clusters/;site-check.sh site-a;site-check.sh site-b;site-check.sh site-c;" ] &&
-  [ "$(sed -n "/^== site-files/,/^== site site-a/p" <<<"$out" | grep -c "gate hub-root: passed")" = 1 ]'
+  [ "$(sed -n "/^== site-files/,/^== site site-a/p" <<<"$out" | grep -c "gate hub-root-sites: passed")" = 1 ]'
 
 t "no token value in any output" eval '[ -n "$all_out" ] && ! grep -qF "$SENTINEL" <<<"$all_out" &&
   ! grep -rqF "$SENTINEL" "$T"/*/repo/.install "$T"/*/stub/calls.log "$T"/*/stub/argv.log 2>/dev/null'

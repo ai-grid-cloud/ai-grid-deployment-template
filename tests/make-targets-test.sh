@@ -93,4 +93,13 @@ t "tenant-call SITE= passes --site" 0 "--site site-c" make -n -C "$two" tenant-c
 t "tenant-user uses the hub's login" 0 'kubeconfig "\.config/\$\(scripts/clusters\.sh --hub\)/kubeconfig"' \
   make -n -C "$one" tenant-user ORG=o TENANT_USER=u PASSWORD_FILE=p
 
+t "make install runs scripts/install.sh" 0 "^scripts/install.sh$" make -n -C "$one" install
+t "make provider-admin runs scripts/provider-admin.sh" 0 "^scripts/provider-admin.sh$" make -n -C "$one" provider-admin
+: > "$STUB_LOG"
+t "make ready-check is read-only" 0 "^ok$" bash -c 'PATH="$1:$PATH" make -s -C "$0" ready-check >/dev/null 2>&1;
+  grep -q "get " "$2" && ! grep -E " oc (apply|create|patch|delete|label)" "$2" && echo ok' "$one" "$T/bin" "$STUB_LOG"
+t "make help lists install" 0 "^install: Install the hub and import every site, unattended \(page 9\)$" make -s -C "$one" help
+t "make login NONINTERACTIVE=1 passes --non-interactive" 0 "^scripts/login.sh --non-interactive *$" make -n -C "$one" login NONINTERACTIVE=1
+t "make login without it: unchanged" 0 "^scripts/login.sh *$" make -n -C "$one" login
+
 echo "make-targets tests: $((total-fails)) ok, $fails failed"; exit "$fails"
