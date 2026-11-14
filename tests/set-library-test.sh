@@ -52,13 +52,47 @@ run feat/next
 t "branch: pins its SHA in all three places" \
   eval '[ "$rc" = 0 ] && [ "$(count "$new")" = 3 ] && [ "$(count "$old")" = 0 ] && grep -qF "pinned file://$T/lib.git at $new (feat/next)" <<<"$out"'
 t "  ... the remote base, the generator revision and values.libraryRevision" \
-  eval 'grep -q "//bootstrap/hub?ref=$new\$" "$k" && grep -q "path: /spec/generators/0/git/revision, value: $new }" "$k" && grep -q "libraryRevision: $new\$" "$k"'
+  eval 'grep -q "//bootstrap/hub?ref=$new\$" "$k" && grep -q "path: /spec/generators/0/git/revision, value: &libraryRevision $new }" "$k" && grep -q "libraryRevision: $new\$" "$k"'
 t "  ... keeps every comment and still parses as YAML" eval '[ "$(comments)" = "$c0" ] && yaml_ok'
 
 sum=$(cksum < "$k")
 run feat/next
 t "same pin: already pinned" eval '[ "$rc" = 0 ] && grep -q "already pinned" <<<"$out" && [ "$(cksum < "$k")" = "$sum" ]'
 
+# The root pins the library through YAML anchors: generator 0's replace ops
+# carry &libraryRepoURL and &libraryRevision, and the ODF generator aliases them.
+renders() { # render a copy of $k with the remote base pointed at a local library
+  local r="$T/render" lib="$T/real-lib" pin rel
+  if [ ! -d "$lib" ]; then
+    pin=$(sed -n -E 's#^[[:space:]]*- [^ ]+//bootstrap/hub\?ref=([0-9a-f]{40})$#\1#p' "$SRC/root/kustomization.yaml")
+    mkdir -p "$lib"; git -C "${LIBRARY:-$("$SRC/scripts/library.sh" "$SRC")}" archive "$pin" | tar -x -C "$lib"
+  fi
+  rm -rf "$r"; mkdir -p "$r"; cp -R "$D/root" "$r/"
+  rel=$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$lib/bootstrap/hub" "$r/root")
+  sed -i.bak -E "s#^  - [^ ]+//bootstrap/hub\?ref=[0-9a-f]+#  - $rel#" "$r/root/kustomization.yaml"; rm "$r/root/kustomization.yaml.bak"
+  printf '%s\n' deploymentRepoURL=https://git.example.com/d.git deploymentRevision=main \
+    catalogRepoURL=https://git.example.com/c.git catalogRevision=main idpIssuerURL=https://idp.example.com/realms/t > "$r/root/inputs.env"
+  oc kustomize "$r/root" > "$r/out.yaml" 2>&1 || { out=$(cat "$r/out.yaml"); return 1; }
+  KUBECONFIG=/dev/null oc label --local -f "$r/out.yaml" ai-grid.dev/read=true -o json |
+    jq -s '[.[] | if .kind == "List" then .items[] else . end | select(.kind == "ApplicationSet")][0]' > "$r/as.json"
+  jq -e --arg s "$1" '.spec.generators[0].git.revision == $s and .spec.generators[1].matrix.generators[0].git.revision == $s' \
+    "$r/as.json" >/dev/null || { out="generator revisions: $(jq -c '[.spec.generators[0].git.revision, .spec.generators[1].matrix.generators[0].git.revision]' "$r/as.json")"; return 1; }
+}
+anchored_root() { # anchored_root SHA: a fresh copy of the real root, naming the bare library, pinned at SHA
+  cp "$SRC/root/kustomization.yaml" "$k"
+  sed -i.bak -E -e "s#https://github.com/ai-grid-cloud/ai-grid-cluster-gitops\.git#file://$T/lib.git#g" \
+    -e "s#https://github.com/ai-grid-cloud/ai-grid-cluster-gitops//#file://$T/lib.git//#g" \
+    -e "s/[0-9a-f]{40}/$1/g" "$k"; rm "$k.bak"
+}
+anchored_root "$old"
+run feat/next
+t "anchored root: pins the SHA, keeps the anchor, and the root still renders" \
+  eval '[ "$rc" = 0 ] && grep -q "value: &libraryRevision $new }" "$k" && grep -q "value: &libraryRepoURL file://" "$k" && renders "$new"'
+anchored_root "$new"; sum=$(cksum < "$k")
+run feat/next
+t "anchored root: already pinned" eval '[ "$rc" = 0 ] && grep -q "already pinned" <<<"$out" && [ "$(cksum < "$k")" = "$sum" ]'
+
+sum=$(cksum < "$k")
 run no/such-branch
 t "unknown revision: stops" eval '[ "$rc" = 1 ] && grep -q "no/such-branch" <<<"$out" && [ "$(cksum < "$k")" = "$sum" ]'
 

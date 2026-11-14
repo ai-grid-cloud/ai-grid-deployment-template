@@ -7,7 +7,8 @@
 #   the generator revision     /spec/generators/0/git/revision's replace value
 #   values.libraryRevision     libraryRevision: SHA
 #
-# Only those three values change; every comment and line around them stays.
+# Only those three values change; every comment and line around them stays,
+# and so does a YAML anchor on the value (value: &libraryRevision SHA).
 # It prints "pinned URL at SHA (REVISION)", or "already pinned" when the root
 # already pins that SHA. It doesn't commit: commit root/kustomization.yaml
 # yourself, or with scripts/git-push.sh.
@@ -57,7 +58,7 @@ path, sha, url, rev = sys.argv[1:]
 before = text = open(path).read()
 places = [
     ("the remote base", r"(^\s*-\s+\S+//bootstrap/hub\?ref=)([^\s#]+)"),
-    ("the generator revision", r"(\{\s*op:\s*replace,\s*path:\s*/spec/generators/0/git/revision,\s*value:\s*)([^\s,}#]+)"),
+    ("the generator revision", r"(\{\s*op:\s*replace,\s*path:\s*/spec/generators/0/git/revision,\s*value:\s*(?:&[\w-]+\s+)?)([^\s,}#]+)"),
     ("values.libraryRevision", r"(^\s*libraryRevision:\s*)([^\s#]+)"),
 ]
 for name, pattern in places:
