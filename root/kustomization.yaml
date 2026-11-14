@@ -15,16 +15,16 @@ kind: Kustomization
 resources:
   # Git form, not a raw URL: raw.githubusercontent.com caches a new commit as 404
   # for minutes.
-  - https://github.com/ai-grid-cloud/ai-grid-cluster-gitops//bootstrap/hub?ref=9f4befd9e5716cea787c10661ddbf422a4999812
+  - https://github.com/ai-grid-cloud/ai-grid-cluster-gitops//bootstrap/hub?ref=ee0eb3755609a93ff305ea3e1278bee8c96301f3
   - self.yaml
 patches:
   - target: { group: argoproj.io, kind: ApplicationSet, name: apps }
     patch: |
       # "test" ops fail the render if the library moves a field this patch relies on.
       - { op: test, path: /spec/generators/0/git/repoURL, value: REQUIRED-libraryRepoURL }
-      - { op: replace, path: /spec/generators/0/git/repoURL, value: https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git }
+      - { op: replace, path: /spec/generators/0/git/repoURL, value: &libraryRepoURL https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git }
       - { op: test, path: /spec/generators/0/git/revision, value: REQUIRED-libraryRevision }
-      - { op: replace, path: /spec/generators/0/git/revision, value: 9f4befd9e5716cea787c10661ddbf422a4999812 }
+      - { op: replace, path: /spec/generators/0/git/revision, value: &libraryRevision ee0eb3755609a93ff305ea3e1278bee8c96301f3 }
       # The components this hub runs, by hub item. Reference for each item:
       # the library's docs/install/hub/0N-*.md; to change one, see "Select
       # components" in docs/install/hub/README.md.
@@ -35,9 +35,11 @@ patches:
           - path: apps/gitops-config/application.yaml
           - path: cluster-config/application.yaml
           - path: apps/external-secrets/application.yaml
-          # 1. ACM, the multicluster engine and Submariner (hub/01-acm.md), with S4 object storage.
+          # 1. ACM, the multicluster engine and Submariner (hub/01-acm.md), with ODF
+          #    object storage (Multicloud Object Gateway only); the ODF operator
+          #    itself is generator 1, kept below.
           - path: apps/acm/application.yaml
-          - path: apps/object-storage/s4/application.yaml
+          - path: apps/object-storage/odf/application.yaml
           # 2. Grid (hub/02-grid.md).
           - path: apps/grid-bootstrap/application.yaml
           - path: apps/ai-grid-policies/application.yaml
@@ -55,12 +57,14 @@ patches:
           - path: apps/argo-registration/application.yaml
           - path: apps/rhoai/application.yaml
           - path: apps/rhoai-prerequisites/application.yaml
-          # 7. Observability and usage logs (hub/07-observability.md): off.
+          # 7. Observability and usage logs (hub/07-observability.md): on.
+          - path: bootstrap/hub/components/ai-grid-o11y.yaml
+          - path: apps/ai-grid-usage-logs/application.yaml
       - op: replace
         path: /spec/generators/0/git/values
         value: &inputs
           libraryRepoURL: https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git
-          libraryRevision: 9f4befd9e5716cea787c10661ddbf422a4999812
+          libraryRevision: ee0eb3755609a93ff305ea3e1278bee8c96301f3
           deploymentRepoURL: &deploymentRepoURL REQUIRED-deploymentRepoURL
           deploymentRevision: &deploymentRevision main
           catalogRepoURL: REQUIRED-catalogRepoURL
@@ -73,13 +77,23 @@ patches:
           idpCANamespace: openshift-config-managed
           idpCAName: default-ingress-cert
           idpCAKey: ca-bundle.crt
-      # ODF isn't selected, so its generator goes.
+      # ODF (generator 1): the operator, which ODF object storage above needs. Its
+      # repository and revision reuse the two values set for generator 0 above
+      # (aliases), so the pin stays in three places.
       - { op: test, path: /spec/generators/1/matrix/generators/0/git/repoURL, value: REQUIRED-libraryRepoURL }
-      - { op: remove, path: /spec/generators/1 }
+      - { op: replace, path: /spec/generators/1/matrix/generators/0/git/repoURL, value: *libraryRepoURL }
+      - { op: test, path: /spec/generators/1/matrix/generators/0/git/revision, value: REQUIRED-libraryRevision }
+      - { op: replace, path: /spec/generators/1/matrix/generators/0/git/revision, value: *libraryRevision }
+      - { op: test, path: /spec/generators/1/matrix/generators/0/git/files/0/path, value: apps/odf/application.yaml }
+      - op: replace
+        path: /spec/generators/1/matrix/generators/0/git/values
+        value: *inputs
       # This deployment's own apps: one Application per apps/*.yaml here. The
-      # library's templatePatch needs the same values on every generator.
+      # library's templatePatch needs the same values on every generator. Added
+      # at index 2, not appended, so the replacements below (spec.generators.2)
+      # always reach it; the test after it checks it landed there.
       - op: add
-        path: /spec/generators/-
+        path: /spec/generators/2
         value:
           git:
             # Generator fields can't take @inputs@; these aliases reuse the
@@ -89,6 +103,7 @@ patches:
             files:
               - path: apps/*.yaml
             values: *inputs
+      - { op: test, path: /spec/generators/2/git/files/0/path, value: apps/*.yaml }
 # Your inputs, from inputs.env. local-config keeps the ConfigMap out of the
 # render; a missing inputs.env, or a name missing from it, fails the render.
 configMapGenerator:
@@ -98,16 +113,18 @@ configMapGenerator:
       disableNameSuffixHash: true
       annotations:
         config.kubernetes.io/local-config: "true"
-# Each input into both generators' values; the deployment repository and its
-# revision also into the own-apps generator and deployment-root (self.yaml).
+# Each input into every generator's values (0, ODF's 1, and the own-apps 2);
+# the deployment repository and its revision also into the own-apps generator
+# and deployment-root (self.yaml).
 replacements:
   - source: { kind: ConfigMap, name: deployment-inputs, fieldPath: data.deploymentRepoURL }
     targets:
       - select: { group: argoproj.io, kind: ApplicationSet, name: apps }
         fieldPaths:
           - spec.generators.0.git.values.deploymentRepoURL
-          - spec.generators.1.git.values.deploymentRepoURL
-          - spec.generators.1.git.repoURL
+          - spec.generators.1.matrix.generators.0.git.values.deploymentRepoURL
+          - spec.generators.2.git.values.deploymentRepoURL
+          - spec.generators.2.git.repoURL
       - select: { group: argoproj.io, kind: Application, name: deployment-root }
         fieldPaths:
           - spec.source.repoURL
@@ -116,8 +133,9 @@ replacements:
       - select: { group: argoproj.io, kind: ApplicationSet, name: apps }
         fieldPaths:
           - spec.generators.0.git.values.deploymentRevision
-          - spec.generators.1.git.values.deploymentRevision
-          - spec.generators.1.git.revision
+          - spec.generators.1.matrix.generators.0.git.values.deploymentRevision
+          - spec.generators.2.git.values.deploymentRevision
+          - spec.generators.2.git.revision
       - select: { group: argoproj.io, kind: Application, name: deployment-root }
         fieldPaths:
           - spec.source.targetRevision
@@ -126,16 +144,19 @@ replacements:
       - select: { group: argoproj.io, kind: ApplicationSet, name: apps }
         fieldPaths:
           - spec.generators.0.git.values.catalogRepoURL
-          - spec.generators.1.git.values.catalogRepoURL
+          - spec.generators.1.matrix.generators.0.git.values.catalogRepoURL
+          - spec.generators.2.git.values.catalogRepoURL
   - source: { kind: ConfigMap, name: deployment-inputs, fieldPath: data.catalogRevision }
     targets:
       - select: { group: argoproj.io, kind: ApplicationSet, name: apps }
         fieldPaths:
           - spec.generators.0.git.values.catalogRevision
-          - spec.generators.1.git.values.catalogRevision
+          - spec.generators.1.matrix.generators.0.git.values.catalogRevision
+          - spec.generators.2.git.values.catalogRevision
   - source: { kind: ConfigMap, name: deployment-inputs, fieldPath: data.idpIssuerURL }
     targets:
       - select: { group: argoproj.io, kind: ApplicationSet, name: apps }
         fieldPaths:
           - spec.generators.0.git.values.idpIssuerURL
-          - spec.generators.1.git.values.idpIssuerURL
+          - spec.generators.1.matrix.generators.0.git.values.idpIssuerURL
+          - spec.generators.2.git.values.idpIssuerURL

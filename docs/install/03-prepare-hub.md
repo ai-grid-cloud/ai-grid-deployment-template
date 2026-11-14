@@ -37,7 +37,7 @@ OK       quay.io/rhoai pull secret file           $RHOAI_QUAY_PULL_SECRET_FILE
 MISSING  object storage                           Secret open-cluster-management-observability/thanos-object-storage (apps/object-storage)
 ```
 
-`MISSING object storage` is expected: S4 installs it on the next page. For any other `MISSING` line, see
+`MISSING object storage` is expected: ODF object storage installs it on the next page. For any other `MISSING` line, see
 [troubleshooting](troubleshooting.md#the-hub-check-prints-missing). You should see `Bootstrapped.` at the end.
 
 ## 2. Check that Argo CD follows your repository

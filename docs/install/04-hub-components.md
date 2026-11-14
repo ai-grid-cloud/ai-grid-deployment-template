@@ -19,7 +19,7 @@ mostly for the tenant Keycloak. Then it reads your catalog token from `~/.ai-gri
 `CATALOG_TOKEN_FILE` if you set it, uses your tenant Keycloak in `tenant-idp`, and restarts the console to read the
 new Secrets. It prints no secret value. If it times out, run `make status` (next step). For every variable, and for a
 hub whose ingress certificate isn't publicly trusted, see
-[provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/9f4befd9e5716cea787c10661ddbf422a4999812/docs/install/hub/05-console-and-model-delivery.md#provider-console).
+[provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/ee0eb3755609a93ff305ea3e1278bee8c96301f3/docs/install/hub/05-console-and-model-delivery.md#provider-console).
 
 ## 2. Verify
 
