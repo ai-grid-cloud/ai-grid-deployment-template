@@ -15,7 +15,7 @@ kind: Kustomization
 resources:
   # Git form, not a raw URL: raw.githubusercontent.com caches a new commit as 404
   # for minutes.
-  - https://github.com/ai-grid-cloud/ai-grid-cluster-gitops//bootstrap/hub?ref=ee0eb3755609a93ff305ea3e1278bee8c96301f3
+  - https://github.com/ai-grid-cloud/ai-grid-cluster-gitops//bootstrap/hub?ref=b96c26578e893a5094b424b0ae55b15a8590c7b7
   - self.yaml
 patches:
   - target: { group: argoproj.io, kind: ApplicationSet, name: apps }
@@ -24,7 +24,7 @@ patches:
       - { op: test, path: /spec/generators/0/git/repoURL, value: REQUIRED-libraryRepoURL }
       - { op: replace, path: /spec/generators/0/git/repoURL, value: &libraryRepoURL https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git }
       - { op: test, path: /spec/generators/0/git/revision, value: REQUIRED-libraryRevision }
-      - { op: replace, path: /spec/generators/0/git/revision, value: &libraryRevision ee0eb3755609a93ff305ea3e1278bee8c96301f3 }
+      - { op: replace, path: /spec/generators/0/git/revision, value: &libraryRevision b96c26578e893a5094b424b0ae55b15a8590c7b7 }
       # The components this hub runs, by hub item. Reference for each item:
       # the library's docs/install/hub/0N-*.md; to change one, see "Select
       # components" in docs/install/hub/README.md.
@@ -64,7 +64,7 @@ patches:
         path: /spec/generators/0/git/values
         value: &inputs
           libraryRepoURL: https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git
-          libraryRevision: ee0eb3755609a93ff305ea3e1278bee8c96301f3
+          libraryRevision: b96c26578e893a5094b424b0ae55b15a8590c7b7
           deploymentRepoURL: &deploymentRepoURL REQUIRED-deploymentRepoURL
           deploymentRevision: &deploymentRevision main
           catalogRepoURL: REQUIRED-catalogRepoURL
