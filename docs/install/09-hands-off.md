@@ -7,58 +7,30 @@ You came here from the README and already created your deployment repository fro
 
 ## Before you start
 
-Check each item. Run the cluster commands while you're logged in to that cluster with `oc`.
+You need the following. In step 9, `make prereqs` checks the clusters and logins for you.
 
 - [ ] **A hub and one or more sites on OpenShift 4.21 or later,** with nothing of AI Grid on them, and a
-  `cluster-admin` login and the API URL for each:
-
-  ```sh
-  oc version
-  oc whoami --show-server
-  ```
-
-- [ ] **A default StorageClass on each cluster.** One line ends in `(default)`:
-
-  ```sh
-  oc get storageclass
-  ```
-
+  `cluster-admin` login and the API URL for each.
+- [ ] **A role for each site:** `combined` (tenants enter and models run), `ingress` (tenants enter, no models) or
+  `inference` (models only). At least one site is `ingress` or `combined`.
+- [ ] **A default StorageClass on each cluster.**
 - [ ] **Two worker nodes on each cluster** for Submariner's gateways. On a compact cluster or single-node OpenShift,
   you label the gateway nodes by hand.
-
-  ```sh
-  oc get nodes -l node-role.kubernetes.io/worker
-  ```
-
 - [ ] **Network:** each cluster has a load-balancer provider for Submariner's LoadBalancer Service, each cluster
   reaches the other clusters' load balancers on UDP 4500 and 4490, and every router name answers `AAAA` queries
   without `NXDOMAIN`.
-- [ ] **A role for each site:** `combined` (tenants enter and models run), `ingress` (tenants enter, no models) or
-  `inference` (models only). At least one site is `ingress` or `combined`.
 - [ ] **On each `ingress` or `combined` site, a cert-manager ClusterIssuer that issues publicly trusted certificates
-  by DNS-01,** for the site's MaaS certificate. The following command prints the site's DNS-01 issuers; if it prints
-  nothing, add one, or give the site the role `inference`:
-
-  ```sh
-  oc get clusterissuers -o json | jq -r '.items[] | select(any(.spec.acme.solvers[]?; .dns01 != null)) | .metadata.name'
-  ```
-
+  by DNS-01,** for the site's MaaS certificate. If a site has none, add one, or give the site the role `inference`.
 - [ ] **A `quay.io/rhoai` login** in a container auth file. This template installs a pre-release OpenShift AI 3.6
   build from `quay.io/rhoai`; Red Hat gives `quay.io/rhoai` robot tokens to early-access partners, so ask your Red Hat
-  contact. The following command prints `true`:
-
-  ```sh
-  jq '.auths | has("quay.io/rhoai")' ~/.config/containers/auth.json
-  ```
-
+  contact.
 - [ ] **Tools:** `oc`, `kubectl`, `git`, `jq`, `curl`, `openssl`, `base64`, `python3`, `clusteradm` and `make`.
-  The following command prints the name of each one that's missing:
-
-  ```sh
-  for t in oc kubectl git jq curl openssl base64 python3 clusteradm make; do command -v "$t" >/dev/null || echo "missing: $t"; done
-  ```
 
 ## Install
+
+### Create the repositories and tokens
+
+The install writes to two GitHub repositories and needs a token for each.
 
 1. Create your catalog repository. The provider console writes your models and subscriptions there.
    [Create a new repository](https://github.com/new), name it, such as `ai-grid-catalog`, make it public, and turn
@@ -81,6 +53,10 @@ Check each item. Run the cluster commands while you're logged in to that cluster
 3. Create the deployment token. Create a second fine-grained token the same way, named such as
    `ai-grid-deployment`, with **Contents** set to **Read and write** on your deployment repository only. Keep it for
    step 6. `make install` pushes your settings and the sites' files with it.
+
+### Set up your deployment repository
+
+Tell the install which clusters to use and where its credentials are.
 
 4. Clone your deployment repository by its HTTPS URL, because `make install` pushes with the token, not with SSH:
 
@@ -160,30 +136,69 @@ Check each item. Run the cluster commands while you're logged in to that cluster
    `install.env` holds no secrets. A setting `make install` doesn't know, or a value still starting with `REQUIRED-`,
    stops it before it touches a cluster.
 
-8. Commit your two files:
+### Check the prerequisites
+
+Confirm that every cluster and credential is ready before anything is installed.
+
+8. Log in to each cluster:
 
    ```sh
-   git add clusters.yaml install.env && git commit -m "deployment: our clusters and install settings"
+   make login NONINTERACTIVE=1
    ```
 
-   `make install` pushes this commit with its own.
+   It writes `.config/NAME/kubeconfig` for each cluster from its token in `.config/NAME/token` and the API URL in
+   `clusters.yaml`, and keeps a kubeconfig that already works. For each cluster it prints `Logged in to NAME as USER.`
+   or `NAME: already logged in.` If it names a token file instead, put the cluster's token there and run it again.
 
-9. Run the install:
+9. Check the prerequisites:
 
    ```sh
-   make install
+   make prereqs
    ```
 
-   On new clusters it takes about 75 minutes; waiting for the hub's Applications takes about 55 of them. It prints
-   `== STEP` as each step starts, and ends with:
+   It prints one line per check, starting with `ok`, `MISSING`, `OLD`, `FAIL` or `skipped`. It checks the tools, the
+   `quay.io/rhoai` login in `QUAY_AUTH_FILE`, the catalog token in `CATALOG_TOKEN_FILE`, and, for each cluster in
+   `clusters.yaml`, that it's reachable, runs OpenShift 4.21 or later, has a default StorageClass and gives you
+   `cluster-admin`, and that each `ingress` or `combined` site has a DNS-01 ClusterIssuer. It changes nothing.
+
+   Fix each `MISSING`, `OLD` or `FAIL` line, then run it again. When everything is ready, its last line counts only
+   `ok` lines, with no `Nothing was changed; fix these` line after it, such as:
 
    ```text
-   Installed. Outputs: .install/outputs.json
+   42 ok
    ```
 
-   If it stops instead, see [If it stops](#if-it-stops).
+   If a site had an earlier install, also run `make site-check SITE=SITE_NAME`. It also looks for a previous AI Grid
+   install and checks that the site's apps domain resolves.
 
-10. Check the end state, without changing anything:
+### Run the install
+
+Run the install and confirm the end state.
+
+10. Commit your two files:
+
+    ```sh
+    git add clusters.yaml install.env && git commit -m "deployment: our clusters and install settings"
+    ```
+
+    `make install` pushes this commit with its own.
+
+11. Run the install:
+
+    ```sh
+    make install
+    ```
+
+    On new clusters it takes about 75 minutes; waiting for the hub's Applications takes about 55 of them. It prints
+    `== STEP` as each step starts, and ends with:
+
+    ```text
+    Installed. Outputs: .install/outputs.json
+    ```
+
+    If it stops instead, see [If it stops](#if-it-stops).
+
+12. Check the end state, without changing anything:
 
     ```sh
     make ready-check
