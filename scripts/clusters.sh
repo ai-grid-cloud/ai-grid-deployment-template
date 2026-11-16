@@ -14,6 +14,8 @@
 #   CLUSTERS_FILE                 the file it read
 #   secret_get JQ_PATH            a secret's value, such as .github.catalogToken; empty when unset
 #   cluster_secret NAME KEY       credentials.NAME.KEY (token, username, password, kubeconfig)
+#   deployment_load DIR           clusters_load, then the settings and the secret files
+#                                 exported (see "settings and secrets" below)
 #   settings_lines                its install settings, KEY=VALUE per line
 #   hub_name, site_names          the hub's name; the sites' names
 #   site_name [NAME]              NAME, or the only site when NAME is empty;
@@ -26,7 +28,7 @@
 
 CLUSTERS_DIR="" CLUSTERS_ROWS="" CLUSTERS_JSON="" CLUSTERS_FILE=""
 # The keys clusters.yaml's options: may hold (make install's settings).
-SETTINGS_OPTIONS_RE='DEPLOYMENT_TOKEN_FILE|CATALOG_TOKEN_FILE|QUAY_AUTH_FILE|KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_ROOT_SECONDS|GATE_MCH_SECONDS|GATE_HUB_APPS_SECONDS|GATE_SITE_IMPORT_SECONDS|GATE_READY_SECONDS|GATE_INTERVAL|GATE_ERROR_LIMIT'
+SETTINGS_OPTIONS_RE='KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_ROOT_SECONDS|GATE_MCH_SECONDS|GATE_HUB_APPS_SECONDS|GATE_SITE_IMPORT_SECONDS|GATE_READY_SECONDS|GATE_INTERVAL|GATE_ERROR_LIMIT|GATE_O11Y_SECONDS|GATE_TENANT_IDP_SECONDS|WIPE_PROTECT_NAMESPACES|WIPE_PROTECT_PACKAGES'
 INSTALL_NS_RE='open-cluster-management|multicluster-engine|redhat-ods|redhat-ai-grid|maas|ai-grid|gitops|kuadrant|submariner'
 
 clusters_load() {
@@ -50,6 +52,14 @@ clusters_load() {
     echo "error: clusters.yaml is committed, so it can't hold credentials:, github: or quay:: move the file to .config/clusters.yaml (chmod 600), which git ignores" >&2
     return 1
   fi
+  # Options that named secret files before the secrets moved into the private file.
+  left=$(jq -r '(.options // {}) | keys[] | select(. == "DEPLOYMENT_TOKEN_FILE" or . == "CATALOG_TOKEN_FILE" or . == "QUAY_AUTH_FILE")' <<<"$json" | head -n 1)
+  case "$left" in
+    "") ;;
+    DEPLOYMENT_TOKEN_FILE) echo "error: options.$left is no longer read: put the token in github.deploymentToken in .config/clusters.yaml (make secrets), and delete the option" >&2; return 1 ;;
+    CATALOG_TOKEN_FILE) echo "error: options.$left is no longer read: put the token in github.catalogToken in .config/clusters.yaml (make secrets), and delete the option" >&2; return 1 ;;
+    *) echo "error: options.$left is no longer read: put the quay.io/rhoai robot account in quay.username and quay.password in .config/clusters.yaml (make secrets), and delete the option" >&2; return 1 ;;
+  esac
   # A key the scripts don't read is a typo, most likely: name it.
   left=$(jq -r --arg opts "\\A($SETTINGS_OPTIONS_RE)\\z" '
       (keys - ["apiVersion", "kind", "metadata", "hub", "sites", "repositories", "options", "credentials", "github", "quay"] | map(.)),
@@ -164,6 +174,127 @@ merge_kubeconfigs() { # HUB SITE OUT: renames each cluster, user and context, so
   rm -rf "$tmp"
 }
 
+# --- settings and secrets for every target --------------------------------
+#
+# deployment_load DIR: clusters_load, then make install's settings and the
+# secret files, exported for this script and the ones it runs.
+#
+# Settings (settings_lines): a value the file holds, even an empty one, wins
+# over the environment's; one it leaves out comes from the environment.
+#
+# Secrets: each becomes a file the scripts pass on by path, never a command line:
+#   DEPLOYMENT_TOKEN_FILE   AI_GRID_DEPLOYMENT_TOKEN, else DEPLOYMENT_TOKEN_FILE,
+#                           else github.deploymentToken, else .config/deployment-token
+#   CATALOG_TOKEN_FILE      AI_GRID_CATALOG_TOKEN, else CATALOG_TOKEN_FILE, else
+#                           github.catalogToken, else .config/catalog-token, else
+#                           (page by page) ~/.ai-grid/catalog-token
+#   QUAY_AUTH_FILE          AI_GRID_QUAY_USERNAME and AI_GRID_QUAY_PASSWORD, else
+#                           QUAY_AUTH_FILE, else quay:, else .config/quay-auth.json,
+#                           else (page by page) ~/.config/containers/auth.json or
+#                           $XDG_RUNTIME_DIR/containers/auth.json
+# A value (from AI_GRID_* or the private file) is written to .config/generated/
+# (mode 600, rewritten on every load, removed when the value goes). "Page by
+# page" means no .config/clusters.yaml and no catalog setting. VAR_SOURCE says
+# where each came from; secret_missing VAR prints the fix when there's none.
+SETTINGS_KEYS_RE='CATALOG_REPO_URL|LIBRARY_REVISION|SITE_ISSUER_[A-Z0-9_]+'
+
+deployment_load() { # DIR
+  clusters_load "$1" || return 1
+  settings_apply || return 1
+  secrets_apply
+}
+
+settings_apply() {
+  local lines line key value
+  lines=$(settings_lines) || return 1
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    key=${line%%=*} value=${line#*=}
+    # Only a known setting becomes a variable, never PATH or the like.
+    [[ "$key" =~ ^($SETTINGS_KEYS_RE|$SETTINGS_OPTIONS_RE)$ ]] ||
+      { echo "error: ${CLUSTERS_FILE#"$CLUSTERS_DIR/"}: unknown setting $key" >&2; return 1; }
+    printf -v "$key" '%s' "$value"; export "${key?}"
+  done <<<"$lines"
+  for key in $(compgen -v GATE_; compgen -v WIPE_PROTECT_); do
+    [[ "$key" != GATE_* || "${!key}" =~ ^[0-9]+$ ]] ||
+      { echo "error: $key must be a number of seconds, not ${!key}" >&2; return 1; }
+  done
+}
+
+clusters_private() { [ "$CLUSTERS_FILE" = "$CLUSTERS_DIR/.config/clusters.yaml" ]; }
+page_by_page() { ! clusters_private && [ -z "${CATALOG_REPO_URL:-}" ]; }
+
+_generated() { # NAME: writes stdin to .config/generated/NAME (mode 600) and prints its path
+  local g="$CLUSTERS_DIR/.config/generated"
+  ( umask 077; mkdir -p "$g"; cat > "$g/$1.new" ) && chmod 700 "$CLUSTERS_DIR/.config" "$g" &&
+    chmod 600 "$g/$1.new" && mv -f "$g/$1.new" "$g/$1" && echo "$g/$1"
+}
+
+_abs() { case "$1" in /*) echo "$1" ;; "~/"*) echo "$HOME/${1#"~/"}" ;; *) echo "$CLUSTERS_DIR/$1" ;; esac; }
+
+_secret_file() { # VAR ENV JQ_PATH NAME [HOME_DEFAULT]
+  local var=$1 env=$2 path=$3 name=$4 home=${5:-} v="" f="" src=""
+  v=${!env:-}; [ -z "$v" ] || src=$env
+  if [ -z "$v" ] && [ -n "${!var:-}" ]; then
+    f=$(_abs "${!var}") src=$var
+  else
+    if [ -z "$v" ]; then v=$(secret_get "$path") || return 1; [ -z "$v" ] || src="${path#.} in .config/clusters.yaml"; fi
+    if [ -n "$v" ]; then
+      f=$(printf '%s\n' "$v" | _generated "$name") || return 1
+    else
+      rm -f "$CLUSTERS_DIR/.config/generated/$name"
+      if [ -s "$CLUSTERS_DIR/.config/$name" ]; then f="$CLUSTERS_DIR/.config/$name" src=".config/$name"
+      elif [ -n "$home" ] && page_by_page && [ -s "$home" ]; then f=$home src=$home; fi
+    fi
+  fi
+  printf -v "$var" '%s' "$f"; printf -v "${var}_SOURCE" '%s' "$src"; export "${var?}" "${var}_SOURCE"
+}
+
+_quay_auth() {
+  local u p f="" src="" b64 h
+  u=${AI_GRID_QUAY_USERNAME:-} p=${AI_GRID_QUAY_PASSWORD:-}
+  [ -z "$u$p" ] || src="AI_GRID_QUAY_USERNAME and AI_GRID_QUAY_PASSWORD"
+  if [ -z "$u$p" ] && [ -n "${QUAY_AUTH_FILE:-${RHOAI_QUAY_AUTH_FILE:-}}" ]; then
+    f=$(_abs "${QUAY_AUTH_FILE:-$RHOAI_QUAY_AUTH_FILE}") src=QUAY_AUTH_FILE
+  else
+    if [ -z "$u$p" ]; then
+      u=$(secret_get .quay.username) && p=$(secret_get .quay.password) || return 1
+      [ -z "$u$p" ] || src="quay: in .config/clusters.yaml"
+    fi
+    if [ -n "$u" ] && [ -n "$p" ]; then
+      b64=$(printf '%s' "$u:$p" | base64 | tr -d '\n')
+      f=$(printf '{"auths":{"quay.io/rhoai":{"auth":"%s"}}}\n' "$b64" | _generated quay-auth.json) || return 1
+    elif [ -n "$u$p" ]; then
+      echo "error: the quay.io/rhoai login needs both a username and a password ($src)" >&2; return 1
+    else
+      rm -f "$CLUSTERS_DIR/.config/generated/quay-auth.json"
+      if [ -s "$CLUSTERS_DIR/.config/quay-auth.json" ]; then f="$CLUSTERS_DIR/.config/quay-auth.json" src=.config/quay-auth.json
+      elif page_by_page; then
+        for h in "$HOME/.config/containers/auth.json" "${XDG_RUNTIME_DIR:+$XDG_RUNTIME_DIR/containers/auth.json}"; do
+          [ -n "$h" ] && [ -f "$h" ] && { f=$h src=$h; break; }
+        done
+      fi
+    fi
+  fi
+  QUAY_AUTH_FILE=$f QUAY_AUTH_FILE_SOURCE=$src; export QUAY_AUTH_FILE QUAY_AUTH_FILE_SOURCE
+}
+
+secrets_apply() {
+  _secret_file DEPLOYMENT_TOKEN_FILE AI_GRID_DEPLOYMENT_TOKEN .github.deploymentToken deployment-token || return 1
+  _secret_file CATALOG_TOKEN_FILE AI_GRID_CATALOG_TOKEN .github.catalogToken catalog-token "$HOME/.ai-grid/catalog-token" || return 1
+  _quay_auth
+}
+
+secret_missing() { # VAR: how to supply it
+  case "$1:$(page_by_page && echo pp)" in
+    DEPLOYMENT_TOKEN_FILE:*) echo "set github.deploymentToken in .config/clusters.yaml (make secrets NAME=github), or AI_GRID_DEPLOYMENT_TOKEN" ;;
+    CATALOG_TOKEN_FILE:pp) echo "save it in ~/.ai-grid/catalog-token, or set CATALOG_TOKEN_FILE (install guide, page 2)" ;;
+    CATALOG_TOKEN_FILE:*) echo "set github.catalogToken in .config/clusters.yaml (make secrets NAME=github), or AI_GRID_CATALOG_TOKEN" ;;
+    QUAY_AUTH_FILE:pp) echo "set QUAY_AUTH_FILE to a container auth file with a quay.io/rhoai login" ;;
+    QUAY_AUTH_FILE:*) echo "set quay.username and quay.password in .config/clusters.yaml (make secrets NAME=quay), or AI_GRID_QUAY_USERNAME and AI_GRID_QUAY_PASSWORD" ;;
+  esac
+}
+
 # scripts/clusters.sh --rows DIR prints one line per cluster (name role location
 # api), or the error; prereqs.py uses it. scripts/clusters.sh --settings DIR
 # prints settings_lines (install.sh and prereqs.py). scripts/clusters.sh --site [NAME]
@@ -173,6 +304,10 @@ if [ "${BASH_SOURCE[0]}" = "$0" ] && [ "${1:-}" = --rows ]; then
   clusters_load "${2:-.}" && printf '%s' "$CLUSTERS_ROWS"
 elif [ "${BASH_SOURCE[0]}" = "$0" ] && [ "${1:-}" = --settings ]; then
   clusters_load "${2:-.}" && settings_lines
+elif [ "${BASH_SOURCE[0]}" = "$0" ] && [ "${1:-}" = --resolve ]; then
+  # VAR=PATH<tab>SOURCE for each secret file (make prereqs); never a secret's value.
+  deployment_load "${2:-.}" && for v in DEPLOYMENT_TOKEN_FILE CATALOG_TOKEN_FILE QUAY_AUTH_FILE; do
+    s="${v}_SOURCE"; printf '%s=%s\t%s\n' "$v" "${!v}" "${!s}"; done
 elif [ "${BASH_SOURCE[0]}" = "$0" ] && [ "${1:-}" = --hub ]; then
   clusters_load "$(dirname "$0")/.." && hub_name
 elif [ "${BASH_SOURCE[0]}" = "$0" ] && [ "${1:-}" = --site ]; then

@@ -248,4 +248,35 @@ github: {catalogToken: '$SECRET' x: }")
 t "invalid YAML: names the line, not the text" 1 "isn't valid YAML" bash "$d/scripts/clusters.sh" --rows "$d"
 t "  ... never the text" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
 
+# deployment_load: settings and the secret files, for every target.
+load() { # dir [VAR=value...] -- shell: runs the shell after deployment_load in a clean HOME
+  local d=$1; shift; local envs=(); while [ "$1" != -- ]; do envs+=("$1"); shift; done; shift
+  env -u DEPLOYMENT_TOKEN_FILE -u CATALOG_TOKEN_FILE -u QUAY_AUTH_FILE -u AI_GRID_DEPLOYMENT_TOKEN -u AI_GRID_CATALOG_TOKEN \
+    HOME="$T/home" ${envs[@]+"${envs[@]}"} bash -c '. "$0/scripts/clusters.sh"; deployment_load "$0" || exit 1; '"$1" "$d"
+}
+mkdir -p "$T/home/.ai-grid"; printf 'home-token\n' > "$T/home/.ai-grid/catalog-token"
+d=$(priv load "$PRIV")
+t "load: deployment token into .config/generated" 0 "^$SECRET-d$" load "$d" -- 'cat "$DEPLOYMENT_TOKEN_FILE"'
+t "  ... the file is .config/generated/deployment-token, mode 600" 0 "generated/deployment-token 600$" load "$d" -- 'echo "$DEPLOYMENT_TOKEN_FILE $(stat -f %Lp "$DEPLOYMENT_TOKEN_FILE" 2>/dev/null || stat -c %a "$DEPLOYMENT_TOKEN_FILE")"'
+t "  ... its source" 0 "^github.deploymentToken in .config/clusters.yaml$" load "$d" -- 'echo "$DEPLOYMENT_TOKEN_FILE_SOURCE"'
+t "  ... the quay.io/rhoai auth file from quay:" 0 "^rhoai\+robot:$SECRET-q$" load "$d" -- 'jq -r ".auths[\"quay.io/rhoai\"].auth" "$QUAY_AUTH_FILE" | base64 -d'
+t "  ... AI_GRID_CATALOG_TOKEN wins" 0 "^env-token$" load "$d" AI_GRID_CATALOG_TOKEN=env-token -- 'cat "$CATALOG_TOKEN_FILE"'
+t "  ... CATALOG_TOKEN_FILE wins over the file" 0 "^/x/token CATALOG_TOKEN_FILE$" load "$d" CATALOG_TOKEN_FILE=/x/token -- 'echo "$CATALOG_TOKEN_FILE $CATALOG_TOKEN_FILE_SOURCE"'
+t "  ... --resolve prints paths and sources, no secret" 0 "^0$" bash -c 'HOME="$1" bash "$0/scripts/clusters.sh" --resolve "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d" "$T/home"
+sed -i.bak '/^github:/d' "$d/.config/clusters.yaml"; rm "$d/.config/clusters.yaml.bak"
+t "  ... a value removed from the file: the generated file goes" 0 "^gone$" load "$d" -- '[ ! -e "$0/.config/generated/deployment-token" ] && [ -z "$DEPLOYMENT_TOKEN_FILE" ] && echo gone'
+printf 'legacy\n' > "$d/.config/catalog-token"
+t "  ... else the legacy .config/catalog-token" 0 "^legacy$" load "$d" -- 'cat "$CATALOG_TOKEN_FILE"'
+t "  ... the missing hint names the key" 0 "github.deploymentToken in .config/clusters.yaml \(make secrets NAME=github\)" load "$d" -- 'secret_missing DEPLOYMENT_TOKEN_FILE'
+d=$(repo pagebypage "hub: {name: hub, api: 'https://h:6443'}")
+t "page by page: ~/.ai-grid/catalog-token" 0 "^home-token$" load "$d" -- 'cat "$CATALOG_TOKEN_FILE"'
+d=$(repo withcatalog "hub: {name: hub, api: 'https://h:6443'}
+repositories: {catalog: 'https://github.com/o/c.git'}")
+t "with a catalog: no home default" 0 "^none$" load "$d" -- '[ -z "$CATALOG_TOKEN_FILE" ] && echo none'
+t "settings exported, WIPE_PROTECT_ allowed" 0 "^a,b$" load "$(repo wipe "hub: {name: hub, api: 'https://h:6443'}
+options: {WIPE_PROTECT_NAMESPACES: 'a,b'}")" -- 'echo "$WIPE_PROTECT_NAMESPACES"'
+d=$(priv halfquay "hub: {api: 'https://h:6443'}
+quay: {username: u}")
+t "quay username without password: stops" 1 "needs both a username and a password" load "$d" -- 'true'
+
 echo "clusters tests: $((total-fails)) ok, $fails failed"; exit "$fails"

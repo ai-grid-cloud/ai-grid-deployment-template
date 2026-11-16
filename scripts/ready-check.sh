@@ -42,7 +42,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/clusters.sh"
 . "$here/gates.sh"
-clusters_load "$here/.."
+deployment_load "$here/.."   # the deployment token, for reading origin
 dir=$CLUSTERS_DIR
 : "${PERSES_SERVICE:=openshift-cluster-observability-operator/perses}"
 : "${THANOS_ROUTE:=open-cluster-management-observability/rbac-query-proxy}"

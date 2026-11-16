@@ -17,7 +17,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 dir="$(cd "$here/.." && pwd)"
 . "$here/clusters.sh"
 [ $# -le 2 ] || { echo "usage: add-site.sh [NAME] [ISSUER]" >&2; exit 2; }
-clusters_load "$dir"
+deployment_load "$dir"
 name=$(site_name "${1:-}")
 role=$(cluster_field "$name" role)
 case "$role" in
@@ -40,6 +40,8 @@ if [ ${#missing[@]} -gt 0 ]; then
   issuers=$(site_oc get clusterissuers.cert-manager.io -o json |
     jq -r '.items[] | select(any(.spec.acme.solvers[]?; .dns01 != null)) | .metadata.name')
   issuer=${2:-}
+  # Else the site's issuer: in clusters.yaml (settings_lines' SITE_ISSUER_<NAME>).
+  if [ -z "$issuer" ]; then v="SITE_ISSUER_$(tr 'a-z-' 'A-Z_' <<<"$name")"; issuer=${!v:-}; fi
   if [ -n "$issuer" ]; then
     grep -qx -- "$issuer" <<<"$issuers" ||
       { echo "error: $issuer isn't a DNS-01 ClusterIssuer on $name; those are: $(echo ${issuers:-none})" >&2; exit 1; }
@@ -76,9 +78,13 @@ if [ ${#missing[@]} -eq 0 ] && git -C "$dir" rev-parse --git-dir >/dev/null 2>&1
   echo; echo "Nothing to commit: the site's files are already committed."
   exit 0
 fi
+if [ "${PUSH:-}" = 1 ]; then
+  "$here/git-push.sh" "site $name: values and MaaS certificate" "${files[@]}"
+  exit
+fi
 cat <<EOF
 
-Commit and push:
+Commit and push with the deployment token (make site-add PUSH=1), or yourself:
 
   git add ${files[*]}
   git commit -m "site $name: values and MaaS certificate"

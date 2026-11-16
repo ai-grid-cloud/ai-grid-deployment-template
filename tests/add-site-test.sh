@@ -63,6 +63,10 @@ t "  ... and says how to choose one" 1 "make site-add SITE=site-b ISSUER=ISSUER"
 t "an issuer named" 0 "certificate from ClusterIssuer le-dns-staging" site-b le-dns-staging
 rm -rf "$D/apps" "$D/sites" "$D/values"
 t "an issuer that isn't DNS-01" 1 "le-http isn't a DNS-01 ClusterIssuer" site-b le-http
+D=$(repo issuerfile '  - {name: site-b, issuer: le-dns-staging, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}')
+t "the site's issuer: in clusters.yaml picks one" 0 "certificate from ClusterIssuer le-dns-staging"
+printf '#!/bin/bash\necho "git-push.sh $*"\n' > "$D/scripts/git-push.sh"; rm -rf "$D/apps" "$D/sites" "$D/values"
+PUSH=1 t "PUSH=1 pushes with git-push.sh" 0 "^git-push.sh site site-b: values and MaaS certificate apps/site-b-maas-tls.yaml"
 
 W="$T/none"; mkdir -p "$W"; echo "{\"items\":[$(issuer le-http http01)]}" > "$W/issuers.json"
 D=$(repo none "$B")

@@ -17,8 +17,10 @@
 #
 # Usage: [QUAY_AUTH_FILE=AUTH_JSON] [ALLOW_GENERIC_LOGIN=1] scripts/bootstrap-hub.sh [--deployment DIR]
 #
-# QUAY_AUTH_FILE defaults to ~/.config/containers/auth.json, else
-# $XDG_RUNTIME_DIR/containers/auth.json (as make prereqs). ALLOW_GENERIC_LOGIN=1
+# The quay.io/rhoai login comes from scripts/clusters.sh's deployment_load:
+# quay: in .config/clusters.yaml, the environment winning, else QUAY_AUTH_FILE,
+# else ~/.config/containers/auth.json or $XDG_RUNTIME_DIR/containers/auth.json
+# (page by page, as make prereqs). ALLOW_GENERIC_LOGIN=1
 # lets a general quay.io login stand in for a quay.io/rhoai one. The older names
 # RHOAI_QUAY_AUTH_FILE and RHOAI_QUAY_ALLOW_GENERIC_LOGIN still work.
 set -Eeuo pipefail
@@ -33,20 +35,14 @@ while [ $# -gt 0 ]; do
 done
 [ -d "$dir/root" ] || die "--deployment must be a checkout with root/"
 for c in oc jq git; do command -v "$c" >/dev/null || die "required command not found: $c"; done
-auth_file="${QUAY_AUTH_FILE:-${RHOAI_QUAY_AUTH_FILE:-}}"
-if [ -z "$auth_file" ]; then
-  for f in "$HOME/.config/containers/auth.json" "${XDG_RUNTIME_DIR:+$XDG_RUNTIME_DIR/containers/auth.json}"; do
-    [ -n "$f" ] && [ -f "$f" ] && { auth_file=$f; break; }
-  done
-fi
-[ -f "$auth_file" ] || die "no auth file: set QUAY_AUTH_FILE to a container auth file with a quay.io/rhoai login"
-allow_generic="${ALLOW_GENERIC_LOGIN:-${RHOAI_QUAY_ALLOW_GENERIC_LOGIN:-}}"
-
 . "$here/library.sh"
 library_dir "$dir" || exit 1
 lib=$LIB
 . "$here/clusters.sh"
-clusters_load "$dir" || exit 1
+deployment_load "$dir" || exit 1
+auth_file=$QUAY_AUTH_FILE
+[ -n "$auth_file" ] && [ -f "$auth_file" ] || die "no quay.io/rhoai login: $(secret_missing QUAY_AUTH_FILE)"
+allow_generic="${ALLOW_GENERIC_LOGIN:-${RHOAI_QUAY_ALLOW_GENERIC_LOGIN:-}}"
 hub=$(hub_name)
 cluster_login_ok "$hub" || exit 1
 KUBECONFIG=$(cluster_kubeconfig "$hub"); export KUBECONFIG
