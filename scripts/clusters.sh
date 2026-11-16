@@ -3,7 +3,7 @@
 # exists (private: git-ignored, mode 600, and the only place secrets may go),
 # else clusters.yaml at the root (copied from clusters-example.yaml). It holds
 # the hub, and each site with its role, location and API URL; make install's
-# settings (repositories:, options:, each site's issuer); and, in the private
+# settings (repositories:, options:); and, in the private
 # file only, the secrets (credentials:, github:, quay:). The hub's name is
 # "hub" unless the file names it. Each cluster's login is
 # .config/NAME/kubeconfig (git-ignored; make login). kubectl parses the YAML
@@ -81,7 +81,7 @@ clusters_load() {
       ((.quay // {}) | keys - ["username", "password"] | map("quay." + .)),
       ((.hub // {}) | keys - ["name", "api"] | map("hub." + .)),
       ((.sites // []) | to_entries[] | .key as $i | (.value // {}) | keys
-        - ["name", "role", "location", "api", "issuer"] | map("sites[\($i)]." + .)),
+        - ["name", "role", "location", "api"] | map("sites[\($i)]." + .)),
       ((.repositories // {}) | keys - ["catalog", "library"] | map("repositories." + .)),
       ((.options // {}) | keys | map(select(test($opts) | not)) | map("options." + .))
       | .[]' <<<"$json" | tr '\n' ' ')
@@ -127,8 +127,8 @@ cluster_secret() { secret_get ".credentials[\"$1\"].$2"; } # NAME KEY
 # The install settings clusters.yaml holds, as KEY=VALUE lines, one for each
 # key the file sets (an empty value too, so it wins over the environment):
 # repositories.catalog is CATALOG_REPO_URL, repositories.library is
-# LIBRARY_REVISION, a site's issuer is SITE_ISSUER_<NAME> (the name upper-cased,
-# - as _), and each options key is itself. true is 1, false and null are empty.
+# LIBRARY_REVISION, and each options key is itself. true is 1, false and null
+# are empty.
 settings_lines() {
   # A value spread over lines would come out as more than one setting: refuse it.
   jq -r '
@@ -136,8 +136,6 @@ settings_lines() {
       else tostring | if test("[\\n\\r]") then error("a setting'"'"'s value spans lines") else . end end;
     (if (.repositories // {}) | has("catalog") then "CATALOG_REPO_URL=\(.repositories.catalog | v)" else empty end),
     (if (.repositories // {}) | has("library") then "LIBRARY_REVISION=\(.repositories.library | v)" else empty end),
-    ((.sites // [])[] | select(has("issuer"))
-      | "SITE_ISSUER_\(.name | ascii_upcase | gsub("-"; "_"))=\(.issuer | v)"),
     ((.options // {}) | to_entries[] | "\(.key)=\(.value | v)")' <<<"$CLUSTERS_JSON" 2>/dev/null ||
     { echo "error: clusters.yaml: a setting's value spans lines" >&2; return 1; }
 }
@@ -211,7 +209,7 @@ merge_kubeconfigs() { # HUB SITE OUT: renames each cluster, user and context, so
 # (mode 600, rewritten on every load, removed when the value goes). "Page by
 # page" means no .config/clusters.yaml and no catalog setting. VAR_SOURCE says
 # where each came from; secret_missing VAR prints the fix when there's none.
-SETTINGS_KEYS_RE='CATALOG_REPO_URL|LIBRARY_REVISION|SITE_ISSUER_[A-Z0-9_]+'
+SETTINGS_KEYS_RE='CATALOG_REPO_URL|LIBRARY_REVISION'
 
 deployment_load() { # DIR
   clusters_load "$1" || return 1

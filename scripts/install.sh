@@ -6,7 +6,7 @@
 # you fix the cause and run it again.
 #
 # Reads its settings from clusters.yaml at the root of this repository
-# (repositories:, options:, and each site's issuer; scripts/clusters.sh
+# (repositories: and options:; scripts/clusters.sh
 # settings_lines) and stops before any cluster call when a REQUIRED- value is
 # left in it, or a file it names doesn't exist. Relative paths in it are
 # relative to this repository. A setting the file holds, even an empty one,
@@ -37,17 +37,9 @@
 #                    safe to rerun
 #   hub-apps         gate hub-apps: every hub Application Synced and Healthy,
 #                    except those waiting for a site
-# Then the sites phase, unless --hub-only. First, what a later console Add needs
-# (install guide, page 6):
-#   site-files       each ingress or combined site needs a DNS-01 ClusterIssuer
-#                    for its MaaS certificate, read with the site's login; with
-#                    one, scripts/add-site.sh NAME; with several, the one named
-#                    by the site's issuer in clusters.yaml (or the variable
-#                    SITE_ISSUER_<NAME>, the name upper-cased, - as _); with none,
-#                    it stops. A site whose files exist keeps them, with no
-#                    issuer check. Then one scripts/git-push.sh of apps/ sites/
-#                    values/clusters/ and gate hub-root-sites: deployment-root
-#                    Synced at that commit. Inference sites need nothing.
+# Then the sites phase, unless --hub-only. Ingress and combined sites keep the
+# chart's internal certificate on the MaaS gateway, as upstream does; the
+# library sets its hostname, maas.<apps domain>.
 # Then for each site in clusters.yaml order:
 #   site NAME        scripts/site-check.sh NAME, scripts/import-site.sh NAME --yes,
 #                    then gate site-NAME-import: ManagedCluster NAME available
@@ -100,7 +92,7 @@ run_step() { # STEP SCRIPT [ARG...]: runs a script; stops the install at STEP wh
 
 check_old_files() { # an install.env, which earlier versions read, stops the install
   [ ! -f "$dir/install.env" ] ||
-    die "install.env is no longer read: move its settings into clusters.yaml (CATALOG_REPO_URL and LIBRARY_REVISION under repositories: as catalog and library, SITE_ISSUER_<NAME> as that site's issuer, the rest under options:; see clusters-example.yaml), then delete install.env"
+    die "install.env is no longer read: move its settings into clusters.yaml (CATALOG_REPO_URL and LIBRARY_REVISION under repositories: as catalog and library, the rest under options:; see clusters-example.yaml), then delete install.env"
 }
 
 inputs_value() { # NAME: its value in root/inputs.env, empty when unset
@@ -247,61 +239,11 @@ step_site() { # NAME: check the site, import it into the hub's ACM, wait until i
   hub_gate "site-$name-import" "$GATE_SITE_IMPORT_SECONDS" managedcluster_available "$name"
 }
 
-site_issuers() { # NAME: the site's DNS-01 ClusterIssuers, one per line (add-site.sh's filter); 2 on an oc error
-  local json rc
-  json=$(KUBECONFIG=$(cluster_kubeconfig "$1") oc_read get clusterissuers.cert-manager.io -o json) && rc=0 || rc=$?
-  [ "$rc" = 1 ] && return 0                     # no cert-manager, or no ClusterIssuer
-  if [ "$rc" != 0 ]; then echo "error: can't read $1's ClusterIssuers: ${json#oc error: }" >&2; return 2; fi
-  jq -r '.items[] | select(any(.spec.acme.solvers[]?; .dns01 != null)) | .metadata.name' <<<"$json"
-}
-
-site_files_present() { # NAME: the three files add-site.sh writes all exist, so it reads no issuer
-  [ -e "$dir/apps/$1-maas-tls.yaml" ] && [ -e "$dir/sites/$1/maas-tls/certificate.yaml" ] &&
-    [ -e "$dir/values/clusters/$1/rhoai.yaml" ]
-}
-
-# The MaaS files of every ingress and combined site, committed, pushed and
-# synced to the hub, so a later console Add of the site finds them. A site
-# whose files exist keeps them, as add-site.sh does, with no issuer check.
-step_site_files() {
-  local name role issuers var chosen n any=""
-  step site-files
-  for name in $(site_names); do
-    role=$(cluster_field "$name" role)
-    case "$role" in ingress|combined) ;; *) continue ;; esac
-    any=1
-    if site_files_present "$name"; then run_step site-files add-site.sh "$name"; continue; fi
-    issuers=$(site_issuers "$name") || stopped site-files
-    n=$(grep -c . <<<"$issuers" || true)
-    var="SITE_ISSUER_$(tr 'a-z-' 'A-Z_' <<<"$name")"
-    chosen=${!var:-}
-    if [ "$n" = 0 ]; then
-      echo "error: $name ($role) has no DNS-01 ClusterIssuer for its MaaS certificate; add one, or give it role inference." >&2
-      stopped site-files
-    elif [ -n "$chosen" ]; then
-      grep -qx -- "$chosen" <<<"$issuers" || {
-        echo "error: issuer $chosen (site $name in clusters.yaml) isn't a DNS-01 ClusterIssuer on $name; those are: $(echo $issuers)" >&2
-        stopped site-files; }
-      run_step site-files add-site.sh "$name" "$chosen"
-    elif [ "$n" = 1 ]; then
-      run_step site-files add-site.sh "$name"
-    else
-      echo "error: $name has several DNS-01 ClusterIssuers: $(echo $issuers). Set issuer: on site $name in clusters.yaml to the one that issues publicly trusted certificates for its apps domain." >&2
-      stopped site-files
-    fi
-  done
-  [ -n "$any" ] || { echo "No ingress or combined site: no site files."; return 0; }
-  run_step site-files git-push.sh "install: site files" apps/ sites/ values/clusters/
-  pushed=$(git -C "$dir" rev-parse HEAD)
-  hub_gate hub-root-sites "$GATE_ROOT_SECONDS" root_synced_to "$pushed"
-}
-
 # Each site from clusters.yaml, in file order, then the hub's Applications
 # again. hub-apps-final, like the ready check (scripts/ready-check.sh), lets
 # through the Applications that wait for a site: no site is in the grid yet.
 sites_phase() {
   local name
-  step_site_files
   for name in $(site_names); do step_site "$name"; done
   hub_gate hub-apps-final "$GATE_HUB_APPS_SECONDS" apps_healthy
 }

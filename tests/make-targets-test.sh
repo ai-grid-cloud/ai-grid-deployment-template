@@ -49,7 +49,7 @@ m() { env PATH="$T/bin:$PATH" make -s -C "$@"; }
 one=$(repo one site-b:combined)
 two=$(repo two site-b:combined site-c:inference)
 
-t "make help lists every guide target" 0 "console-secrets.*site-check.*site-wipe.*site-import.*site-add.*site-join.*site-status.*tenant-user.*tenant-call.*uninstall-site.*uninstall-hub.*uninstall-check" \
+t "make help lists every guide target" 0 "console-secrets.*site-check.*site-wipe.*site-import.*site-join.*site-status.*tenant-user.*tenant-call.*uninstall-site.*uninstall-hub.*uninstall-check" \
   bash -c 'make -s -C "$0" help | tr "\n" " "' "$one"
 
 : > "$STUB_LOG"
@@ -73,7 +73,7 @@ t "site-status with several sites lists them" 2 "name a site: site-b, site-c" m 
 t "site-status SITE= picks one" 0 "rhoai-site-c-x" m "$two" site-status SITE=site-c
 t "  ... and skips the MaaS host for an inference site" 0 "^ok$" bash -c '! grep -q "ingresses.config" "$0" && echo ok' "$STUB_LOG"
 t "a SITE that isn't a site is named" 2 "nope isn't a site in clusters.yaml: site-b, site-c" m "$two" site-status SITE=nope
-for target in site-check site-import site-join site-add uninstall-site; do
+for target in site-check site-import site-join uninstall-site; do
   t "$target with several sites lists them" 2 "name a site: site-b, site-c" m "$two" "$target"
 done
 
@@ -85,7 +85,7 @@ t "site-wipe SITE= passes the site" 0 "wipe-site.sh --site site-c --dry-run" mak
 t "uninstall-site previews by default" 0 "uninstall.sh site .* --dry-run" make -n -C "$one" uninstall-site
 t "uninstall-site CONFIRM=1 keeps a plan file" 0 '--plan-file "\.uninstall/\$n-plan\.tsv"' make -n -C "$one" uninstall-site CONFIRM=1
 t "uninstall-hub previews by default" 0 "uninstall.sh hub --dry-run" make -n -C "$one" uninstall-hub
-t "site-add passes ISSUER" 0 'add-site\.sh "\$n" letsencrypt' make -n -C "$one" site-add ISSUER=letsencrypt
+t "site-add is gone (no certificate step)" 2 "No rule to make target" make -n -C "$one" site-add
 t "tenant-user needs ORG" 2 "set ORG, such as: make tenant-user ORG=ORG_NAME" make -s -C "$one" tenant-user
 t "tenant-call needs MODEL" 2 "set MODEL, such as: make tenant-call MODEL=MODEL_NAME" \
   make -s -C "$one" tenant-call TENANT_USER=u PASSWORD_FILE=p SUBSCRIPTION=s

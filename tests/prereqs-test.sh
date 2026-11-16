@@ -37,7 +37,6 @@ case "$args" in
   *" get clusterversion version "*) answer version ;;
   *" auth can-i "*) answer can-i ;;
   *" get storageclasses."*) answer storageclasses.json ;;
-  *" get clusterissuers."*) [ -f "$d/fail-issuers" ] && { echo 'error: the server doesn'"'"'t have a resource type "clusterissuers"' >&2; exit 1; }; answer clusterissuers.json ;;
   *" image info "*)
     [ -f "$d/fail-image" ] && { echo "error: unauthorized: access to the requested resource is not authorized (auth $(<"$d/leak"))" >&2; exit 1; }
     echo "Name: quay.io/rhoai/rhoai-fbc-fragment" ;;
@@ -51,7 +50,6 @@ world() { # name: a fresh stub cluster that passes every check
   local w="$T/$1"; rm -rf "$w"; mkdir -p "$w"
   echo "4.22.18" > "$w/version"; echo yes > "$w/can-i"
   echo '{"items":[{"metadata":{"name":"gp3-csi","annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}]}' > "$w/storageclasses.json"
-  echo '{"items":[{"metadata":{"name":"le-dns"},"spec":{"acme":{"solvers":[{"dns01":{"route53":{}}}]}}}]}' > "$w/clusterissuers.json"
   echo "$TOKEN" > "$w/leak"
   echo "$w"
 }
@@ -87,7 +85,9 @@ mkdep() { # name clusters-body: a deployment at the pin with that clusters.yaml 
 D=$(mkdep deployment "hub: {name: hub, api: 'https://api.hub:6443'}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: 'https://api.site-b:6443'}")
 ALL=(--deployment "$D" --quay-auth-file "$A" --catalog-token-file "$TOK")
 t "all ok: no problem lines" '^[0-9]+ ok$' "$T/bin" "$w" "${ALL[@]}"
-t "all ok: site ClusterIssuer with DNS-01" '^ok +ClusterIssuer +le-dns \(DNS-01\)' "$T/bin" "$w" "${ALL[@]}"
+out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$T" STUB_DIR="$w" "$PY" "$SCRIPT" "${ALL[@]}" 2>&1) || true
+total=$((total+1))
+if ! grep -q ClusterIssuer <<<"$out"; then echo "   ok   no ClusterIssuer check (no certificate step)"; else echo "   FAIL no ClusterIssuer check"; fails=$((fails+1)); fi
 t "all ok: catalog pulls" '^ok +pull the pinned catalog +quay.io/rhoai/rhoai-fbc-fragment' "$T/bin" "$w" "${ALL[@]}"
 if grep -qE "$TOKEN|$PASSWORD" "$w/argv.log"; then echo "   FAIL a secret reached oc's argv"; fails=$((fails+1)); else echo "   ok   no secret on oc's argv"; fi
 if grep -qwE 'apply|create|delete|patch|edit|label|annotate|replace|scale' "$w/argv.log"; then
@@ -131,10 +131,6 @@ echo '{"items":[{"metadata":{"name":"gp2"}}]}' > "$w/storageclasses.json"
 t "OpenShift 4.20 is OLD" '^OLD +OpenShift 4.21 or later +4.20.5' "$T/bin" "$w" --deployment "$D"
 t "not cluster-admin" '^MISSING +cluster-admin' "$T/bin" "$w" --deployment "$D"
 t "no default StorageClass" '^MISSING +default StorageClass' "$T/bin" "$w" --deployment "$D"
-echo '{"items":[{"metadata":{"name":"self-signed"},"spec":{"selfSigned":{}}}]}' > "$w/clusterissuers.json"
-t "ClusterIssuer without DNS-01" '^MISSING +ClusterIssuer +self-signed \(no DNS-01\)' "$T/bin" "$w" --deployment "$D"
-touch "$w/fail-issuers"
-t "no cert-manager" '^MISSING +ClusterIssuer +error: the server' "$T/bin" "$w" --deployment "$D"
 touch "$w/fail-whoami"
 t "unreachable cluster" '^FAIL +reachable +hub: error: Unauthorized' "$T/bin" "$w" --deployment "$D"
 t "unreachable cluster skips the rest" '^skipped +cluster-admin +cluster not reachable' "$T/bin" "$w" --deployment "$D"

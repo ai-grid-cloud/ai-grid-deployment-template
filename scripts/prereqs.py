@@ -278,8 +278,6 @@ def check_cluster(name, role, kubeconfig):
     site = role != "hub"
     section(f"Site {name} ({role})" if site else f"Hub {name}")
     names = ["reachable", "OpenShift 4.21 or later", "cluster-admin", "default StorageClass"]
-    if role in ("combined", "ingress"):
-        names.append("ClusterIssuer")
     if not os.path.isfile(kubeconfig):
         report("skipped", f"{name} checks", f"no login: run make login NAME={name}")
         return
@@ -329,25 +327,6 @@ def check_cluster(name, role, kubeconfig):
         else:
             report("MISSING", "default StorageClass", "no StorageClass is marked default")
 
-    if "ClusterIssuer" not in names:
-        return
-    rc, out, err = oc("get", "clusterissuers.cert-manager.io", "-o", "json")
-    try:
-        items = json.loads(out).get("items", []) if rc == 0 else None
-    except ValueError:
-        items = None
-    if items is None:
-        report("MISSING", "ClusterIssuer", first_line(err) or "can't list ClusterIssuers (is cert-manager installed?)")
-    elif not items:
-        report("MISSING", "ClusterIssuer", "none; the site needs one that issues by DNS-01")
-    else:
-        parts = []
-        for i in items:
-            solvers = (((i.get("spec") or {}).get("acme") or {}).get("solvers")) or []
-            dns01 = any(isinstance(s, dict) and s.get("dns01") for s in solvers)
-            parts.append(f"{i['metadata']['name']} ({'DNS-01' if dns01 else 'no DNS-01'})")
-        status = "ok" if any("(DNS-01)" in p for p in parts) else "MISSING"
-        report(status, "ClusterIssuer", ", ".join(parts))
 
 
 def check_catalog_token(path, from_settings=False, label=None):
