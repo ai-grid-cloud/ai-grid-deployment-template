@@ -27,7 +27,7 @@ help: ## Show the targets
 secrets: ## Ask for each cluster's token or username and password, the two GitHub tokens and the quay.io/rhoai robot account; write them to .config/clusters.yaml (FORCE=1 replaces; NAME=cluster, github or quay asks for that one only)
 	@FORCE=$(FORCE) scripts/secrets.sh $(NAME)
 
-login: ## Log in to each cluster in clusters.yaml that needs it; NAME=... for one; NONINTERACTIVE=1 for no browser
+login: ## Log in to each cluster that needs it, with its stored credentials, else the browser; NAME=... for one
 	@scripts/login.sh $(if $(filter 1,$(NONINTERACTIVE)),--non-interactive) $(NAME)
 
 prereqs: ## Report what is installed and what isn't found; never blocks
