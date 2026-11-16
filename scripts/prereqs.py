@@ -54,7 +54,6 @@ TOOLS = [
     ("python3", ["python3", "--version"], "reads cluster state in the setup scripts"),
     ("clusteradm", ["clusteradm", "version"], "imports the site into ACM"),
     ("make", ["make", "--version"], "runs make prereqs"),
-    ("podman", ["podman", "--version"], "make secrets: the quay.io/rhoai login"),
 ]
 
 results = []
@@ -171,10 +170,14 @@ def pinned_catalog_image():
     return f"{vals['registry']}/{vals['repository']}{ref}"
 
 
-IN_ENV = " under options: in clusters.yaml"  # added to a hint when clusters.yaml was read
+HINTS = {  # the fix when make install's file is missing (scripts/clusters.sh secret_missing)
+    "QUAY_AUTH_FILE": "set quay.username and quay.password in .config/clusters.yaml (make secrets NAME=quay)",
+    "CATALOG_TOKEN_FILE": "set github.catalogToken in .config/clusters.yaml (make secrets NAME=github)",
+    "DEPLOYMENT_TOKEN_FILE": "set github.deploymentToken in .config/clusters.yaml (make secrets NAME=github)",
+}
 
 
-def check_registry(auth_file, from_settings=False):
+def check_registry(auth_file, from_settings=False, label=None):
     section("Registry logins (pre-release builds)")
     names = ["auth file", "quay.io/rhoai login", "registry.stage.redhat.io login", "pull the pinned catalog"]
     if not auth_file:
@@ -192,8 +195,8 @@ def check_registry(auth_file, from_settings=False):
             report("FAIL", "auth file", f"{auth_file}: {type(e).__name__}")
         else:
             report("MISSING", "auth file",
-                   f"{auth_file}: not found; set QUAY_AUTH_FILE{IN_ENV if from_settings else ''} "
-                   "to your auth file, or put it there")
+                   f"{auth_file}: not found; " + (HINTS["QUAY_AUTH_FILE"] if from_settings else
+                                                   "set QUAY_AUTH_FILE to your auth file, or put it there"))
         for n in names[1:]:
             report("skipped", n, "no readable auth file")
         return
@@ -205,7 +208,7 @@ def check_registry(auth_file, from_settings=False):
                 secrets.extend(p for p in user_pass.split(":", 1) if len(p) >= 4)
             except Exception:
                 pass
-    report("ok", "auth file", auth_file)
+    report("ok", "auth file", label or auth_file)
 
     def has(key):
         e = auths.get(key) or auths.get("https://" + key)
@@ -247,7 +250,7 @@ ROLES = ("hub", "combined", "ingress", "inference")
 
 def read_clusters(deployment):
     """[(name, role)] from DIR/clusters.yaml, or an error string. scripts/clusters.sh reads and checks it."""
-    if not os.path.isfile(os.path.join(deployment, "clusters.yaml")):
+    if not clusters_file(deployment):
         return "no clusters.yaml: run cp clusters-example.yaml clusters.yaml and fill it in"
     if not (shutil.which("kubectl") and shutil.which("jq")):
         return "needs kubectl and jq to read clusters.yaml"
@@ -348,8 +351,11 @@ def check_cluster(name, role, kubeconfig):
         report(status, "ClusterIssuer", ", ".join(parts))
 
 
-def check_catalog_token(path, from_settings=False):
+def check_catalog_token(path, from_settings=False, label=None):
     section("Catalog token")
+    if label:  # from .config/clusters.yaml or the environment: a value, not a file of yours
+        report("ok", "catalog token", label)
+        return
     if not path:
         report("skipped", "catalog token file",
                "no ~/.ai-grid/catalog-token; set CATALOG_TOKEN_FILE")
@@ -359,8 +365,8 @@ def check_catalog_token(path, from_settings=False):
         st = os.stat(path)
     except OSError:
         report("MISSING", "catalog token file",
-               f"{path} not found; set CATALOG_TOKEN_FILE{IN_ENV if from_settings else ''} "
-               "to your token file, or put it there")
+               f"{path} not found; " + (HINTS["CATALOG_TOKEN_FILE"] if from_settings else
+                                        "set CATALOG_TOKEN_FILE to your token file, or put it there"))
         return
     mode = stat.S_IMODE(st.st_mode)
     if not stat.S_ISREG(st.st_mode) or st.st_size == 0:
@@ -386,12 +392,44 @@ def default_auth_file():
 INSTALL_DEFAULTS = {"QUAY_AUTH_FILE": ".config/quay-auth.json", "CATALOG_TOKEN_FILE": ".config/catalog-token"}
 
 
+def clusters_file(deployment):
+    """The clusters file the scripts read: .config/clusters.yaml, else clusters.yaml; None without one."""
+    for rel in (".config/clusters.yaml", "clusters.yaml"):
+        if os.path.isfile(os.path.join(deployment, rel)):
+            return os.path.join(deployment, rel)
+    return None
+
+
+def resolved_secrets(deployment):
+    """{VAR: (path, source)} for the secret files make install uses, from scripts/clusters.sh
+    --resolve (it writes .config/generated/ from .config/clusters.yaml; it prints no secret).
+    {} when it can't run."""
+    env = dict(os.environ, PATH=os.environ.get("PATH", "") + ":/usr/bin:/bin")
+    try:
+        p = subprocess.run(["/bin/bash", os.path.join(REPO, "scripts", "clusters.sh"), "--resolve", deployment],
+                           capture_output=True, text=True, timeout=30, env=env)
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+    if p.returncode != 0:
+        return {}
+    out = {}
+    for line in p.stdout.splitlines():
+        var, _, rest = line.partition("=")
+        path, _, source = rest.partition("\t")
+        out[var] = (path, source)
+    return out
+
+
+def from_value(source):
+    """A label when the secret came from .config/clusters.yaml or an AI_GRID_ variable, else None."""
+    return source if source and (source.startswith("AI_GRID_") or source.endswith("in .config/clusters.yaml")) else None
+
+
 def deployment_settings(deployment):
     """{KEY: value} for the install settings in DIR/clusters.yaml, read by scripts/clusters.sh
     --settings as scripts/install.sh reads them, or None when it can't be read or sets no
     repositories.catalog."""
-    if not (os.path.isfile(os.path.join(deployment, "clusters.yaml"))
-            and shutil.which("kubectl") and shutil.which("jq")):
+    if not (clusters_file(deployment) and shutil.which("kubectl") and shutil.which("jq")):
         return None
     env = dict(os.environ, PATH=os.environ.get("PATH", "") + ":/usr/bin:/bin")
     try:
@@ -441,6 +479,14 @@ def main():
     a = p.parse_args()
     LIB = a.library
     settings = deployment_settings(a.deployment)
+    resolved = resolved_secrets(a.deployment) if settings is not None else {}
+    quay_label = catalog_label = None
+    if not a.quay_auth_file and "QUAY_AUTH_FILE" in resolved:
+        path, source = resolved["QUAY_AUTH_FILE"]
+        a.quay_auth_file, quay_label = path or None, from_value(source)
+    if not a.catalog_token_file and "CATALOG_TOKEN_FILE" in resolved:
+        path, source = resolved["CATALOG_TOKEN_FILE"]
+        a.catalog_token_file, catalog_label = path or None, from_value(source)
     a.quay_auth_file = (a.quay_auth_file or install_path("QUAY_AUTH_FILE", a.deployment, settings)
                         or os.environ.get("QUAY_AUTH_FILE") or default_auth_file())
     a.catalog_token_file = (a.catalog_token_file or install_path("CATALOG_TOKEN_FILE", a.deployment, settings)
@@ -450,9 +496,16 @@ def main():
     check_tools()
     check_old_settings(a.deployment)
     check_library(a.deployment)
-    check_registry(a.quay_auth_file, settings is not None)
+    check_registry(a.quay_auth_file, settings is not None, quay_label)
     check_clusters(a.deployment)
-    check_catalog_token(a.catalog_token_file, settings is not None)
+    check_catalog_token(a.catalog_token_file, settings is not None, catalog_label)
+    if settings is not None:
+        section("Deployment token")
+        path, source = resolved.get("DEPLOYMENT_TOKEN_FILE", ("", ""))
+        if path and os.path.isfile(path) and os.path.getsize(path):
+            report("ok", "deployment token", from_value(source) or path)
+        else:
+            report("MISSING", "deployment token", HINTS["DEPLOYMENT_TOKEN_FILE"])
 
     counts = {s: results.count(s) for s in ("ok", "MISSING", "OLD", "FAIL", "skipped")}
     print("\n" + ", ".join(f"{n} {s.lower()}" for s, n in counts.items() if n))
