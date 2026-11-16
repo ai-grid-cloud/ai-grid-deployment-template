@@ -3,12 +3,14 @@
 # Read only; prints one line per Application that reads the library:
 #   OK    NAME  every library source at your pin (libraryRevision in
 #               root/applicationset.yaml)
-#   HEAD  NAME  a library source at HEAD: an Application that one of the
-#               library's own ApplicationSets generates (sites' rhoai-*,
-#               maas-db-*, acm-submariner-*). The root can't pin those on the
-#               library's main branch (docs/upstream-main-limits.md, L1), so
-#               this is reported, not a failure.
-#   OFF   NAME  a library source at any other revision
+#   HEAD  NAME  a library source at HEAD, in an Application the root
+#               ApplicationSet (apps) didn't generate: one of the library's own
+#               ApplicationSets did (sites' rhoai-*, maas-db-*,
+#               acm-submariner-*). The root can't pin those on the library's
+#               main branch (docs/upstream-main-limits.md, L1), so this is
+#               reported, not a failure.
+#   OFF   NAME  a library source at any other revision, or at HEAD in an
+#               Application the root generated (it pins every one of those)
 # Exits 1 if any Application is OFF.
 #
 #   scripts/check-revisions.sh
@@ -27,8 +29,9 @@ rows=$(jq -r --arg u "${url%.git}" --arg p "$pin" '
   .items[] | .metadata.name as $n
   | [(.spec.sources // [.spec.source])[] | select(.repoURL != null and (.repoURL | rtrimstr(".git")) == $u) | .targetRevision // "HEAD"] as $revs
   | select($revs | length > 0)
+  | ([.metadata.ownerReferences[]? | select(.kind == "ApplicationSet" and .name == "apps")] | length > 0) as $root
   | if all($revs[]; . == $p) then "OK\t\($n)\t\($p)"
-    elif all($revs[]; . == $p or . == "HEAD") then "HEAD\t\($n)\tHEAD"
+    elif ($root | not) and all($revs[]; . == $p or . == "HEAD") then "HEAD\t\($n)\tHEAD"
     else "OFF\t\($n)\t\([$revs[] | select(. != $p)] | unique | join(","))" end' <<<"$json")
 off=0 head=0
 while IFS=$'\t' read -r state name rev; do

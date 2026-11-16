@@ -47,6 +47,17 @@ t "Applications the library's own ApplicationSets generate at HEAD: reported as 
   "^HEAD +maas-db-local-cluster .*upstream-main-limits.md, L1" "^OFF "
 t "  ... with a count" 0 "2 Application\(s\) read the library at HEAD"
 
+owned() { # NAME SOURCE: an Application the root ApplicationSet apps generated
+  printf '{"metadata":{"name":"%s","ownerReferences":[{"kind":"ApplicationSet","name":"apps"}]},"spec":{"source":%s}}' "$1" "$2"
+}
+ownedn() { printf '{"metadata":{"name":"%s","ownerReferences":[{"kind":"ApplicationSet","name":"apps"}]},"spec":{"sources":[%s]}}' "$1" "$2"; }
+apps "$(owned acm "$(src "$LIBURL" HEAD apps/acm/manifests)")"
+t "a root-generated Application at HEAD: OFF, exit 1 (the root pins its apps)" 1 "^OFF +acm .*HEAD" "^HEAD "
+apps "$(ownedn grid-bootstrap "$(src "$LIBURL" "$PIN" ""),$(src "$LIBURL" HEAD apps/grid-bootstrap/policies)")"
+t "  ... also when only one of its sources is at HEAD" 1 "^OFF +grid-bootstrap .*HEAD"
+apps "$(owned acm "$(src "$LIBURL" "$PIN" apps/acm/manifests)")"
+t "a root-generated Application at the pin: OK" 0 "^OK +acm"
+
 apps "$(app1 acm "$(src "$LIBURL" 0123456789abcdef0123456789abcdef01234567 apps/acm/manifests)")"
 t "a library source at another commit: OFF, exit 1" 1 "^OFF +acm .*0123456789ab"
 
