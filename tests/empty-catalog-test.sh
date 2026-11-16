@@ -31,8 +31,30 @@ t "previews what it removes" 0 "clusters/site-b/model.yaml" make -s -C "$D" empt
 t "  ... and keeps README.md" 0 "^ok$" bash -c '! make -s -C "$0" empty-catalog | grep -q "  README.md" && echo ok' "$D"
 t "  ... says it's a preview" 0 "CONFIRM=1" make -s -C "$D" empty-catalog
 t "  ... and changes nothing" 0 "subscriptions.yaml" files
+t "--check on a non-empty catalog exits 1" 1 "isn't empty.*|clusters/site-b/model.yaml" "$D/scripts/empty-catalog.sh" --check
 t "CONFIRM=1 commits and pushes" 0 "catalog: empty for uninstall" bash -c 'make -s -C "$0" empty-catalog CONFIRM=1 >/dev/null && git --git-dir="$1" log -1 --format=%s main' "$D" "$T/catalog.git"
 t "  ... leaving only README.md" 0 "^README.md $" files
+t "--check on an empty catalog passes" 0 "already empty" "$D/scripts/empty-catalog.sh" --check
+
+# --check with CATALOG_TOKEN_FILE: a git wrapper logs its argv and asks
+# $GIT_ASKPASS for the password, as git does over https; the token must reach
+# it only through the helper, never argv or output.
+token='SENTINEL_CATALOG_TOKEN'; printf '%s\n' "$token" > "$T/catalog-token"
+mkdir -p "$T/bin"; real_git=$(command -v git)
+cat > "$T/bin/git" <<EOF
+#!/bin/bash
+echo "\$*" >> "$T/git-argv.log"
+case " \$* " in *" clone "*)
+  [ -n "\${GIT_ASKPASS:-}" ] && [ "\$("\$GIT_ASKPASS" "Password for 'https://x-access-token@github.com': ")" = "$token" ] &&
+    echo askpass-gave-token >> "$T/askpass.log" ;;
+esac
+exec "$real_git" "\$@"
+EOF
+chmod +x "$T/bin/git"
+check_out=$(PATH="$T/bin:$PATH" CATALOG_TOKEN_FILE="$T/catalog-token" "$D/scripts/empty-catalog.sh" --check 2>&1) || true
+t "--check with CATALOG_TOKEN_FILE uses the askpass helper" 0 "^askpass-gave-token$" cat "$T/askpass.log"
+t "  ... and the token is never in argv or output" 0 "^ok$" bash -c '! grep -qF "$0" "$1" && ! grep -qF "$0" <<<"$2" && echo ok' "$token" "$T/git-argv.log" "$check_out"
+
 t "an empty catalog has nothing to remove" 0 "already empty" make -s -C "$D" empty-catalog CONFIRM=1
 sed -i.bak 's#^catalogRepoURL=.*#catalogRepoURL=#' "$D/root/inputs.env"; rm "$D/root/inputs.env.bak"
 t "no catalogRepoURL names set-inputs.sh" 1 "set-inputs.sh" "$D/scripts/empty-catalog.sh"
