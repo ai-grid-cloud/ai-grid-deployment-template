@@ -12,7 +12,7 @@ export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NA
 
 .PHONY: help login prereqs bootstrap status console-secrets test update \
   site-check site-wipe site-import site-add site-join site-status tenant-user tenant-call \
-  empty-catalog uninstall-site uninstall-hub uninstall-check
+  empty-catalog uninstall-site uninstall-hub uninstall-check provider-admin ready-check
 
 # The site targets work on the only site in clusters.yaml; with several, set
 # SITE=NAME. Targets that change a cluster without asking preview by default;
@@ -86,3 +86,9 @@ uninstall-hub: ## Preview the hub's uninstall; CONFIRM=1 runs it (page 8)
 
 uninstall-check: ## After an uninstall, show what is left on each cluster; read-only (page 8)
 	@scripts/uninstall-check.sh
+
+provider-admin: ## Create the provider-admin ServiceAccount and its token
+	@scripts/provider-admin.sh
+
+ready-check: ## Check the installed end state and write .install/outputs.json; read-only
+	@scripts/ready-check.sh
