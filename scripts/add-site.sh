@@ -73,14 +73,15 @@ PY
   echo "MaaS hostname maas.$domain, certificate from ClusterIssuer $issuer."
 fi
 "$here/check-deployment.sh" "$dir"
+# PUSH=1 first: it also pushes files committed by an earlier run (join-site sends you here).
+if [ "${PUSH:-}" = 1 ]; then
+  "$here/git-push.sh" "site $name: values and MaaS certificate" "${files[@]}"
+  exit
+fi
 if [ ${#missing[@]} -eq 0 ] && git -C "$dir" rev-parse --git-dir >/dev/null 2>&1 &&
    [ -z "$(git -C "$dir" status --porcelain -- "${files[@]}")" ]; then
   echo; echo "Nothing to commit: the site's files are already committed."
   exit 0
-fi
-if [ "${PUSH:-}" = 1 ]; then
-  "$here/git-push.sh" "site $name: values and MaaS certificate" "${files[@]}"
-  exit
 fi
 cat <<EOF
 

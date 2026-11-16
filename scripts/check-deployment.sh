@@ -24,7 +24,7 @@ placeholders="$(cd "$dir" && grep -rnoE --include='*.yaml' --include='*.yml' --i
 [ -z "$placeholders" ] || { echo "placeholders left in your files:"; echo "$placeholders"; }
 [ -z "$left$placeholders" ] || exit 1
 # clusters.yaml, when there is one: a hub, and sites with known roles.
-if [ -f "$dir/clusters.yaml" ]; then . "$(dirname "$0")/clusters.sh"; clusters_load "$dir" || exit 1; fi
+if [ -f "$dir/.config/clusters.yaml" ] || [ -f "$dir/clusters.yaml" ]; then . "$(dirname "$0")/clusters.sh"; clusters_load "$dir" || exit 1; fi
 # Every input the library declares (its bootstrap/hub generator values) must
 # be set: replacing the values map can drop one without leaving a marker.
 library_dir "$dir"

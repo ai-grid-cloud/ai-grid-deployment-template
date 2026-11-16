@@ -20,6 +20,7 @@ case "$a" in
                grep -qxF "    token: ${STUB_TOKEN:-sha256~SENTINEL}" "${KUBECONFIG:-/dev/null}" 2>/dev/null && echo admin ||
                 { echo "error: You must be logged in to the server (Unauthorized)" >&2; exit 1; } ;;
   *" login "*) echo "stub oc: login $*" ;;
+  *" config view --raw --flatten "*) echo "# flattened"; cat "$KUBECONFIG" ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
 STUB
@@ -155,8 +156,8 @@ new_repo; mkdir -p "$D/kc"
 printf 'apiVersion: v1\nkind: Config\nusers:\n- name: x\n  user:\n    token: %s\n' "$SENTINEL" > "$D/kc/hub.yaml"
 private "hub: {kubeconfig: kc/hub.yaml}"
 run -- --non-interactive hub
-kc_copied() { [ "$rc" = 0 ] && mode600 "$D/.config/hub/kubeconfig" && cmp -s "$D/kc/hub.yaml" "$D/.config/hub/kubeconfig"; }
-t "credentials.hub.kubeconfig (relative): copied to .config/hub/kubeconfig, mode 600" kc_copied
+kc_copied() { [ "$rc" = 0 ] && mode600 "$D/.config/hub/kubeconfig" && [ "$(head -n 1 "$D/.config/hub/kubeconfig")" = "# flattened" ]; }
+t "credentials.hub.kubeconfig (relative): flattened into .config/hub/kubeconfig, mode 600" kc_copied
 t "  ... no OAuth call" no_curl
 
 new_repo; mkdir -p "$D/kc"; printf 'apiVersion: v1\nkind: Config\n' > "$D/kc/hub.yaml"
@@ -236,5 +237,15 @@ new_repo; private "hub: {token: '$SENTINEL'}"
 run -- hub --token=x
 t "explicit oc flags: passed to oc login as today, stored credentials unused" \
   grep -qx 'login --server https://api.hub.example.com:6443 --token=x' "$W/argv.log"
+
+# M1: a username or password with a line break is refused, never sent.
+new_repo; private "hub: {username: \"ad\\nmin\", password: \"$PW\"}"
+run -- --non-interactive hub
+t "a username with a line break: refused, no OAuth call" bash -c '[ "$0" = 1 ] && grep -q "line break" <<<"$1" && ! grep -q "^curl" "$2/argv.log"' "$rc" "$out" "$W"
+# M3: the environment wins over the file's kubeconfig.
+new_repo; mkdir -p "$D/kc"; printf 'apiVersion: v1\nkind: Config\nusers:\n- name: x\n  user:\n    token: %s\n' "$SENTINEL" > "$D/kc/hub.yaml"
+private "hub: {kubeconfig: kc/hub.yaml}"
+run AI_GRID_TOKEN_HUB="$SENTINEL" -- --non-interactive hub
+t "AI_GRID_TOKEN_ wins over credentials.NAME.kubeconfig" bash -c '[ "$0" = 0 ] && ! grep -q "flattened" "$1/.config/hub/kubeconfig"' "$rc" "$D"
 
 echo "login tests: $((total-fails)) ok, $fails failed"; exit "$fails"

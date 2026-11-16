@@ -106,7 +106,10 @@ for name in $(hub_name) $(site_names); do
     c_tok[i]=$tok c_user[i]="" c_pw[i]="" c_kc[i]=""; echo "credentials.$name: token set."; continue
   fi
   ask user "Username for $name (empty skips)" visible; trim user
-  [ -n "$user" ] || { echo "credentials.$name: skipped."; continue; }
+  if [ -z "$user" ]; then
+    if [ -n "${c_tok[i]}${c_user[i]}" ]; then echo "credentials.$name: kept."; else echo "credentials.$name: skipped."; fi
+    continue
+  fi
   ask pw "Password for $user on $name" hidden
   [ -n "$pw" ] || { echo "credentials.$name: no password, skipped."; continue; }
   c_tok[i]="" c_user[i]=$user c_pw[i]=$pw c_kc[i]=""; echo "credentials.$name: username and password set."
@@ -119,7 +122,9 @@ one() { # VAR JQ_PATH PROMPT hidden|visible: keeps VAR's current value or asks f
   else
     local _n; ask _n "$3 (empty skips)" "$4"
     [ "$4" = hidden ] && [[ "$2" == *password ]] || trim _n
-    if [ -n "$_n" ]; then _v=$_n; echo "${2#.}: set."; else echo "${2#.}: skipped."; fi
+    if [ -n "$_n" ]; then _v=$_n; echo "${2#.}: set."
+    elif [ -n "$_v" ]; then echo "${2#.}: kept."
+    else echo "${2#.}: skipped."; fi
   fi
   printf -v "$1" '%s' "$_v"
 }

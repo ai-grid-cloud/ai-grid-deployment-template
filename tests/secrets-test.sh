@@ -202,6 +202,13 @@ out=$(printf '\n' | env PATH="$T/bin:$PATH" "$D/scripts/secrets.sh" nope 2>&1) &
 t "an unknown NAME: exit 1 with the valid names, file kept" bash -c '[ "$0" = 1 ] && grep -q "NAME=nope isn.t one of: hub site-b github quay" <<<"$1" && [ "$(cat "$2/.config/clusters.yaml")" = "$3" ]' "$rc" "$out" "$D" "$before"
 t "make secrets NAME= passes the name" bash -c 'make -n -C "$0" secrets NAME=site-b | grep -q "scripts/secrets.sh site-b"' "$SRC"
 
+# M9: with FORCE=1, an empty answer keeps the stored value and says so.
+new_repo
+run "$S-hub" "" "kubeadmin" "$S-pw" "$S-d" "$S-c" "robot" "$S-q"
+
+ENVV=(FORCE=1); run "" "" "" "" "" "" "" "" "" ""; ENVV=()
+t "FORCE=1 and an empty answer: kept, not skipped" bash -c '! grep -q skipped <<<"$0" && grep -q "credentials.hub: kept" <<<"$0" && grep -q "github.catalogToken: kept" <<<"$0"' "$out"
+
 # 10. No clusters.yaml at all.
 D="$T/repo-none"; mkdir -p "$D"; cp -R "$SRC/scripts" "$D/"; cp "$SRC/clusters-example.yaml" "$D/"
 run ""

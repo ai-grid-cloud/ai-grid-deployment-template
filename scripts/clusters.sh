@@ -28,7 +28,7 @@
 
 CLUSTERS_DIR="" CLUSTERS_ROWS="" CLUSTERS_JSON="" CLUSTERS_FILE=""
 # The keys clusters.yaml's options: may hold (make install's settings).
-SETTINGS_OPTIONS_RE='KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_ROOT_SECONDS|GATE_MCH_SECONDS|GATE_HUB_APPS_SECONDS|GATE_SITE_IMPORT_SECONDS|GATE_READY_SECONDS|GATE_INTERVAL|GATE_ERROR_LIMIT|GATE_O11Y_SECONDS|GATE_TENANT_IDP_SECONDS|WIPE_PROTECT_NAMESPACES|WIPE_PROTECT_PACKAGES'
+SETTINGS_OPTIONS_RE='KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_ROOT_SECONDS|GATE_MCH_SECONDS|GATE_HUB_APPS_SECONDS|GATE_SITE_IMPORT_SECONDS|GATE_READY_SECONDS|GATE_INTERVAL|GATE_ERROR_LIMIT|GATE_O11Y_SECONDS|GATE_TENANT_IDP_SECONDS'
 INSTALL_NS_RE='open-cluster-management|multicluster-engine|redhat-ods|redhat-ai-grid|maas|ai-grid|gitops|kuadrant|submariner'
 
 clusters_load() {
@@ -48,10 +48,22 @@ clusters_load() {
     echo "error: ${f#"$CLUSTERS_DIR/"} isn't valid YAML${left:+ (at $left)}" >&2; return 1
   fi
   [ "$(jq -r .kind <<<"$json")" = Clusters ] || { echo "error: clusters.yaml needs kind: Clusters" >&2; return 1; }
-  if [ -z "$private" ] && [ "$(jq '[.credentials, .github, .quay] | map(select(. != null)) | length' <<<"$json")" != 0 ]; then
-    echo "error: clusters.yaml is committed, so it can't hold credentials:, github: or quay:: move the file to .config/clusters.yaml (chmod 600), which git ignores" >&2
+  # The committed clusters.yaml never holds secrets, whichever file is read.
+  if [ -f "$CLUSTERS_DIR/clusters.yaml" ] &&
+     ! KUBECONFIG=/dev/null kubectl label --local -f "$CLUSTERS_DIR/clusters.yaml" ai-grid.dev/read=true -o json 2>/dev/null |
+       jq -e '[.credentials, .github, .quay] | map(select(. != null)) | length == 0' >/dev/null 2>&1; then
+    echo "error: clusters.yaml is committed, so it can't hold credentials:, github: or quay: (or isn't valid YAML): move the secrets to .config/clusters.yaml (chmod 600), which git ignores" >&2
     return 1
   fi
+  # Each of these is a map; a value in its place is named by path only, never printed.
+  left=$(jq -r '
+      ([["options"], ["repositories"], ["hub"], ["credentials"], ["github"], ["quay"]][] as $p
+        | select(getpath($p) | . != null and type != "object") | $p | join(".")),
+      ((.credentials // {}) | if type == "object" then to_entries[] | select(.value != null and (.value | type) != "object") | "credentials.\(.key)" else empty end),
+      ((.sites // []) | if type == "array" then to_entries[] | select((.value | type) != "object") | "sites[\(.key)]" else "sites" end)
+      ' <<<"$json" 2>/dev/null | head -n 1) ||
+    { echo "error: ${f#"$CLUSTERS_DIR/"}: can't read its structure" >&2; return 1; }
+  [ -z "$left" ] || { echo "error: ${f#"$CLUSTERS_DIR/"}: $left must be a map" >&2; return 1; }
   # Options that named secret files before the secrets moved into the private file.
   left=$(jq -r '(.options // {}) | keys[] | select(. == "DEPLOYMENT_TOKEN_FILE" or . == "CATALOG_TOKEN_FILE" or . == "QUAY_AUTH_FILE")' <<<"$json" | head -n 1)
   case "$left" in
@@ -218,7 +230,7 @@ settings_apply() {
       { echo "error: ${CLUSTERS_FILE#"$CLUSTERS_DIR/"}: unknown setting $key" >&2; return 1; }
     printf -v "$key" '%s' "$value"; export "${key?}"
   done <<<"$lines"
-  for key in $(compgen -v GATE_; compgen -v WIPE_PROTECT_); do
+  for key in $(compgen -v GATE_); do
     [[ "$key" != GATE_* || "${!key}" =~ ^[0-9]+$ ]] ||
       { echo "error: $key must be a number of seconds, not ${!key}" >&2; return 1; }
   done
@@ -240,6 +252,7 @@ _secret_file() { # VAR ENV JQ_PATH NAME [HOME_DEFAULT]
   v=${!env:-}; [ -z "$v" ] || src=$env
   if [ -z "$v" ] && [ -n "${!var:-}" ]; then
     f=$(_abs "${!var}") src=$var
+    [ "$f" = "$CLUSTERS_DIR/.config/generated/$name" ] || rm -f "$CLUSTERS_DIR/.config/generated/$name"
   else
     if [ -z "$v" ]; then v=$(secret_get "$path") || return 1; [ -z "$v" ] || src="${path#.} in .config/clusters.yaml"; fi
     if [ -n "$v" ]; then
@@ -259,6 +272,7 @@ _quay_auth() {
   [ -z "$u$p" ] || src="AI_GRID_QUAY_USERNAME and AI_GRID_QUAY_PASSWORD"
   if [ -z "$u$p" ] && [ -n "${QUAY_AUTH_FILE:-${RHOAI_QUAY_AUTH_FILE:-}}" ]; then
     f=$(_abs "${QUAY_AUTH_FILE:-$RHOAI_QUAY_AUTH_FILE}") src=QUAY_AUTH_FILE
+    [ "$f" = "$CLUSTERS_DIR/.config/generated/quay-auth.json" ] || rm -f "$CLUSTERS_DIR/.config/generated/quay-auth.json"
   else
     if [ -z "$u$p" ]; then
       u=$(secret_get .quay.username) && p=$(secret_get .quay.password) || return 1

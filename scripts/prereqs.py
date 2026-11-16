@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report which AI Grid install prerequisites you have. Never blocks, never changes anything.
+"""Report which AI Grid install prerequisites you have. Never blocks; changes nothing on a cluster.
 
 Usage: scripts/prereqs.py [--library DIR] [--deployment DIR]
                           [--quay-auth-file FILE] [--catalog-token-file FILE]
@@ -10,17 +10,16 @@ at your pin (scripts/library.sh).
 The clusters come from the deployment's clusters.yaml, each with its login in
 .config/NAME/kubeconfig. LIBRARY sets the library checkout.
 
-Without --quay-auth-file and --catalog-token-file, the two files are the ones
-make install uses. QUAY_AUTH_FILE and CATALOG_TOKEN_FILE under options: in the
-deployment's clusters.yaml win over the environment variables of the same names; a key
-it leaves out takes the environment variable; an empty value means
-.config/quay-auth.json and .config/catalog-token; a relative path is relative to the
-deployment. When clusters.yaml can't be read, or there's no catalog in its
-repositories.catalog or else CATALOG_REPO_URL (the page-by-page guide), the
-environment variables apply, else
-QUAY_AUTH_FILE is the first of
-~/.config/containers/auth.json and $XDG_RUNTIME_DIR/containers/auth.json that
-exists, and CATALOG_TOKEN_FILE is ~/.ai-grid/catalog-token if it exists. A check whose input you haven't set prints
+Without --quay-auth-file and --catalog-token-file, it checks the secrets make
+install uses, as scripts/clusters.sh deployment_load finds them (clusters.sh
+--resolve): AI_GRID_* values, then QUAY_AUTH_FILE and CATALOG_TOKEN_FILE, then
+quay: and github: in .config/clusters.yaml, then .config/quay-auth.json and
+.config/catalog-token. That refreshes .config/generated/ from .config/clusters.yaml,
+the only thing it writes. Page by page (no .config/clusters.yaml and no catalog in
+clusters.yaml or CATALOG_REPO_URL), the environment variables apply, else
+QUAY_AUTH_FILE is the first of ~/.config/containers/auth.json and
+$XDG_RUNTIME_DIR/containers/auth.json that exists, and CATALOG_TOKEN_FILE is
+~/.ai-grid/catalog-token if it exists. A check whose input you haven't set prints
 "skipped". Every line is: status, name, detail. Statuses: ok, MISSING,
 OLD, FAIL, skipped. Cluster checks are read-only (get, whoami, auth can-i).
 The registry check runs "oc image info" with your auth file; it never prints a
@@ -388,7 +387,7 @@ def default_auth_file():
                           run_dir and os.path.join(run_dir, "containers", "auth.json"))
 
 
-# install.sh's defaults for a setting clusters.yaml leaves out or leaves empty.
+# The files of earlier versions, which make install still reads when nothing else supplies the secret.
 INSTALL_DEFAULTS = {"QUAY_AUTH_FILE": ".config/quay-auth.json", "CATALOG_TOKEN_FILE": ".config/catalog-token"}
 
 
@@ -448,14 +447,9 @@ def deployment_settings(deployment):
 
 
 def install_path(key, deployment, settings):
-    """The file make install uses for KEY, as scripts/install.sh picks it: clusters.yaml's
-    value beats the environment, and an unset or empty one falls back to the
-    environment, else to .config/ in the deployment. None when clusters.yaml can't be read."""
-    if settings is None:
-        return None
-    value = (settings[key] if key in settings else os.environ.get(key)) or INSTALL_DEFAULTS[key]
-    path = os.path.expanduser(value)
-    return path if os.path.isabs(path) else os.path.join(deployment, path)
+    """Where make install looks for KEY when nothing supplies it: its old file under .config/
+    (named in the MISSING hint). None page by page."""
+    return None if settings is None else os.path.join(deployment, INSTALL_DEFAULTS[key])
 
 
 def check_old_settings(deployment):
@@ -473,9 +467,9 @@ def main():
     p.add_argument("--deployment", default=REPO, help="your deployment repository (default: this one)")
     p.add_argument("--library", default=LIB, help="your library checkout (default: .library) [LIBRARY]")
     p.add_argument("--quay-auth-file",
-                   help="container auth file with your quay.io login [clusters.yaml, then QUAY_AUTH_FILE]")
+                   help="container auth file with your quay.io login [default: what make install uses]")
     p.add_argument("--catalog-token-file",
-                   help="file holding the catalog repository token [clusters.yaml, then CATALOG_TOKEN_FILE]")
+                   help="file holding the catalog repository token [default: what make install uses]")
     a = p.parse_args()
     LIB = a.library
     settings = deployment_settings(a.deployment)

@@ -67,6 +67,8 @@ D=$(repo issuerfile '  - {name: site-b, issuer: le-dns-staging, role: combined, 
 t "the site's issuer: in clusters.yaml picks one" 0 "certificate from ClusterIssuer le-dns-staging"
 printf '#!/bin/bash\necho "git-push.sh $*"\n' > "$D/scripts/git-push.sh"; rm -rf "$D/apps" "$D/sites" "$D/values"
 PUSH=1 t "PUSH=1 pushes with git-push.sh" 0 "^git-push.sh site site-b: values and MaaS certificate apps/site-b-maas-tls.yaml"
+git -C "$D" init -q 2>/dev/null; git -C "$D" -c user.email=t@t -c user.name=t add -A >/dev/null 2>&1; git -C "$D" -c user.email=t@t -c user.name=t -c core.hooksPath=/dev/null commit -qm files >/dev/null 2>&1
+PUSH=1 t "PUSH=1 with the files already committed: still pushes" 0 "^git-push.sh site site-b"
 
 W="$T/none"; mkdir -p "$W"; echo "{\"items\":[$(issuer le-http http01)]}" > "$W/issuers.json"
 D=$(repo none "$B")
