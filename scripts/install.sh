@@ -104,6 +104,9 @@ read_settings() { # clusters.yaml's settings into exported variables; stops on a
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     key=${line%%=*} value=${line#*=}
+    # Only a known setting becomes a variable, never PATH or the like.
+    [[ "$key" =~ ^(CATALOG_REPO_URL|LIBRARY_REVISION|SITE_ISSUER_[A-Z0-9_]+|$SETTINGS_OPTIONS_RE)$ ]] ||
+      die "clusters.yaml: unknown setting $key"
     printf -v "$key" '%s' "$value"; export "${key?}"
   done <<<"$lines"
   for key in $(compgen -v GATE_); do
