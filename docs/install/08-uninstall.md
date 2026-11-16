@@ -196,8 +196,10 @@ make uninstall-check
 For each cluster you should see `Argo CD Applications: none`, `Install namespaces left: none`,
 `Namespaces in Terminating: none`, and your platform's identity providers. Then sign in once to the cluster's web console.
 
-To reinstall, start again at [set up your deployment repository](02-repositories.md), with the same or new
-repositories.
+To reinstall, start again at [set up your deployment repository](02-repositories.md), or at
+[install with one command](09-hands-off.md), with the same or new repositories. If you skipped
+[empty the catalog](#1-empty-the-catalog), run `make empty-catalog CONFIRM=1` first, so the reinstall starts with no
+models or subscriptions.
 
 ## Checkpoint
 
