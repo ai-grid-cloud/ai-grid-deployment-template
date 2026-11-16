@@ -24,8 +24,8 @@ need = $(if $($(1)),,$(error set $(1), such as: make $@ $(1)=$(2)))
 help: ## Show the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /: /'
 
-secrets: ## Ask for each cluster token, the two GitHub tokens and the quay.io login; write them to .config/ (FORCE=1 replaces)
-	@FORCE=$(FORCE) scripts/secrets.sh
+secrets: ## Ask for each cluster's token or username and password, the two GitHub tokens and the quay.io/rhoai robot account; write them to .config/clusters.yaml (FORCE=1 replaces; NAME=cluster, github or quay asks for that one only)
+	@FORCE=$(FORCE) scripts/secrets.sh $(NAME)
 
 login: ## Log in to each cluster in clusters.yaml that needs it; NAME=... for one; NONINTERACTIVE=1 for no browser
 	@scripts/login.sh $(if $(filter 1,$(NONINTERACTIVE)),--non-interactive) $(NAME)
