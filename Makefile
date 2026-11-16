@@ -7,8 +7,10 @@
 # $XDG_RUNTIME_DIR/containers/auth.json; ALLOW_GENERIC_LOGIN=1 lets bootstrap
 # use a general quay.io login. CATALOG_TOKEN_FILE defaults to
 # ~/.ai-grid/catalog-token; KEYCLOAK_NAMESPACE and KEYCLOAK_REALM to the
-# template's tenant-idp and tenants (console-secrets). make prereqs reads
-# QUAY_AUTH_FILE and CATALOG_TOKEN_FILE from install.env before those defaults.
+# template's tenant-idp and tenants (console-secrets). When install.env exists,
+# make prereqs checks the files make install uses: install.env's QUAY_AUTH_FILE
+# and CATALOG_TOKEN_FILE beat these variables, and their defaults are
+# .config/quay-auth.json and .config/catalog-token.
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
 .PHONY: help login prereqs bootstrap status console-secrets test update \
