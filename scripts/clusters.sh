@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
-# Reads clusters.yaml at the root of a deployment repository (copied from
-# clusters-example.yaml): the hub, and each site with its role, location and
-# API URL, and make install's settings (repositories:, options:, each site's
-# issuer). The hub's name is "hub" unless the file names it. Each cluster's login is .config/NAME/kubeconfig (git-ignored; make
-# login). kubectl parses the YAML offline (--local), and jq reads the result.
+# Reads a deployment repository's clusters.yaml: .config/clusters.yaml when it
+# exists (private: git-ignored, mode 600, and the only place secrets may go),
+# else clusters.yaml at the root (copied from clusters-example.yaml). It holds
+# the hub, and each site with its role, location and API URL; make install's
+# settings (repositories:, options:, each site's issuer); and, in the private
+# file only, the secrets (credentials:, github:, quay:). The hub's name is
+# "hub" unless the file names it. Each cluster's login is
+# .config/NAME/kubeconfig (git-ignored; make login). kubectl parses the YAML
+# offline (--local), and jq reads the result. No error quotes the file's text.
 #
 # Sourced by the other scripts:
-#   clusters_load DIR             reads and checks DIR/clusters.yaml
+#   clusters_load DIR             reads and checks DIR/.config/clusters.yaml, else DIR/clusters.yaml
+#   CLUSTERS_FILE                 the file it read
+#   secret_get JQ_PATH            a secret's value, such as .github.catalogToken; empty when unset
+#   cluster_secret NAME KEY       credentials.NAME.KEY (token, username, password, kubeconfig)
 #   settings_lines                its install settings, KEY=VALUE per line
 #   hub_name, site_names          the hub's name; the sites' names
 #   site_name [NAME]              NAME, or the only site when NAME is empty;
@@ -17,21 +24,39 @@
 #   INSTALL_NS_RE                 an extended regex matching the namespaces an
 #                                 install creates on a hub or a site
 
-CLUSTERS_DIR="" CLUSTERS_ROWS="" CLUSTERS_JSON=""
+CLUSTERS_DIR="" CLUSTERS_ROWS="" CLUSTERS_JSON="" CLUSTERS_FILE=""
 # The keys clusters.yaml's options: may hold (make install's settings).
 SETTINGS_OPTIONS_RE='DEPLOYMENT_TOKEN_FILE|CATALOG_TOKEN_FILE|QUAY_AUTH_FILE|KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_ROOT_SECONDS|GATE_MCH_SECONDS|GATE_HUB_APPS_SECONDS|GATE_SITE_IMPORT_SECONDS|GATE_READY_SECONDS|GATE_INTERVAL|GATE_ERROR_LIMIT'
 INSTALL_NS_RE='open-cluster-management|multicluster-engine|redhat-ods|redhat-ai-grid|maas|ai-grid|gitops|kuadrant|submariner'
 
 clusters_load() {
   CLUSTERS_DIR=$(cd "${1:-.}" && pwd)
-  local f="$CLUSTERS_DIR/clusters.yaml" json rows="" what name role location api left
-  [ -f "$f" ] || { echo "error: no clusters.yaml: copy clusters-example.yaml to clusters.yaml and edit it (install guide, page 2)" >&2; return 1; }
-  json=$(KUBECONFIG=/dev/null kubectl label --local -f "$f" ai-grid.dev/read=true -o json 2>&1) ||
-    { echo "error: clusters.yaml isn't valid: $json" >&2; return 1; }
+  local f json rows="" what name role location api left mode private=""
+  if [ -f "$CLUSTERS_DIR/.config/clusters.yaml" ]; then f="$CLUSTERS_DIR/.config/clusters.yaml" private=1
+  else f="$CLUSTERS_DIR/clusters.yaml"; fi
+  CLUSTERS_FILE=$f
+  [ -f "$f" ] || { echo "error: no clusters.yaml: copy clusters-example.yaml to .config/clusters.yaml (or clusters.yaml) and edit it (install guide, page 2 or 9)" >&2; return 1; }
+  if [ -n "$private" ]; then
+    mode=$(stat -f %Lp "$f" 2>/dev/null || stat -c %a "$f")
+    [[ "$mode" =~ 00$ ]] || { echo "error: .config/clusters.yaml holds secrets and is mode $mode: run chmod 600 .config/clusters.yaml" >&2; return 1; }
+  fi
+  # kubectl's message can quote the file, which may hold secrets: keep only its line number.
+  if ! json=$(KUBECONFIG=/dev/null kubectl label --local -f "$f" ai-grid.dev/read=true -o json 2>&1); then
+    left=$(grep -oE 'line [0-9]+' <<<"$json" | head -n 1 || true)
+    echo "error: ${f#"$CLUSTERS_DIR/"} isn't valid YAML${left:+ (at $left)}" >&2; return 1
+  fi
   [ "$(jq -r .kind <<<"$json")" = Clusters ] || { echo "error: clusters.yaml needs kind: Clusters" >&2; return 1; }
+  if [ -z "$private" ] && [ "$(jq '[.credentials, .github, .quay] | map(select(. != null)) | length' <<<"$json")" != 0 ]; then
+    echo "error: clusters.yaml is committed, so it can't hold credentials:, github: or quay:: move the file to .config/clusters.yaml (chmod 600), which git ignores" >&2
+    return 1
+  fi
   # A key the scripts don't read is a typo, most likely: name it.
   left=$(jq -r --arg opts "\\A($SETTINGS_OPTIONS_RE)\\z" '
-      (keys - ["apiVersion", "kind", "metadata", "hub", "sites", "repositories", "options"] | map(.)),
+      (keys - ["apiVersion", "kind", "metadata", "hub", "sites", "repositories", "options", "credentials", "github", "quay"] | map(.)),
+      ((.credentials // {}) | to_entries[] | .key as $n | (.value // {}) | keys
+        - ["token", "username", "password", "kubeconfig"] | map("credentials.\($n)." + .)),
+      ((.github // {}) | keys - ["deploymentToken", "catalogToken"] | map("github." + .)),
+      ((.quay // {}) | keys - ["username", "password"] | map("quay." + .)),
       ((.hub // {}) | keys - ["name", "api"] | map("hub." + .)),
       ((.sites // []) | to_entries[] | .key as $i | (.value // {}) | keys
         - ["name", "role", "location", "api", "issuer"] | map("sites[\($i)]." + .)),
@@ -39,8 +64,12 @@ clusters_load() {
       ((.options // {}) | keys | map(select(test($opts) | not)) | map("options." + .))
       | .[]' <<<"$json" | tr '\n' ' ')
   [ -z "$left" ] || { echo "error: clusters.yaml: unknown keys (typos?): ${left% }" >&2; return 1; }
-  left=$(grep -oE 'REQUIRED-[A-Za-z]+' "$f" | sort -u | tr '\n' ' ' || true)
-  [ -z "$left" ] || { echo "error: set these in clusters.yaml: ${left% }" >&2; return 1; }
+  # Placeholders: a setting's own text; a secret's key, never its value.
+  left=$(jq -r '
+      (del(.credentials, .github, .quay) | .. | strings | select(test("REQUIRED-")) | match("REQUIRED-[A-Za-z]+").string),
+      ({credentials, github, quay} | paths(strings) as $p | select(getpath($p) | test("REQUIRED-"))
+        | $p | map(tostring) | join("."))' <<<"$json" | sort -u | tr '\n' ' ')
+  [ -z "$left" ] || { echo "error: set these in ${f#"$CLUSTERS_DIR/"}: ${left% }" >&2; return 1; }
   # One tab-separated row per cluster: what (hub or site N), name, role, location, api.
   while IFS=$'\t' read -r what name role location api; do
     [ -n "$name" ] && [ -n "$role" ] && [ -n "$location" ] && [ -n "$api" ] ||
@@ -57,8 +86,18 @@ clusters_load() {
       ((.sites // []) | to_entries[] | ["site \(.key + 1)", .value.name, .value.role, .value.location, .value.api])
       | map(. // "" | tostring) | @tsv' <<<"$json")
   [ -n "$rows" ] || { echo "error: clusters.yaml has no hub" >&2; return 1; }
+  left=$(jq -r --arg names "$(awk '{print $1}' <<<"$rows")" '
+      ($names | split("\n")) as $n | (.credentials // {}) | keys - $n | .[]' <<<"$json" | tr '\n' ' ')
+  [ -z "$left" ] || { echo "error: ${f#"$CLUSTERS_DIR/"}: credentials for clusters it doesn't name: ${left% }" >&2; return 1; }
   CLUSTERS_ROWS=$rows CLUSTERS_JSON=$json
 }
+
+secret_get() { # JQ_PATH: the secret's value on stdout, empty when unset; it never reaches a command line
+  jq -r "($1) // empty | if type == \"string\" then . else error(\"not a string\") end" <<<"$CLUSTERS_JSON" 2>/dev/null ||
+    { echo "error: ${CLUSTERS_FILE#"$CLUSTERS_DIR/"}: ${1#.} isn't a string" >&2; return 1; }
+}
+
+cluster_secret() { secret_get ".credentials[\"$1\"].$2"; } # NAME KEY
 
 # The install settings clusters.yaml holds, as KEY=VALUE lines, one for each
 # key the file sets (an empty value too, so it wins over the environment):

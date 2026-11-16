@@ -71,7 +71,7 @@ t "no hub" 1 "hub needs name and api" bash -c '. "$0/scripts/clusters.sh"; clust
 d="$T/broken"; mkdir -p "$d"; cp -R "$SRC/scripts" "$d/"; printf 'apiVersion: v1\nkind: Clusters\nhub: [unclosed\n' > "$d/clusters.yaml"
 t "invalid YAML" 1 "clusters.yaml isn't valid" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
 d="$T/none"; mkdir -p "$d"; cp -R "$SRC/scripts" "$d/"
-t "no clusters.yaml" 1 "copy clusters-example.yaml to clusters.yaml" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
+t "no clusters.yaml" 1 "copy clusters-example.yaml to .config/clusters.yaml" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
 
 # A stub oc that logs its KUBECONFIG and arguments.
 mkdir -p "$T/bin"
@@ -205,5 +205,47 @@ t "a key with a line break is refused" 1 "unknown keys" bash "$d/scripts/cluster
 d=$(repo gatetypo "hub: {name: hub, api: 'https://h:6443'}
 options: {GATE_ROOT_SECOND: 1}")
 t "a misspelled GATE_ option" 1 "unknown keys \(typos\?\): options.GATE_ROOT_SECOND$" bash "$d/scripts/clusters.sh" --hub
+
+# The private file: .config/clusters.yaml, read first, the only place for secrets.
+SECRET='sha256~SECRET_do_not_print_4242'
+priv() { # name body: a repository whose .config/clusters.yaml (mode 600) has that body
+  local d; d=$(repo "$1" "hub: {name: hub, api: 'https://public:6443'}"); mkdir -p "$d/.config"
+  printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\n%s\n' "$2" > "$d/.config/clusters.yaml"; chmod 600 "$d/.config/clusters.yaml"; echo "$d"
+}
+PRIV="hub: {api: 'https://private:6443'}
+sites:
+  - {name: site-b, role: combined, location: us, api: 'https://s:6443'}
+credentials:
+  hub: {token: '$SECRET'}
+  site-b: {username: admin, password: '$SECRET-pw', kubeconfig: /k}
+github: {deploymentToken: '$SECRET-d', catalogToken: '$SECRET-c'}
+quay: {username: 'rhoai+robot', password: '$SECRET-q'}"
+d=$(priv private "$PRIV")
+t ".config/clusters.yaml wins over clusters.yaml" 0 "^hub hub - https://private:6443" bash "$d/scripts/clusters.sh" --rows "$d"
+t "secret_get: a token" 0 "^$SECRET-c$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && secret_get .github.catalogToken' "$d"
+t "cluster_secret: a cluster's password" 0 "^$SECRET-pw$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret site-b password' "$d"
+t "cluster_secret: unset is empty" 0 "^$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret hub password' "$d"
+t "--rows and --settings print no secret" 0 "^0$" bash -c '{ bash "$0/scripts/clusters.sh" --rows "$0"; bash "$0/scripts/clusters.sh" --settings "$0"; } 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+chmod 644 "$d/.config/clusters.yaml"
+t "a readable private file stops" 1 "mode 644: run chmod 600 .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(repo publicsecret "hub: {name: hub, api: 'https://h:6443'}
+github: {catalogToken: x}")
+t "secrets in the committed clusters.yaml stop" 1 "move the file to .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(priv unknowncred "hub: {api: 'https://h:6443'}
+credentials:
+  site-z: {token: x}")
+t "credentials for an unknown cluster" 1 "credentials for clusters it doesn't name: site-z" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(priv credtypo "hub: {api: 'https://h:6443'}
+credentials:
+  hub: {tokn: x}")
+t "an unknown credential key" 1 "credentials.hub.tokn" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(priv placeholder2 "hub: {api: 'https://h:6443'}
+github: {catalogToken: 'REQUIRED-$SECRET'}")
+t "a secret's placeholder: named by key" 1 "set these in .config/clusters.yaml: github.catalogToken" bash "$d/scripts/clusters.sh" --rows "$d"
+t "  ... never by value" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+d=$(priv badyaml "hub: {api: 'https://h:6443'}
+github: {catalogToken: '$SECRET' x: }")
+t "invalid YAML: names the line, not the text" 1 "isn't valid YAML" bash "$d/scripts/clusters.sh" --rows "$d"
+t "  ... never the text" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
 
 echo "clusters tests: $((total-fails)) ok, $fails failed"; exit "$fails"
