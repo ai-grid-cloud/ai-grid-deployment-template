@@ -8,13 +8,16 @@ Runs from your deployment repository; the library is .library/, which make prere
 at your pin (scripts/library.sh).
 
 The clusters come from the deployment's clusters.yaml, each with its login in
-.config/NAME/kubeconfig. Each option also reads an environment variable:
-QUAY_AUTH_FILE, CATALOG_TOKEN_FILE and LIBRARY. Unset, QUAY_AUTH_FILE and
-CATALOG_TOKEN_FILE come from the deployment's install.env, as make install reads
-them (a relative path is relative to the deployment). Unset there too,
-QUAY_AUTH_FILE is the first of ~/.config/containers/auth.json and
-$XDG_RUNTIME_DIR/containers/auth.json that exists, and CATALOG_TOKEN_FILE is
-~/.ai-grid/catalog-token if it exists. A check whose input you haven't set prints
+.config/NAME/kubeconfig. LIBRARY sets the library checkout.
+
+Without --quay-auth-file and --catalog-token-file, the two files are the ones
+make install uses. When the deployment has an install.env, its QUAY_AUTH_FILE and
+CATALOG_TOKEN_FILE win over the environment variables of the same names; a key it
+leaves out or empty takes the environment variable, else .config/quay-auth.json
+and .config/catalog-token; a relative path is relative to the deployment. With no
+install.env, the environment variables apply, else QUAY_AUTH_FILE is the first of
+~/.config/containers/auth.json and $XDG_RUNTIME_DIR/containers/auth.json that
+exists, and CATALOG_TOKEN_FILE is ~/.ai-grid/catalog-token if it exists. A check whose input you haven't set prints
 "skipped". Every line is: status, name, detail. Statuses: ok, MISSING,
 OLD, FAIL, skipped. Cluster checks are read-only (get, whoami, auth can-i).
 The registry check runs "oc image info" with your auth file; it never prints a
@@ -170,7 +173,7 @@ def check_registry(auth_file):
     if not auth_file:
         report("skipped", "registry logins",
                "no auth file at ~/.config/containers/auth.json or $XDG_RUNTIME_DIR/containers/auth.json; "
-               "set QUAY_AUTH_FILE to yours")
+               "set QUAY_AUTH_FILE in install.env")
         return
     auth_file = os.path.expanduser(auth_file)
     try:
@@ -178,8 +181,11 @@ def check_registry(auth_file):
         if not isinstance(auths, dict):
             raise ValueError("auths isn't an object")
     except (OSError, ValueError, AttributeError) as e:
-        report("FAIL" if os.path.exists(auth_file) else "MISSING", "auth file",
-               f"{auth_file}: {type(e).__name__}")
+        if os.path.exists(auth_file):
+            report("FAIL", "auth file", f"{auth_file}: {type(e).__name__}")
+        else:
+            report("MISSING", "auth file",
+                   f"{auth_file}: not found; set QUAY_AUTH_FILE in install.env to your auth file, or put it there")
         for n in names[1:]:
             report("skipped", n, "no readable auth file")
         return
@@ -337,13 +343,14 @@ def check_catalog_token(path):
     section("Catalog token")
     if not path:
         report("skipped", "catalog token file",
-               "no ~/.ai-grid/catalog-token yet (page 2, part 2); or set CATALOG_TOKEN_FILE")
+               "no ~/.ai-grid/catalog-token; set CATALOG_TOKEN_FILE in install.env")
         return
     path = os.path.expanduser(path)
     try:
         st = os.stat(path)
     except OSError:
-        report("MISSING", "catalog token file", f"{path} not found")
+        report("MISSING", "catalog token file",
+               f"{path} not found; set CATALOG_TOKEN_FILE in install.env to your token file, or put it there")
         return
     mode = stat.S_IMODE(st.st_mode)
     if not stat.S_ISREG(st.st_mode) or st.st_size == 0:
@@ -365,15 +372,19 @@ def default_auth_file():
                           run_dir and os.path.join(run_dir, "containers", "auth.json"))
 
 
-def install_env_paths(deployment):
-    """{KEY: absolute path} for QUAY_AUTH_FILE and CATALOG_TOKEN_FILE in DIR/install.env,
-    parsed as scripts/install.sh reads it (NAME=VALUE lines, quotes, trailing comments);
-    never evaluated by a shell."""
-    found = {}
+# install.sh's defaults for a setting install.env leaves out or leaves empty.
+INSTALL_DEFAULTS = {"QUAY_AUTH_FILE": ".config/quay-auth.json", "CATALOG_TOKEN_FILE": ".config/catalog-token"}
+
+
+def install_env_settings(deployment):
+    """{KEY: value} for QUAY_AUTH_FILE and CATALOG_TOKEN_FILE in DIR/install.env, or None
+    when there's no install.env. Parsed as scripts/install.sh reads it (NAME=VALUE lines,
+    quotes, trailing comments); never evaluated by a shell."""
     try:
         lines = open(os.path.join(deployment, "install.env")).read().splitlines()
     except OSError:
-        return found
+        return None
+    found = {}
     for line in lines:
         m = re.match(r"^\s*(QUAY_AUTH_FILE|CATALOG_TOKEN_FILE)=(.*)$", line)
         if not m:
@@ -384,10 +395,19 @@ def install_env_paths(deployment):
             value = q.group(1) if q.group(1) is not None else q.group(3)
         else:
             value = re.sub(r"\s#.*$", "", value).rstrip()
-        if value:
-            path = os.path.expanduser(value)
-            found[m.group(1)] = path if os.path.isabs(path) else os.path.join(deployment, path)
+        found[m.group(1)] = value
     return found
+
+
+def install_path(key, deployment, settings):
+    """The file make install uses for KEY, as scripts/install.sh picks it: install.env's
+    value beats the environment, and an unset or empty one falls back to the
+    environment, else to .config/ in the deployment. None when there's no install.env."""
+    if settings is None:
+        return None
+    value = (settings[key] if key in settings else os.environ.get(key)) or INSTALL_DEFAULTS[key]
+    path = os.path.expanduser(value)
+    return path if os.path.isabs(path) else os.path.join(deployment, path)
 
 
 def main():
@@ -396,15 +416,17 @@ def main():
         description="Report which AI Grid install prerequisites you have. Never blocks; always exits 0.")
     p.add_argument("--deployment", default=REPO, help="your deployment repository (default: this one)")
     p.add_argument("--library", default=LIB, help="your library checkout (default: .library) [LIBRARY]")
-    p.add_argument("--quay-auth-file", default=os.environ.get("QUAY_AUTH_FILE"),
-                   help="container auth file with your quay.io login [QUAY_AUTH_FILE]")
-    p.add_argument("--catalog-token-file", default=os.environ.get("CATALOG_TOKEN_FILE"),
-                   help="file holding the catalog repository token [CATALOG_TOKEN_FILE]")
+    p.add_argument("--quay-auth-file",
+                   help="container auth file with your quay.io login [install.env, then QUAY_AUTH_FILE]")
+    p.add_argument("--catalog-token-file",
+                   help="file holding the catalog repository token [install.env, then CATALOG_TOKEN_FILE]")
     a = p.parse_args()
     LIB = a.library
-    from_env = install_env_paths(a.deployment)
-    a.quay_auth_file = a.quay_auth_file or from_env.get("QUAY_AUTH_FILE") or default_auth_file()
-    a.catalog_token_file = (a.catalog_token_file or from_env.get("CATALOG_TOKEN_FILE")
+    settings = install_env_settings(a.deployment)
+    a.quay_auth_file = (a.quay_auth_file or install_path("QUAY_AUTH_FILE", a.deployment, settings)
+                        or os.environ.get("QUAY_AUTH_FILE") or default_auth_file())
+    a.catalog_token_file = (a.catalog_token_file or install_path("CATALOG_TOKEN_FILE", a.deployment, settings)
+                            or os.environ.get("CATALOG_TOKEN_FILE")
                             or first_existing(os.path.expanduser("~/.ai-grid/catalog-token")))
 
     check_tools()
