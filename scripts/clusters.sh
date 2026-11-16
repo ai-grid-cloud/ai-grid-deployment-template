@@ -60,10 +60,14 @@ clusters_load() {
       ([["options"], ["repositories"], ["hub"], ["credentials"], ["github"], ["quay"]][] as $p
         | select(getpath($p) | . != null and type != "object") | $p | join(".")),
       ((.credentials // {}) | if type == "object" then to_entries[] | select(.value != null and (.value | type) != "object") | "credentials.\(.key)" else empty end),
-      ((.sites // []) | if type == "array" then to_entries[] | select((.value | type) != "object") | "sites[\(.key)]" else "sites" end)
+      ((.sites // []) | if type == "array" then to_entries[] | select((.value | type) != "object") | "sites[\(.key)]" else "sites must be a list" end)
       ' <<<"$json" 2>/dev/null | head -n 1) ||
     { echo "error: ${f#"$CLUSTERS_DIR/"}: can't read its structure" >&2; return 1; }
-  [ -z "$left" ] || { echo "error: ${f#"$CLUSTERS_DIR/"}: $left must be a map" >&2; return 1; }
+  case "$left" in
+    "") ;;
+    *" must be a list") echo "error: ${f#"$CLUSTERS_DIR/"}: $left" >&2; return 1 ;;
+    *) echo "error: ${f#"$CLUSTERS_DIR/"}: $left must be a map" >&2; return 1 ;;
+  esac
   # Options that named secret files before the secrets moved into the private file.
   left=$(jq -r '(.options // {}) | keys[] | select(. == "DEPLOYMENT_TOKEN_FILE" or . == "CATALOG_TOKEN_FILE" or . == "QUAY_AUTH_FILE")' <<<"$json" | head -n 1)
   case "$left" in
@@ -74,11 +78,13 @@ clusters_load() {
   esac
   # A key the scripts don't read is a typo, most likely: name it.
   left=$(jq -r --arg opts "\\A($SETTINGS_OPTIONS_RE)\\z" '
+      def count($p): if length == 0 then [] else ["\($p) (\(length) unknown key\(if length > 1 then "s" else "" end))"] end;
       (keys - ["apiVersion", "kind", "metadata", "hub", "sites", "repositories", "options", "credentials", "github", "quay"] | map(.)),
+      # In the secret sections a key may itself be a pasted secret: count, never name.
       ((.credentials // {}) | to_entries[] | .key as $n | (.value // {}) | keys
-        - ["token", "username", "password", "kubeconfig"] | map("credentials.\($n)." + .)),
-      ((.github // {}) | keys - ["deploymentToken", "catalogToken"] | map("github." + .)),
-      ((.quay // {}) | keys - ["username", "password"] | map("quay." + .)),
+        - ["token", "username", "password", "kubeconfig"] | count("credentials.\($n)")),
+      ((.github // {}) | keys - ["deploymentToken", "catalogToken"] | count("github")),
+      ((.quay // {}) | keys - ["username", "password"] | count("quay")),
       ((.hub // {}) | keys - ["name", "api"] | map("hub." + .)),
       ((.sites // []) | to_entries[] | .key as $i | (.value // {}) | keys
         - ["name", "role", "location", "api"] | map("sites[\($i)]." + .)),

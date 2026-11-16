@@ -126,7 +126,7 @@ loki=$(oc get lokistack usage-logs -n redhat-ods-monitoring -o json 2>/dev/null 
 if [ "$loki" = True ]; then ok "LokiStack redhat-ods-monitoring/usage-logs Ready"
 else fail "LokiStack redhat-ods-monitoring/usage-logs Ready: ${loki:-not created yet}"; fi
 
-# The sites: imported and waiting, with what a later Add needs.
+# The sites: imported and waiting, not added to the grid.
 sites_json='[]' root_checked=""
 for name in $(site_names); do
   role=$(cluster_field "$name" role)

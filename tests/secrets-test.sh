@@ -212,7 +212,7 @@ t "FORCE=1 and an empty answer: kept, not skipped" bash -c '! grep -q skipped <<
 # 10. No clusters.yaml at all.
 D="$T/repo-none"; mkdir -p "$D"; cp -R "$SRC/scripts" "$D/"; cp "$SRC/clusters-example.yaml" "$D/"
 run ""
-t "no clusters.yaml: creates .config/clusters.yaml from the example and stops" bash -c '[ "$0" = 1 ] && grep -q "edit it, then run make secrets again" <<<"$1" && cmp -s "$2/clusters-example.yaml" "$2/.config/clusters.yaml"' "$rc" "$out" "$D"
+t "no clusters.yaml: creates .config/clusters.yaml from the example and stops, exit 0" bash -c '[ "$0" = 0 ] && grep -q "edit it, then run make secrets again" <<<"$1" && cmp -s "$2/clusters-example.yaml" "$2/.config/clusters.yaml"' "$rc" "$out" "$D"
 t "  ... file 600, directory 700" bash -c '[ "$(stat -f %Lp "$0/.config/clusters.yaml" 2>/dev/null || stat -c %a "$0/.config/clusters.yaml")$(stat -f %Lp "$0/.config" 2>/dev/null || stat -c %a "$0/.config")" = 600700 ]' "$D"
 
 echo "secrets tests: $((total-fails)) ok, $fails failed"; exit "$fails"
