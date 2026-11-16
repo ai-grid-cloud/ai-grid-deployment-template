@@ -139,6 +139,13 @@ total=$((total+1))
 if out=$(bash tests/status-test.sh 2>&1); then echo "   ok   status.sh still passes"
 else fails=$((fails+1)); echo "   FAIL status.sh still passes (output:)"; echo "$out"; fi
 
+# The hub-apps limit: grid-bootstrap and OpenShift AI take about 50 minutes on a
+# new hub, so the default leaves room above that; install.env can still set it.
+W="$T/defaults"; mkdir -p "$W"; unset GATE_HUB_APPS_SECONDS
+t "GATE_HUB_APPS_SECONDS defaults to 5400" 0 "^hub-apps=5400$" "" 'echo hub-apps=$GATE_HUB_APPS_SECONDS'
+t "GATE_HUB_APPS_SECONDS from the environment wins" 0 "^hub-apps=42$" "" \
+  "GATE_HUB_APPS_SECONDS=42 bash -c '. scripts/gates.sh && echo hub-apps=\$GATE_HUB_APPS_SECONDS'"
+
 total=$((total+1))
 if grep -qwE 'apply|create|delete|patch|edit|label|annotate|replace|scale|rollout' "$T"/*/argv.log; then
   fails=$((fails+1)); echo "   FAIL oc got a write verb"; else echo "   ok   oc calls are read-only"; fi
