@@ -19,13 +19,13 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 | OpenShift version | Upgrade the cluster to 4.21 or later. |
 | default StorageClass | Annotate one StorageClass `storageclass.kubernetes.io/is-default-class=true`. |
 | cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or select `apps/cert-manager` ([cert-manager](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/00-platform-services.md#cert-manager)). |
-| quay.io/rhoai pull secret file | Log in to `quay.io` with a `quay.io/rhoai` robot token, as follows this table ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
+| quay.io/rhoai pull secret file | Add your `quay.io/rhoai` robot account, as follows this table ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
 | object storage | Expected with `apps/object-storage/s4` or `odf` selected: it appears when you [install the hub components](04-hub-components.md). If you bring your own bucket, create the Secret now ([object storage](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/01-acm.md#object-storage)). |
 
-To log in to `quay.io`:
+To add your `quay.io/rhoai` robot account's name and token to `.config/clusters.yaml`:
 
 ```sh
-podman login quay.io
+make secrets NAME=quay
 ```
 
 ## `make bootstrap` refuses a general `quay.io` login
@@ -118,11 +118,12 @@ doesn't exist.
 **Cause:** the observability components aren't ready yet. Either ODF or the usage-logs LokiStack is still coming up,
 or the Cluster Observability Operator or Perses isn't installed.
 
-**Fix:** check each one on the hub:
+**Fix:** check each one on the hub. `scripts/with-cluster.sh hub` runs each `oc` command with the hub's login from
+`.config/hub/kubeconfig`, not with your own kubeconfig:
 
 ```sh
-oc get lokistack usage-logs -n redhat-ods-monitoring
-oc get persesdashboards -n redhat-ods-monitoring
+scripts/with-cluster.sh hub oc get lokistack usage-logs -n redhat-ods-monitoring
+scripts/with-cluster.sh hub oc get persesdashboards -n redhat-ods-monitoring
 make status
 ```
 

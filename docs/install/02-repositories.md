@@ -46,7 +46,8 @@ again.
 
    The site's name becomes its ACM cluster name, and you can't change it once the site is imported. Commit
    `clusters.yaml` with your other changes in part 5; it records which clusters make up your grid, and holds no
-   secrets.
+   secrets. This guide keeps that committed file. If a private `.config/clusters.yaml` exists, from
+   [Install with one command](09-hands-off.md), the scripts read it instead.
 
 3. Log in to each cluster as a `cluster-admin` user:
 

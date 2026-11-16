@@ -50,8 +50,8 @@ and which the template doesn't have; to upgrade, you move the library pin. For m
 2. Choose how to install:
 
    - To install the hub and import your sites with one unattended command, such as for a test suite or a CI job,
-     follow [Install with one command](docs/install/09-hands-off.md): you edit one file, `clusters.yaml`, run
-     `make secrets` for the tokens, then `make install`.
+     follow [Install with one command](docs/install/09-hands-off.md): you edit one private, git-ignored file,
+     `.config/clusters.yaml`, run `make secrets` to add the logins and tokens to it, then `make install`.
    - To install page by page, follow the [install guide](docs/install/README.md).
 
 ## Update from the template
