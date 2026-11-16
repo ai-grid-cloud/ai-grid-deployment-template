@@ -2,9 +2,10 @@
 # Commit the given paths of this deployment repository, when they changed, and
 # push HEAD to origin, with no prompt.
 #
-# The token comes from the file named by $DEPLOYMENT_TOKEN_FILE (default
-# .config/deployment-token, relative to this repository), a GitHub token that
-# can write this repository. git reads it through a temporary GIT_ASKPASS
+# The token, a GitHub token that can write this repository, comes from
+# scripts/clusters.sh's deployment_load: github.deploymentToken in
+# .config/clusters.yaml, the environment winning, else the file named by
+# $DEPLOYMENT_TOKEN_FILE, else .config/deployment-token. git reads it through a temporary GIT_ASKPASS
 # helper (mode 700) that reads the file when git asks, so the token is never
 # on a command line, in the helper, or in the output. The helper is removed on
 # exit. Credential helpers you have configured are skipped for this push.
@@ -24,6 +25,10 @@ msg=$1; shift
 cd "$dir"
 export GIT_TERMINAL_PROMPT=0
 
+if [ -f "$dir/.config/clusters.yaml" ] || [ -f "$dir/clusters.yaml" ]; then
+  . "$here/clusters.sh"; deployment_load "$dir" || exit 1
+  [ -n "$DEPLOYMENT_TOKEN_FILE" ] || { echo "error: no deployment token: $(secret_missing DEPLOYMENT_TOKEN_FILE)" >&2; exit 1; }
+fi
 token_file=${DEPLOYMENT_TOKEN_FILE:-.config/deployment-token}
 case "$token_file" in /*) ;; *) token_file="$dir/$token_file" ;; esac
 [ -r "$token_file" ] || { echo "error: no token file $token_file: put a token that can push to origin there" >&2; exit 1; }

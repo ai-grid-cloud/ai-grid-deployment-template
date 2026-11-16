@@ -12,10 +12,12 @@
 # relative to this repository. A setting the file holds, even an empty one,
 # wins over the environment's; one it leaves out comes from the environment,
 # else its default. An install.env, which earlier versions read, stops it.
-# The token files are passed on by path (DEPLOYMENT_TOKEN_FILE to
+# Secrets come from scripts/clusters.sh's deployment_load: the environment,
+# else the private .config/clusters.yaml, else the files of earlier versions.
+# Each reaches the scripts as a file passed by path (DEPLOYMENT_TOKEN_FILE to
 # scripts/git-push.sh, CATALOG_TOKEN_FILE to scripts/create-console-secrets.sh,
-# QUAY_AUTH_FILE to scripts/bootstrap-hub.sh); this script never reads a token
-# from them. It only checks, before anything is pushed, that QUAY_AUTH_FILE holds
+# QUAY_AUTH_FILE to scripts/bootstrap-hub.sh), never on a command line or in
+# the output. It only checks, before anything is pushed, that QUAY_AUTH_FILE holds
 # a quay.io/rhoai login, or that ALLOW_GENERIC_LOGIN=1 lets the general one stand in.
 #
 # The hub phase, each step printing "== STEP":
@@ -96,22 +98,9 @@ run_step() { # STEP SCRIPT [ARG...]: runs a script; stops the install at STEP wh
 
 # --- settings ----------------------------------------------------------------
 
-read_settings() { # clusters.yaml's settings into exported variables; stops on a problem
-  local lines line key value
+check_old_files() { # an install.env, which earlier versions read, stops the install
   [ ! -f "$dir/install.env" ] ||
     die "install.env is no longer read: move its settings into clusters.yaml (CATALOG_REPO_URL and LIBRARY_REVISION under repositories: as catalog and library, SITE_ISSUER_<NAME> as that site's issuer, the rest under options:; see clusters-example.yaml), then delete install.env"
-  lines=$(settings_lines) || exit 1
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    key=${line%%=*} value=${line#*=}
-    # Only a known setting becomes a variable, never PATH or the like.
-    [[ "$key" =~ ^(CATALOG_REPO_URL|LIBRARY_REVISION|SITE_ISSUER_[A-Z0-9_]+|$SETTINGS_OPTIONS_RE)$ ]] ||
-      die "clusters.yaml: unknown setting $key"
-    printf -v "$key" '%s' "$value"; export "${key?}"
-  done <<<"$lines"
-  for key in $(compgen -v GATE_); do
-    [[ "${!key}" =~ ^[0-9]+$ ]] || die "$key must be a number of seconds, not ${!key}"
-  done
 }
 
 inputs_value() { # NAME: its value in root/inputs.env, empty when unset
@@ -146,19 +135,14 @@ abs_path() { # PATH: absolute, relative to this repository; ~/ is your home
 }
 
 check_settings() { # the values the hub phase needs, and the files they name
-  local var f
-  [ -n "${CATALOG_REPO_URL:-}" ] || die "set repositories.catalog in clusters.yaml"
+  [ -n "${CATALOG_REPO_URL:-}" ] || die "set repositories.catalog in ${CLUSTERS_FILE#"$dir/"}"
   case "${KEYCLOAK:-install}" in
     install) ;;
     *) die "KEYCLOAK=${KEYCLOAK} is not supported yet: only KEYCLOAK=install is" ;;
   esac
-  : "${DEPLOYMENT_TOKEN_FILE:=.config/deployment-token}"
-  : "${CATALOG_TOKEN_FILE:=.config/catalog-token}"
-  : "${QUAY_AUTH_FILE:=.config/quay-auth.json}"
+  local var
   for var in DEPLOYMENT_TOKEN_FILE CATALOG_TOKEN_FILE QUAY_AUTH_FILE; do
-    f=$(abs_path "${!var}")
-    [ -s "$f" ] || die "$var names $f, which doesn't exist or is empty: put the file there (make secrets), or set options.$var in clusters.yaml"
-    printf -v "$var" '%s' "$f"; export "${var?}"
+    [ -n "${!var}" ] && [ -s "${!var}" ] || die "no ${var%_FILE}: $(secret_missing "$var")"
   done
   # bootstrap-hub.sh's own login check, made here so a missing login stops the
   # install before the inputs step pushes anything. It reads which logins the
@@ -352,8 +336,8 @@ end_phase() {
 
 cd "$dir"
 . "$here/clusters.sh"
-clusters_load "$dir" || exit 1
-read_settings
+check_old_files
+deployment_load "$dir" || exit 1
 check_settings
 check_branch
 . "$here/gates.sh"   # after the settings, so their GATE_* values win

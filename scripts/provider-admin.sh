@@ -19,7 +19,7 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/clusters.sh"
-clusters_load "$here/.."
+deployment_load "$here/.."   # options.PROVIDER_ADMIN_TOKEN_DURATION
 hub=$(hub_name)
 cluster_login_ok "$hub"
 export KUBECONFIG; KUBECONFIG=$(cluster_kubeconfig "$hub")

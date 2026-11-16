@@ -67,9 +67,11 @@ setup() { # NAME: a deployment repository $D and a stub directory $W, for one ca
   D="$T/$1/repo" W="$T/$1/stub"; mkdir -p "$W" "$D/.config"
   cp -R "$SRC/scripts" "$D/"
   for s in login.sh set-library.sh set-inputs.sh check-deployment.sh empty-catalog.sh \
-      create-console-secrets.sh install-report.sh add-site.sh provider-admin.sh; do fake "$s"; done
+      install-report.sh add-site.sh provider-admin.sh; do fake "$s"; done
   fake ready-check.sh '[ ! -f "$STUB_DIR/ready-check.sh.rc" ] || { echo "OK   hub Applications"; echo "FAIL site site-a: not available"; echo "Not ready: see FAIL above."; }'
-  fake git-push.sh 'if [ -f "$STUB_DIR/nothing-to-push" ]; then echo "nothing to push"
+  fake create-console-secrets.sh '[ -z "${CATALOG_TOKEN_FILE:-}" ] || cat "$CATALOG_TOKEN_FILE" > "$STUB_DIR/catalog-token-seen"'
+  fake git-push.sh 'cat "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-seen"; echo "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-path"
+    if [ -f "$STUB_DIR/nothing-to-push" ]; then echo "nothing to push"
     else git -C "$REPO" -c core.hooksPath=/dev/null commit -q --allow-empty -m pushed; fi'
   fake site-check.sh '[ ! -f "$STUB_DIR/site-check-$1.out" ] || cat "$STUB_DIR/site-check-$1.out"
     [ ! -f "$STUB_DIR/site-check-$1.rc" ] || exit "$(cat "$STUB_DIR/site-check-$1.rc")"'
@@ -84,9 +86,6 @@ repositories:
   catalog: https://github.com/acme/catalog.git
   library: ""
 options:
-  DEPLOYMENT_TOKEN_FILE: .config/deployment-token
-  CATALOG_TOKEN_FILE: .config/catalog-token
-  QUAY_AUTH_FILE: .config/quay-auth.json
 sites:
 - {name: site-a, role: combined, location: us-east, api: "https://api.site-a.example.com:6443"}
 YAML
@@ -101,8 +100,8 @@ YAML
   : > "$W/calls.log"; : > "$W/argv.log"
 }
 opt() { # KEY VALUE: adds an options: entry to clusters.yaml
-  sed -i.bak "s/^options:\$/options:\\
-  $1: $2/" "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+  sed -i.bak "s#^options:\$#options:\\
+  $1: $2#" "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 }
 issuers() { # SITE [SOLVER:NAME...]: the site's ClusterIssuers, as its oc answers them
   local site=$1 items="" i; shift
@@ -197,6 +196,40 @@ sed -i.bak 's#^  catalog: .*#  catalog: ""#' "$D/clusters.yaml"; rm "$D/clusters
 run
 t "no catalog in clusters.yaml: stops and names the key" eval '[ "$rc" = 1 ] && [ ! -s "$W/calls.log" ] &&
   grep -q "set repositories.catalog in clusters.yaml" <<<"$out"'
+
+# The private file: secrets from .config/clusters.yaml, the environment over it.
+private() { # moves $D's clusters.yaml to .config/ with a secrets block, mode 600; drops the legacy files
+  mv "$D/clusters.yaml" "$D/.config/clusters.yaml"; g -C "$D" rm -q --cached clusters.yaml; g -C "$D" commit -qm private
+  cat >> "$D/.config/clusters.yaml" <<YAML
+github: {deploymentToken: "$SENTINEL-deploy", catalogToken: "$SENTINEL-catalog"}
+quay: {username: "rhoai+robot", password: "$SENTINEL-quay"}
+YAML
+  chmod 600 "$D/.config/clusters.yaml"; rm -f "$D/.config/deployment-token" "$D/.config/catalog-token" "$D/.config/quay-auth.json"
+}
+setup private; private
+run
+t "private file: installs" eval '[ "$rc" = 0 ]'
+t "  ... git-push gets the deployment token in a file" grep -qx "$SENTINEL-deploy" "$W/deployment-token-seen"
+t "  ... console-secrets gets the catalog token in a file" grep -qx "$SENTINEL-catalog" "$W/catalog-token-seen"
+t "  ... the token file is .config/generated/deployment-token, mode 600" bash -c '[ "$(cat "$0/deployment-token-path")" = "$1/.config/generated/deployment-token" ] &&
+  [ "$(stat -f %Lp "$1/.config/generated/deployment-token" 2>/dev/null || stat -c %a "$1/.config/generated/deployment-token")" = 600 ]' "$W" "$D"
+t "  ... .config/generated/quay-auth.json built for quay.io/rhoai, mode 600" bash -c '
+  [ "$(jq -r ".auths[\"quay.io/rhoai\"].auth" "$0/.config/generated/quay-auth.json" | base64 -d)" = "rhoai+robot:$1-quay" ] &&
+  [ "$(stat -f %Lp "$0/.config/generated/quay-auth.json" 2>/dev/null || stat -c %a "$0/.config/generated/quay-auth.json")" = 600 ]' "$D" "$SENTINEL"
+
+setup privateenv; private
+AI_GRID_DEPLOYMENT_TOKEN="$SENTINEL-env" run
+t "AI_GRID_DEPLOYMENT_TOKEN beats the file" grep -qx "$SENTINEL-env" "$W/deployment-token-seen"
+
+setup privatemissing; private
+sed -i.bak '/^github:/d' "$D/.config/clusters.yaml"; rm "$D/.config/clusters.yaml.bak"
+run
+t "no deployment token anywhere: stops before any cluster call, naming the key" eval '[ "$rc" = 1 ] && [ ! -s "$W/calls.log" ] &&
+  grep -q "github.deploymentToken in .config/clusters.yaml" <<<"$out"'
+
+setup droppedoption; opt DEPLOYMENT_TOKEN_FILE .config/deployment-token
+run
+t "a dropped *_FILE option: stops with where it goes now" eval '[ "$rc" = 1 ] && grep -q "options.DEPLOYMENT_TOKEN_FILE is no longer read: put the token in github.deploymentToken" <<<"$out"'
 
 setup oldenv
 printf 'CATALOG_REPO_URL=https://github.com/acme/catalog.git\n' > "$D/install.env"

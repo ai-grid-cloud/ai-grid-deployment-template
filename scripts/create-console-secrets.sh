@@ -3,8 +3,9 @@
 # from clusters.yaml (install guide, page 4; make console-secrets). Takes the
 # same environment variables (see that script), with this deployment's
 # defaults:
-#   the catalog token   CATALOG_TOKEN_FILE, else ~/.ai-grid/catalog-token (as
-#                       make prereqs); AI_GRID_GIT_TOKEN_FILE, if set, wins
+#   the catalog token   from scripts/clusters.sh's deployment_load: github.catalogToken
+#                       in .config/clusters.yaml, the environment winning, else
+#                       CATALOG_TOKEN_FILE, else (page by page) ~/.ai-grid/catalog-token
 #   KEYCLOAK_NAMESPACE  tenant-idp, the template's own Keycloak (tenant-idp/)
 #   KEYCLOAK_REALM      tenants
 #
@@ -13,14 +14,15 @@
 # CONSOLE_WAIT_SECONDS (default 1800), checking every CONSOLE_WAIT_INTERVAL
 # seconds (default 20).
 set -euo pipefail
-AI_GRID_GIT_TOKEN_FILE=${AI_GRID_GIT_TOKEN_FILE:-${CATALOG_TOKEN_FILE:-$HOME/.ai-grid/catalog-token}}
-[ -s "$AI_GRID_GIT_TOKEN_FILE" ] ||
-  { echo "error: no catalog token in $AI_GRID_GIT_TOKEN_FILE: save it there, or set CATALOG_TOKEN_FILE (install guide, page 2)" >&2; exit 1; }
-export AI_GRID_GIT_TOKEN_FILE KEYCLOAK_NAMESPACE=${KEYCLOAK_NAMESPACE:-tenant-idp} KEYCLOAK_REALM=${KEYCLOAK_REALM:-tenants}
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/library.sh"
 . "$here/clusters.sh"
-clusters_load "$here/.."
+deployment_load "$here/.."
+[ -n "$CATALOG_TOKEN_FILE" ] && [ -s "$CATALOG_TOKEN_FILE" ] ||
+  { echo "error: no catalog token${CATALOG_TOKEN_FILE:+ in $CATALOG_TOKEN_FILE}: $(secret_missing CATALOG_TOKEN_FILE)" >&2; exit 1; }
+# The library's script reads the token from the file AI_GRID_GIT_TOKEN_FILE names.
+AI_GRID_GIT_TOKEN_FILE=$CATALOG_TOKEN_FILE
+export AI_GRID_GIT_TOKEN_FILE KEYCLOAK_NAMESPACE=${KEYCLOAK_NAMESPACE:-tenant-idp} KEYCLOAK_REALM=${KEYCLOAK_REALM:-tenants}
 hub=$(hub_name)
 cluster_login_ok "$hub"
 library_dir "$here/.."

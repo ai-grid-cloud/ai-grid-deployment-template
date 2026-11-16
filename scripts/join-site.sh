@@ -34,7 +34,7 @@ if [ "${JOIN_SITE_NO_WAIT:-}" != 1 ]; then
   repo="$here/.."
   git -C "$repo" fetch -q origin main || { echo "error: can't fetch origin main" >&2; exit 1; }
   unpushed=$(git -C "$repo" rev-list --count origin/main..HEAD)
-  [ "$unpushed" = 0 ] || { echo "error: $unpushed commit(s) not pushed yet; push first: git push origin HEAD:main" >&2; exit 1; }
+  [ "$unpushed" = 0 ] || { echo "error: $unpushed commit(s) not pushed yet; push first: make site-add PUSH=1, or git push origin HEAD:main" >&2; exit 1; }
   want=$(git -C "$repo" rev-parse origin/main)
   timeout=${JOIN_WAIT_SECONDS:-600} interval=${JOIN_WAIT_INTERVAL:-15} waited=0 last=""
   while :; do

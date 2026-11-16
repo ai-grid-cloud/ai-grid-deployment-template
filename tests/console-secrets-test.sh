@@ -49,7 +49,7 @@ t "defaults: the catalog token, tenant-idp, tenants" 0 "token=$T/home/.ai-grid/c
 ENVS=(CATALOG_TOKEN_FILE="$T/other-token")
 t "CATALOG_TOKEN_FILE picks the token" 0 "token=$T/other-token ns"
 ENVS=(AI_GRID_GIT_TOKEN_FILE="$T/other-token")
-t "AI_GRID_GIT_TOKEN_FILE still works" 0 "token=$T/other-token ns"
+t "AI_GRID_GIT_TOKEN_FILE is no longer read" 0 "token=$T/home/.ai-grid/catalog-token ns"
 ENVS=(KEYCLOAK_NAMESPACE=my-kc KEYCLOAK_REALM=my-realm)
 t "KEYCLOAK_NAMESPACE and KEYCLOAK_REALM override" 0 "ns=my-kc realm=my-realm$"
 ENVS=(CATALOG_TOKEN_FILE="$T/none")

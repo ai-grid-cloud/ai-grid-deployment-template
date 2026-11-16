@@ -3,13 +3,17 @@
 # make empty-catalog). Clones catalogRepoURL at catalogRevision, both from
 # root/inputs.env, into a temporary directory and lists every file but
 # README.md. A preview by default; --confirm removes them, commits
-# "catalog: empty for uninstall" and pushes with your git credentials.
+# "catalog: empty for uninstall" and pushes.
 #
 # --check is read-only (make install uses it): it exits 0 when the catalog
 # holds nothing but README.md, and 1, listing the files, when it holds more
-# or can't be read. It never asks for a password: when CATALOG_TOKEN_FILE
-# names a readable file, git reads the token from it through a temporary
-# GIT_ASKPASS helper, so the token is never on a command line or in the output.
+# or can't be read.
+#
+# The catalog token comes from scripts/clusters.sh's deployment_load
+# (github.catalogToken, the environment winning, else CATALOG_TOKEN_FILE).
+# With one, git reads it through a temporary GIT_ASKPASS helper and never
+# prompts, so the token is never on a command line or in the output; without
+# one, --confirm uses your own git credentials.
 #
 # Usage: scripts/empty-catalog.sh [--confirm | --check]
 set -euo pipefail
@@ -22,19 +26,23 @@ url=$(value catalogRepoURL || true) rev=$(value catalogRevision || true); rev=${
 case "$url" in ""|REQUIRED-*)
   echo "error: root/inputs.env has no catalogRepoURL: run scripts/set-inputs.sh CATALOG_REPO_URL (page 2)" >&2; exit 1 ;;
 esac
+if [ -f "$dir/.config/clusters.yaml" ] || [ -f "$dir/clusters.yaml" ]; then
+  . "$dir/scripts/clusters.sh"; deployment_load "$dir" || exit 1
+fi
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+token_file=${CATALOG_TOKEN_FILE:-} gitc=(git)
+if [ -n "$token_file" ] && [ -r "$token_file" ]; then
+  # The helper holds the file's path, never its contents.
+  printf '#!/bin/bash\ncase "$1" in Username*) echo x-access-token ;; *) head -n1 %q ;; esac\n' "$token_file" > "$tmp/askpass"
+  chmod 700 "$tmp/askpass"; export GIT_ASKPASS="$tmp/askpass" GIT_TERMINAL_PROMPT=0
+  gitc=(git -c credential.helper=)
+fi
 if [ -n "$check" ]; then
   export GIT_TERMINAL_PROMPT=0
-  token_file=${CATALOG_TOKEN_FILE:-}
-  if [ -n "$token_file" ] && [ -r "$token_file" ]; then
-    # The helper holds the file's path, never its contents.
-    printf '#!/bin/bash\ncase "$1" in Username*) echo x-access-token ;; *) head -n1 %q ;; esac\n' "$token_file" > "$tmp/askpass"
-    chmod 700 "$tmp/askpass"; export GIT_ASKPASS="$tmp/askpass"
-  fi
-  err=$(git -c credential.helper= clone -q --depth 1 --branch "$rev" -- "$url" "$tmp/catalog" 2>&1) ||
+  err=$("${gitc[@]}" clone -q --depth 1 --branch "$rev" -- "$url" "$tmp/catalog" 2>&1) ||
     { echo "error: can't read the catalog $url ($rev): $(grep . <<<"$err" | tail -n1)" >&2; exit 1; }
 else
-  git clone -q --branch "$rev" -- "$url" "$tmp/catalog"
+  "${gitc[@]}" clone -q --branch "$rev" -- "$url" "$tmp/catalog"
 fi
 cd "$tmp/catalog"
 files=$(git ls-files | grep -vx README.md || true)
@@ -53,5 +61,5 @@ if [ -z "$confirm" ]; then
 fi
 git ls-files -z | grep -zvx README.md | xargs -0 git rm -q --
 git commit -q -m "catalog: empty for uninstall"
-git push -q origin "HEAD:$rev"
+"${gitc[@]}" push -q origin "HEAD:$rev"
 echo "Pushed: the catalog $url ($rev) now holds only README.md."
