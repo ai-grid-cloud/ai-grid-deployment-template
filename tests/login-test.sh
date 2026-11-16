@@ -25,6 +25,30 @@ esac
 STUB
 chmod +x "$T/bin/oc"
 
+# The stub curl plays the cluster's OAuth server. It logs its arguments to
+# argv.log and its stdin (curl -K - config) to stdin.log. The authorize call
+# answers a 302 with the sentinel token in the Location fragment when the
+# config holds user = "admin:$STUB_PASSWORD" (default $PW) and argv has
+# X-CSRF-Token: 1; else 401. STUB_CURL_X509 makes every call fail as an
+# untrusted certificate.
+cat > "$T/bin/curl" <<'STUB'
+#!/bin/bash
+echo "curl $*" >> "$STUB_DIR/argv.log"; a=" $* "
+in=""; case "$a" in *" -K - "*) in=$(cat); printf '%s\n' "$in" >> "$STUB_DIR/stdin.log" ;; esac
+[ -z "${STUB_CURL_X509:-}" ] || { echo "curl: (60) SSL certificate problem: unable to get local issuer certificate" >&2; exit 60; }
+case "$a" in
+  *"/.well-known/oauth-authorization-server "*)
+    echo '{"issuer":"https://oauth.apps.example.com","authorization_endpoint":"https://oauth.apps.example.com/oauth/authorize"}' ;;
+  *"/oauth/authorize?"*)
+    want=$(printf 'user = "admin:%s"' "${STUB_PASSWORD_ESCAPED:-${STUB_PASSWORD:-PW~SENTINEL pass}}")
+    if grep -qxF "$want" <<<"$in" && [[ "$a" == *"X-CSRF-Token: 1"* ]]; then
+      printf 'HTTP/1.1 302 Found\r\nLocation: https://oauth.apps.example.com/oauth/token/implicit#access_token=sha256%%7ESENTINEL&expires_in=86400&scope=user%%3Afull&token_type=Bearer\r\n\r\n'
+    else printf 'HTTP/1.1 401 Unauthorized\r\n\r\n'; fi ;;
+  *) echo "stub curl: unexpected: $*" >&2; exit 2 ;;
+esac
+STUB
+chmod +x "$T/bin/curl"
+
 new_repo() { # a fresh repository copy in $D, a fresh stub log in $W
   D="$T/repo-$total"; W="$T/stub-$total"; rm -rf "$D" "$W"; mkdir -p "$D" "$W"; : > "$W/argv.log"
   cp -R "$SRC/scripts" "$D/"
@@ -33,7 +57,7 @@ new_repo() { # a fresh repository copy in $D, a fresh stub log in $W
 run() { # [VAR=value...] -- args: runs login.sh in $D; sets rc and out
   local envs=()
   while [ "$1" != -- ]; do envs+=("$1"); shift; done; shift
-  out=$(env -u AI_GRID_TOKEN_HUB -u AI_GRID_TOKEN_SITE_B PATH="$T/bin:$PATH" STUB_DIR="$W" ${envs[@]+"${envs[@]}"} \
+  out=$(env -u AI_GRID_TOKEN_HUB -u AI_GRID_TOKEN_SITE_B -u AI_GRID_USERNAME_HUB -u AI_GRID_PASSWORD_HUB PATH="$T/bin:$PATH" STUB_DIR="$W" ${envs[@]+"${envs[@]}"} \
     "$D/scripts/login.sh" "$@" 2>&1) && rc=0 || rc=$?
 }
 t() { # name condition...: passes when the condition (a command) succeeds
@@ -69,8 +93,9 @@ t "working kubeconfig: left alone" test "$rc:$(cksum "$D/.config/hub/kubeconfig"
 
 new_repo
 run -- --non-interactive hub
-no_token() { [ "$rc" = 1 ] && grep -qF .config/hub/token <<<"$out" && ! grep -q -- --web "$W/argv.log"; }
-t "no token file: stops with the path, no --web" no_token
+no_token() { [ "$rc" = 1 ] && grep -qF "credentials.hub in .config/clusters.yaml (make secrets), or AI_GRID_TOKEN_HUB" <<<"$out" &&
+  ! grep -q -- --web "$W/argv.log"; }
+t "nothing to log in with: names credentials.hub and AI_GRID_TOKEN_HUB, no --web" no_token
 
 never_in_argv() { [ "$rc" = 0 ] && ! grep -rqF "$SENTINEL" "$T"/stub-*/argv.log && ! grep -qF "$SENTINEL" <<<"$all_out"; }
 all_out=""
@@ -98,5 +123,118 @@ t "all-digit token: written as a quoted string" grep -qx "    token: '12345'" "$
 new_repo; mkdir -p "$D/.config/hub"; printf '%s\r\n' "$SENTINEL" > "$D/.config/hub/token"
 run -- --non-interactive hub
 t "token file ending in CRLF: works" working_kubeconfig hub https://api.hub.example.com:6443
+
+# The private .config/clusters.yaml with a credentials: block.
+PW='PW~SENTINEL pass'
+OTHER_TOKEN=sha256~OTHER EXPIRED_TOKEN=sha256~EXPIRED
+private() { # credentials-block lines: writes $D/.config/clusters.yaml (mode 600) with the same clusters
+  mkdir -p "$D/.config"
+  { cat "$D/clusters.yaml"; echo "credentials:"; printf '  %s\n' "$@"; } > "$D/.config/clusters.yaml"
+  chmod 600 "$D/.config/clusters.yaml"
+}
+no_secret() { # [SECRET...]: none in the stubs' argv or the output (default the token and $PW)
+  local s; [ $# -gt 0 ] || set -- "$SENTINEL" "$PW"
+  for s in "$@"; do ! grep -qF -- "$s" "$W/argv.log" && ! grep -qF -- "$s" <<<"$out" || return 1; done
+}
+no_curl() { ! grep -q '^curl' "$W/argv.log"; }
+
+new_repo; private "hub: {token: '$SENTINEL'}"
+run -- --non-interactive hub
+t "credentials.hub.token: writes a working kubeconfig" working_kubeconfig hub https://api.hub.example.com:6443
+t "  ... never in argv or output" no_secret
+
+new_repo; private "hub: {token: '$OTHER_TOKEN'}"
+run AI_GRID_TOKEN_HUB="$SENTINEL" -- --non-interactive hub
+t "AI_GRID_TOKEN_HUB beats credentials.hub.token" working_kubeconfig hub https://api.hub.example.com:6443
+
+new_repo; private "hub: {token: '$SENTINEL'}"; mkdir -p "$D/.config/hub"; printf 'sha256~LEGACY\n' > "$D/.config/hub/token"
+run -- --non-interactive hub
+t "credentials.hub.token beats the legacy .config/hub/token" working_kubeconfig hub https://api.hub.example.com:6443
+
+new_repo; mkdir -p "$D/kc"
+printf 'apiVersion: v1\nkind: Config\nusers:\n- name: x\n  user:\n    token: %s\n' "$SENTINEL" > "$D/kc/hub.yaml"
+private "hub: {kubeconfig: kc/hub.yaml}"
+run -- --non-interactive hub
+kc_copied() { [ "$rc" = 0 ] && mode600 "$D/.config/hub/kubeconfig" && cmp -s "$D/kc/hub.yaml" "$D/.config/hub/kubeconfig"; }
+t "credentials.hub.kubeconfig (relative): copied to .config/hub/kubeconfig, mode 600" kc_copied
+t "  ... no OAuth call" no_curl
+
+new_repo; mkdir -p "$D/kc"; printf 'apiVersion: v1\nkind: Config\n' > "$D/kc/hub.yaml"
+private "hub: {kubeconfig: kc/hub.yaml, token: '$SENTINEL'}"
+run -- --non-interactive hub
+t "a kubeconfig that doesn't log in: falls through to the token" working_kubeconfig hub https://api.hub.example.com:6443
+
+new_repo; private "hub: {username: admin, password: '$PW'}"
+run -- --non-interactive hub
+t "credentials.hub password: writes a working kubeconfig" working_kubeconfig hub https://api.hub.example.com:6443
+t "  ... asks the OAuth server with X-CSRF-Token: 1, as the challenging client" \
+  grep -q "X-CSRF-Token: 1.*client_id=openshift-challenging-client" "$W/argv.log"
+t "  ... the password and token never in argv or output" no_secret
+t "  ... the password passed on stdin" grep -qxF "user = \"admin:$PW\"" "$W/stdin.log"
+t "  ... says where the password came from" grep -qF "hub: logging in as admin with credentials.hub.password" <<<"$out"
+
+new_repo; private "hub: {username: nobody, password: wrong}"
+run AI_GRID_USERNAME_HUB=admin AI_GRID_PASSWORD_HUB="$PW" -- --non-interactive hub
+t "AI_GRID_USERNAME_HUB and AI_GRID_PASSWORD_HUB beat the file" working_kubeconfig hub https://api.hub.example.com:6443
+t "  ... never in argv or output" no_secret
+
+new_repo; private "hub: {token: '$EXPIRED_TOKEN', username: admin, password: '$PW'}"
+run -- --non-interactive hub
+t "expired token, then the password gets a fresh one" working_kubeconfig hub https://api.hub.example.com:6443
+
+new_repo; private "hub: {token: '$SENTINEL', username: admin, password: '$PW'}"
+run -- --non-interactive hub
+t "a working token wins over the password" bash -c '[ "$0" = 0 ] && ! grep -q "^curl" "$1/argv.log"' "$rc" "$W"
+
+new_repo; private "hub: {token: '$SENTINEL', username: admin, password: '$PW'}"
+run STUB_X509=1 -- --non-interactive hub
+t "a certificate error with the token: no fall-through to the password" \
+  bash -c '[ "$0" = 1 ] && grep -q "certificate problem" <<<"$1" && ! grep -q "^curl" "$2/argv.log"' "$rc" "$out" "$W"
+
+new_repo; private "hub: {username: admin, password: 'PW~WRONG'}"
+run -- --non-interactive hub
+bad_pw() { [ "$rc" = 1 ] && grep -q "hub: the OAuth server refused admin" <<<"$out" && no_secret PW~WRONG; }
+t "wrong password: stops, naming the user, not the password" bad_pw
+
+new_repo; private "hub: {username: admin, password: 'q\"u\\ote'}"
+run STUB_PASSWORD_ESCAPED='q\"u\\ote' -- --non-interactive hub
+t "password with \" and \\: escaped for curl's config" working_kubeconfig hub https://api.hub.example.com:6443
+t "  ... never in argv" no_secret 'q"u\ote'
+
+new_repo; private "hub: {username: admin, password: '$PW'}"; mkdir -p "$D/.config/hub"; : > "$D/.config/hub/ca.crt"
+run -- --non-interactive hub
+t "ca.crt: curl checks the OAuth server against it" grep -q -- "--cacert $D/.config/hub/ca.crt" "$W/argv.log"
+
+new_repo; private "hub: {username: admin, password: '$PW'}"
+run STUB_CURL_X509=1 -- --non-interactive hub
+t "OAuth certificate problem: says certificate" bash -c '[ "$0" = 1 ] && grep -q "certificate problem" <<<"$1"' "$rc" "$out"
+
+new_repo; private "hub: {username: admin}"
+run -- --non-interactive hub
+t "a username with no password: names the missing key" \
+  bash -c '[ "$0" = 1 ] && grep -qF "credentials.hub.password" <<<"$1"' "$rc" "$out"
+
+# Plain make login (no flag): stored credentials first, oc login --web only for a cluster with none.
+new_repo; private "hub: {token: '$SENTINEL'}" "site-b: {username: admin, password: '$PW'}"
+run --
+plain_stored() { [ "$rc" = 0 ] && ! grep -q -- --web "$W/argv.log" && no_secret; }
+t "no flag, stored token and password: logs in with them, no --web" plain_stored
+t "  ... the hub's kubeconfig works" working_kubeconfig hub https://api.hub.example.com:6443
+t "  ... the site's too" working_kubeconfig site-b https://api.site-b.example.com:6443
+
+new_repo; private "hub: {token: '$SENTINEL'}"
+run -- hub
+t "no flag, NAME=hub with a stored token: no --web" bash -c '[ "$0" = 0 ] && ! grep -q -- --web "$1/argv.log"' "$rc" "$W"
+
+new_repo; private "hub: {token: '$SENTINEL'}"
+run --
+plain_mixed() { [ "$rc" = 0 ] && grep -qx 'login --server https://api.site-b.example.com:6443 --web' "$W/argv.log" &&
+  ! grep -q 'api.hub.example.com:6443 --web' "$W/argv.log"; }
+t "no flag, nothing stored for site-b: --web for site-b only" plain_mixed
+
+new_repo; private "hub: {token: '$SENTINEL'}"
+run -- hub --token=x
+t "explicit oc flags: passed to oc login as today, stored credentials unused" \
+  grep -qx 'login --server https://api.hub.example.com:6443 --token=x' "$W/argv.log"
 
 echo "login tests: $((total-fails)) ok, $fails failed"; exit "$fails"
