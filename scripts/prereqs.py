@@ -167,13 +167,19 @@ def pinned_catalog_image():
     return f"{vals['registry']}/{vals['repository']}{ref}"
 
 
-def check_registry(auth_file):
+IN_ENV = " in install.env"  # added to a hint only when install.env names the file
+
+
+IN_ENV = " in install.env"  # added to a hint only when install.env names the file
+
+
+def check_registry(auth_file, from_install_env=False):
     section("Registry logins (pre-release builds)")
     names = ["auth file", "quay.io/rhoai login", "registry.stage.redhat.io login", "pull the pinned catalog"]
     if not auth_file:
         report("skipped", "registry logins",
                "no auth file at ~/.config/containers/auth.json or $XDG_RUNTIME_DIR/containers/auth.json; "
-               "set QUAY_AUTH_FILE in install.env")
+               "set QUAY_AUTH_FILE")
         return
     auth_file = os.path.expanduser(auth_file)
     try:
@@ -185,7 +191,8 @@ def check_registry(auth_file):
             report("FAIL", "auth file", f"{auth_file}: {type(e).__name__}")
         else:
             report("MISSING", "auth file",
-                   f"{auth_file}: not found; set QUAY_AUTH_FILE in install.env to your auth file, or put it there")
+                   f"{auth_file}: not found; set QUAY_AUTH_FILE{IN_ENV if from_install_env else ''} "
+                   "to your auth file, or put it there")
         for n in names[1:]:
             report("skipped", n, "no readable auth file")
         return
@@ -340,18 +347,19 @@ def check_cluster(name, role, kubeconfig):
         report(status, "ClusterIssuer", ", ".join(parts))
 
 
-def check_catalog_token(path):
+def check_catalog_token(path, from_install_env=False):
     section("Catalog token")
     if not path:
         report("skipped", "catalog token file",
-               "no ~/.ai-grid/catalog-token; set CATALOG_TOKEN_FILE in install.env")
+               "no ~/.ai-grid/catalog-token; set CATALOG_TOKEN_FILE")
         return
     path = os.path.expanduser(path)
     try:
         st = os.stat(path)
     except OSError:
         report("MISSING", "catalog token file",
-               f"{path} not found; set CATALOG_TOKEN_FILE in install.env to your token file, or put it there")
+               f"{path} not found; set CATALOG_TOKEN_FILE{IN_ENV if from_install_env else ''} "
+               "to your token file, or put it there")
         return
     mode = stat.S_IMODE(st.st_mode)
     if not stat.S_ISREG(st.st_mode) or st.st_size == 0:
@@ -432,9 +440,9 @@ def main():
 
     check_tools()
     check_library(a.deployment)
-    check_registry(a.quay_auth_file)
+    check_registry(a.quay_auth_file, settings is not None)
     check_clusters(a.deployment)
-    check_catalog_token(a.catalog_token_file)
+    check_catalog_token(a.catalog_token_file, settings is not None)
 
     counts = {s: results.count(s) for s in ("ok", "MISSING", "OLD", "FAIL", "skipped")}
     print("\n" + ", ".join(f"{n} {s.lower()}" for s, n in counts.items() if n))
