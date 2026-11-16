@@ -111,6 +111,9 @@ In `install.env`, set `CATALOG_REPO_URL` to your catalog repository's URL, such 
 - `SITE_ISSUER_NAME`: which DNS-01 ClusterIssuer to use, when an `ingress` or `combined` site has several.
 - `GATE_*_SECONDS`: each readiness check's time limit.
 
+If the environment variable `AI_GRID_GIT_TOKEN_FILE` is set, the console's Secrets use the token file it names instead
+of `CATALOG_TOKEN_FILE`.
+
 A line `make install` doesn't know, or a value still starting with `REQUIRED-`, stops it before it touches a
 cluster.
 
