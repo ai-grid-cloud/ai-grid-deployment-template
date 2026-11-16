@@ -117,13 +117,10 @@ if apps=$(oc get applications.argoproj.io -n openshift-gitops -o json 2>/dev/nul
   [ -z "$waiting" ] || warn "Applications that wait for a site, expected until a site is added: $waiting"
 fi
 check "MultiClusterHub Running" mch_running
-console_route=$(oc get route -n ai-grid-provider-console -o json 2>/dev/null | jq -r '.items[0].metadata.name // empty' 2>/dev/null || true)
-if [ -n "$console_route" ]; then
-  check "provider console answers" route_answers ai-grid-provider-console "$console_route"
-  console_host=$(route_host ai-grid-provider-console "$console_route")
-else
-  fail "provider console answers: no Route in ai-grid-provider-console"; console_host=""
-fi
+# The chart's Route, by name: the provider-admin token is sent to its host, so
+# never another Route someone added to the namespace.
+check "provider console answers" route_answers ai-grid-provider-console ai-grid-provider-console
+console_host=$(route_host ai-grid-provider-console ai-grid-provider-console)
 check "Keycloak answers" route_answers tenant-idp keycloak
 check "Perses Service ${PERSES_SERVICE} has a ready endpoint (in-cluster)" service_ready "${PERSES_SERVICE%%/*}" "${PERSES_SERVICE#*/}"
 check "Thanos query answers" route_answers "${THANOS_ROUTE%%/*}" "${THANOS_ROUTE#*/}"
