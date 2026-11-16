@@ -207,7 +207,8 @@ def check_registry(auth_file):
         report("ok", "quay.io/rhoai login", "quay.io/rhoai entry")
     elif has("quay.io"):
         report("ok", "quay.io/rhoai login",
-               "general quay.io entry: page 3 needs make bootstrap ALLOW_GENERIC_LOGIN=1, "
+               "general quay.io entry: set ALLOW_GENERIC_LOGIN=1 in install.env (make install) "
+               "or run make bootstrap ALLOW_GENERIC_LOGIN=1 (page by page), "
                "or add a robot token for quay.io/rhoai")
     else:
         report("MISSING", "quay.io/rhoai login", "no quay.io/rhoai or quay.io entry with an auth value")
@@ -239,7 +240,7 @@ ROLES = ("hub", "combined", "ingress", "inference")
 def read_clusters(deployment):
     """[(name, role)] from DIR/clusters.yaml, or an error string. scripts/clusters.sh reads and checks it."""
     if not os.path.isfile(os.path.join(deployment, "clusters.yaml")):
-        return "no clusters.yaml: copy clusters-example.yaml to clusters.yaml and edit it (page 2, part 1)"
+        return "no clusters.yaml: run cp clusters-example.yaml clusters.yaml and fill it in"
     if not (shutil.which("kubectl") and shutil.which("jq")):
         return "needs kubectl and jq to read clusters.yaml"
     env = dict(os.environ, PATH=os.environ.get("PATH", "") + ":/usr/bin:/bin")
