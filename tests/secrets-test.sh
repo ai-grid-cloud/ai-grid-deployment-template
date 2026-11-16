@@ -71,7 +71,7 @@ t "  ... file mode 600, .config mode 700" [ "$(mode "$D/.config/clusters.yaml")$
 t "  ... no temporary files left" [ "$(ls -A "$D/.config")" = clusters.yaml ]
 t "  ... never prints a secret or passes one to a command" no_leak
 t "  ... never runs podman or oc" bash -c '! grep -qE "^(podman|oc) " "$0"' "$LOG"
-t "  ... says what's next" grep -q "Next: make login NONINTERACTIVE=1, then make prereqs." <<<"$out"
+t "  ... says what's next" grep -q "Next: make login, then make prereqs." <<<"$out"
 first=$(cat "$D/.config/clusters.yaml")
 
 # 2. A rerun keeps everything and asks nothing; FORCE=0 is not FORCE.
@@ -141,6 +141,7 @@ github:
   catalogToken: c
 # Settings below
 hub: {api: \"https://api.hub.example.com:6443\"}
+repositories: {catalog: \"https://github.com/o/c.git\"}
 sites: []"
 run "" "" "" "" "" ""
 t "a block in the middle: exit 0" [ "$rc" = 0 ]
@@ -148,6 +149,7 @@ t "  ... the keys after it, with their comment, stay" [ "$(public_part)" = "apiV
 kind: Clusters
 # Settings below
 hub: {api: \"https://api.hub.example.com:6443\"}
+repositories: {catalog: \"https://github.com/o/c.git\"}
 sites: []" ]
 t "  ... the value kept" [ "$(get .github.catalogToken)" = c ]
 
@@ -201,8 +203,9 @@ t "an unknown NAME: exit 1 with the valid names, file kept" bash -c '[ "$0" = 1 
 t "make secrets NAME= passes the name" bash -c 'make -n -C "$0" secrets NAME=site-b | grep -q "scripts/secrets.sh site-b"' "$SRC"
 
 # 10. No clusters.yaml at all.
-D="$T/repo-none"; mkdir -p "$D"; cp -R "$SRC/scripts" "$D/"
+D="$T/repo-none"; mkdir -p "$D"; cp -R "$SRC/scripts" "$D/"; cp "$SRC/clusters-example.yaml" "$D/"
 run ""
-t "no clusters.yaml: stops" bash -c '[ "$0" = 1 ] && grep -q "copy clusters-example.yaml to .config/clusters.yaml" <<<"$1" && [ ! -e "$2/.config/clusters.yaml" ]' "$rc" "$out" "$D"
+t "no clusters.yaml: creates .config/clusters.yaml from the example and stops" bash -c '[ "$0" = 1 ] && grep -q "edit it, then run make secrets again" <<<"$1" && cmp -s "$2/clusters-example.yaml" "$2/.config/clusters.yaml"' "$rc" "$out" "$D"
+t "  ... file 600, directory 700" bash -c '[ "$(stat -f %Lp "$0/.config/clusters.yaml" 2>/dev/null || stat -c %a "$0/.config/clusters.yaml")$(stat -f %Lp "$0/.config" 2>/dev/null || stat -c %a "$0/.config")" = 600700 ]' "$D"
 
 echo "secrets tests: $((total-fails)) ok, $fails failed"; exit "$fails"

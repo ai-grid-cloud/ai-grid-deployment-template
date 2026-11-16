@@ -37,8 +37,13 @@ force=""; [ "${FORCE:-}" != 1 ] || force=1
 MARK='# Secrets (make secrets writes this part; you can edit it).'
 
 if [ ! -f "$file" ]; then
-  [ -f "$root/clusters.yaml" ] ||
-    { echo "error: no clusters.yaml: copy clusters-example.yaml to .config/clusters.yaml, edit it, then run make secrets" >&2; exit 1; }
+  if [ ! -f "$root/clusters.yaml" ]; then
+    # A first run: start the private file from the example, for you to fill in.
+    ( umask 077; mkdir -p "$cfg"; cp "$root/clusters-example.yaml" "$file" )
+    chmod 700 "$cfg"; chmod 600 "$file"
+    echo "Created .config/clusters.yaml from clusters-example.yaml: edit it, then run make secrets again." >&2
+    exit 1
+  fi
   ( umask 077; mkdir -p "$cfg"; cp "$root/clusters.yaml" "$file" )
   chmod 700 "$cfg"; chmod 600 "$file"
   echo "Copied clusters.yaml to .config/clusters.yaml: the scripts read .config/clusters.yaml from now on, so edit that one."
@@ -120,8 +125,8 @@ one() { # VAR JQ_PATH PROMPT hidden|visible: keeps VAR's current value or asks f
 }
 one gh_deploy .github.deploymentToken "Token that can push to this deployment repository" hidden
 one gh_catalog .github.catalogToken "Token that can write the catalog repository" hidden
-one quay_user .quay.username "quay.io/rhoai robot account username" visible
-one quay_pw .quay.password "quay.io/rhoai robot account password" hidden
+one quay_user .quay.username "The quay.io/rhoai robot account's username" visible
+one quay_pw .quay.password "The quay.io/rhoai robot account's password" hidden
 
 # The new file: the user's text without the secret blocks, then one secret block.
 tmpd=$(umask 077; mktemp -d "$cfg/.secrets.XXXXXX")
@@ -172,4 +177,4 @@ rm -f "$new.body"; mv -f "$new.next" "$new"; chmod 600 "$new"
   { echo "error: the new file didn't load; .config/clusters.yaml is unchanged" >&2; exit 1; }
 mv -f "$new" "$file"; chmod 600 "$file"
 echo "Wrote .config/clusters.yaml."
-echo "Next: make login NONINTERACTIVE=1, then make prereqs."
+echo "Next: make login, then make prereqs."

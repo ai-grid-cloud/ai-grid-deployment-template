@@ -129,7 +129,7 @@ PW='PW~SENTINEL pass'
 OTHER_TOKEN=sha256~OTHER EXPIRED_TOKEN=sha256~EXPIRED
 private() { # credentials-block lines: writes $D/.config/clusters.yaml (mode 600) with the same clusters
   mkdir -p "$D/.config"
-  { cat "$D/clusters.yaml"; echo "credentials:"; printf '  %s\n' "$@"; } > "$D/.config/clusters.yaml"
+  { cat "$D/clusters.yaml"; echo "repositories: {catalog: 'https://github.com/o/c.git'}"; echo "credentials:"; printf '  %s\n' "$@"; } > "$D/.config/clusters.yaml"
   chmod 600 "$D/.config/clusters.yaml"
 }
 no_secret() { # [SECRET...]: none in the stubs' argv or the output (default the token and $PW)
