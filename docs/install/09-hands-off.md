@@ -178,7 +178,8 @@ make install
 ```
 
 Every step first checks whether its work is done and skips it if so, so the install picks up where it stopped. On a
-finished install, a second run changes nothing and passes the ready check again, but only before your tests start.
+finished install, a second run changes nothing on the clusters except a fresh provider-admin token, which it writes to
+`.config/provider-admin-token`, and it passes the ready check again, but only before your tests start.
 Once a test adds a site to the grid or creates an organization, model or subscription, the `catalog` step and the ready
 check's label and content checks fail by design. `.install/report.txt` can quote your manifests: read it before you
 share it.
