@@ -190,6 +190,19 @@ run
 t "oc error: stops with the make install line" eval '[ "$rc" = 1 ] && grep -q "Unauthorized" <<<"$out" &&
   grep -qx "make install stopped at bootstrap. Fix the cause, then run make install again." <<<"$out"'
 
+setup quaylogin
+printf '{"auths":{"quay.io":{"auth":"%s"}}}\n' "$SENTINEL" > "$D/.config/quay-auth.json"
+run
+t "general quay.io login without ALLOW_GENERIC_LOGIN: stops before the inputs push" eval '[ "$rc" = 1 ] &&
+  grep -qF "no quay.io/rhoai login in $D/.config/quay-auth.json; add a robot token for quay.io/rhoai, or set ALLOW_GENERIC_LOGIN=1 to use the general quay.io login" <<<"$out" &&
+  ! grep -q "^git-push.sh" "$W/calls.log" && [ ! -s "$W/argv.log" ]'
+
+setup quaygeneric
+printf '{"auths":{"quay.io":{"auth":"%s"}}}\n' "$SENTINEL" > "$D/.config/quay-auth.json"
+echo 'ALLOW_GENERIC_LOGIN=1' >> "$D/install.env"; g -C "$D" commit -qam generic
+run
+t "general quay.io login with ALLOW_GENERIC_LOGIN=1: installs" eval '[ "$rc" = 0 ] && grep -q "^bootstrap-hub.sh" "$W/calls.log"'
+
 setup branch
 g -C "$D" checkout -qb feature
 run

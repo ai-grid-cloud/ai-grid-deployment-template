@@ -11,7 +11,9 @@
 # are relative to this repository, and its values win over the environment's.
 # The token files are passed on by path (DEPLOYMENT_TOKEN_FILE to
 # scripts/git-push.sh, CATALOG_TOKEN_FILE to scripts/create-console-secrets.sh,
-# QUAY_AUTH_FILE to scripts/bootstrap-hub.sh); this script never reads them.
+# QUAY_AUTH_FILE to scripts/bootstrap-hub.sh); this script never reads a token
+# from them. It only checks, before anything is pushed, that QUAY_AUTH_FILE holds
+# a quay.io/rhoai login, or that ALLOW_GENERIC_LOGIN=1 lets the general one stand in.
 #
 # The hub phase, each step printing "== STEP":
 #   login            scripts/login.sh --non-interactive
@@ -167,6 +169,13 @@ check_install_env() { # the values the hub phase needs, and the files they name
     [ -s "$f" ] || die "$var names $f, which doesn't exist or is empty: put the file there (install.env)"
     printf -v "$var" '%s' "$f"; export "${var?}"
   done
+  # bootstrap-hub.sh's own login check, made here so a missing login stops the
+  # install before the inputs step pushes anything. It reads which logins the
+  # file holds, never a token.
+  jq -e '.auths["quay.io/rhoai"].auth' "$QUAY_AUTH_FILE" >/dev/null 2>&1 && return 0
+  [ "${ALLOW_GENERIC_LOGIN:-${RHOAI_QUAY_ALLOW_GENERIC_LOGIN:-}}" = 1 ] ||
+    die "no quay.io/rhoai login in $QUAY_AUTH_FILE; add a robot token for quay.io/rhoai, or set ALLOW_GENERIC_LOGIN=1 to use the general quay.io login"
+  jq -e '.auths["quay.io"].auth' "$QUAY_AUTH_FILE" >/dev/null 2>&1 || die "no quay.io login in $QUAY_AUTH_FILE"
 }
 
 # --- hub phase ---------------------------------------------------------------
