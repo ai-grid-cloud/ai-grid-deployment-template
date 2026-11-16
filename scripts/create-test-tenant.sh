@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Create a test tenant user in our tenant Keycloak (tenant-idp/), a member of an
+# Create a test tenant user in the library's Keycloak (realm saas in namespace
+# maas-db, the only tenant IdP on the library's main branch), a member of an
 # organization the console created, with the attributes the realm's mappers turn
 # into MaaS claims: org_id, org_name, groups and roles. Groups are plain names
 # (such as ai-grid-users): MaaS prefixes them with org_id itself and drops any
@@ -15,12 +16,12 @@ set -Eeuo pipefail
 usage() {
   cat <<'EOF'
 Usage: create-test-tenant.sh --kubeconfig PATH --org NAME --user NAME --password-file PATH
-                             [--group ai-grid-users] [--role users] [--namespace tenant-idp] [--realm tenants]
+                             [--group ai-grid-users] [--role users] [--namespace maas-db] [--realm saas]
 EOF
 }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-kubeconfig="" org="" user="" password_file="" group=ai-grid-users role=users ns=tenant-idp realm=tenants
+kubeconfig="" org="" user="" password_file="" group=ai-grid-users role=users ns=maas-db realm=saas
 while [ $# -gt 0 ]; do
   case "$1" in
     --kubeconfig) kubeconfig="$2"; shift 2 ;;
@@ -56,7 +57,7 @@ base="https://$host/admin/realms/$realm"
 # The maas_* attributes are unmanaged: the user profile must let an admin set
 # them, or Keycloak drops them silently and tokens carry no org claims. The
 # realm import's user-profile component isn't applied by Keycloak 26.8, and the
-# library sets this in its realm-sync step, which tenant-idp/ leaves out.
+# library sets this in its realm-sync step; set here too, in case that hasn't run.
 profile="$(api "$base/users/profile")"
 if [ "$(printf '%s' "$profile" | jq -r '.unmanagedAttributePolicy // ""')" != ADMIN_EDIT ]; then
   printf '%s' "$profile" | jq '.unmanagedAttributePolicy = "ADMIN_EDIT"' | api -X PUT "$base/users/profile" -d @- >/dev/null

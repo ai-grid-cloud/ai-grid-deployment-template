@@ -25,7 +25,7 @@ ans() { [ -f "$d/$1" ] || { echo "NotFound" >&2; exit 1; }; cat "$d/$1"; }
 case "$a" in
   *" whoami --show-server "*) echo https://api.hub.example.com:6443 ;;
   *" whoami "*) echo admin ;;
-  *" get applications.argoproj.io tenant-idp "*) ans tenant-idp ;;
+  *" get applications.argoproj.io keycloak "*) ans keycloak ;;
   *" get applications.argoproj.io deployment-root "*) ans deployment-root ;;
   *" get applicationsets.argoproj.io apps "*) ans appset.json ;;
   *" get applications.argoproj.io "*) ans apps.json ;;
@@ -56,7 +56,7 @@ W="$T/fresh"; mkdir -p "$W"
 t "fresh: no Applications" "^Applications: none yet$"
 t "fresh: no MultiClusterHub" "^MultiClusterHub: not created yet$"
 t "fresh: no controller pod" "^Argo CD controller: no pod yet$"
-t "fresh: no tenant-idp" "^tenant-idp: not created yet$"
+t "fresh: no keycloak" "^keycloak: not created yet$"
 t "fresh: no console" "^Console: no Route yet$"
 t "fresh: no deployment-root" "^deployment-root: not created yet$"
 
@@ -65,14 +65,14 @@ W="$T/installing"; mkdir -p "$W"
 echo "{\"items\":[$(app acm Synced Progressing),$(app console Synced Healthy),$(app limitador-redis OutOfSync Degraded)]}" > "$W/apps.json"
 printf 'Installing' > "$W/mch"
 pods 3 OOMKilled CrashLoopBackOff > "$W/pods.json"
-printf 'Synced Progressing' > "$W/tenant-idp"
+printf 'Synced Progressing' > "$W/keycloak"
 t "lists the Applications not ready" "^  acm +Synced +Progressing$" "^  console "
 t "counts them" "^Applications not Synced and Healthy \(1 of 3\):$"
 t "the ones that wait for a site on one line" "^Waiting for a site to join \(expected until page 6\): limitador-redis$" "^  limitador-redis"
 t "MultiClusterHub phase" "^MultiClusterHub: Installing$"
 t "controller restarts and last termination" "^Argo CD controller: openshift-gitops-application-controller-0, 3 restarts, last termination OOMKilled$"
 t "OOMKilled called out with the fix" "^  !! The controller failed .*OOMKilled.*troubleshooting"
-t "tenant-idp state" "^tenant-idp: Synced Progressing$"
+t "keycloak state" "^keycloak: Synced Progressing$"
 pods 2 Error CrashLoopBackOff > "$W/pods.json"
 t "CrashLoopBackOff called out" "^  !! The controller failed .*CrashLoopBackOff"
 printf 'OutOfSync Healthy' > "$W/deployment-root"
@@ -134,8 +134,8 @@ t "  ... without the message's clock time" "^  odd: waiting" "PM|AM"
 
 # Done: everything ready, the controller healthy, the console up.
 W="$T/done"; mkdir -p "$W"
-echo "{\"items\":[$(app acm Synced Healthy),$(app tenant-idp Synced Healthy)]}" > "$W/apps.json"
-printf 'Running' > "$W/mch"; pods 0 > "$W/pods.json"; printf 'Synced Healthy' > "$W/tenant-idp"
+echo "{\"items\":[$(app acm Synced Healthy),$(app keycloak Synced Healthy)]}" > "$W/apps.json"
+printf 'Running' > "$W/mch"; pods 0 > "$W/pods.json"; printf 'Synced Healthy' > "$W/keycloak"
 printf 'console.apps.hub.example.com' > "$W/route"; printf 'Synced Healthy' > "$W/deployment-root"
 echo '{"status":{"conditions":[{"type":"ErrorOccurred","status":"False","message":"Successfully generated parameters"}]}}' > "$W/appset.json"
 t "done: deployment-root Synced" "^deployment-root: Synced Healthy$"

@@ -27,7 +27,8 @@ cat > "$T/bin/oc" <<'STUB'
 case " $* " in
   *" whoami "*) echo admin ;;
   *" get ingresses.config.openshift.io "*) printf 'apps.site-b.example.com' ;;
-  *" get secret tenant-idp-client "*) printf 'RkFLRV9jbGllbnRfc2VjcmV0' ;;   # base64 of FAKE_client_secret
+  *" get route keycloak -n maas-db "*) [ -f "$STUB_DIR/no-route" ] || printf 'keycloak-maas-db.apps.hub.example.com' ;;
+  *" get secret keycloak-secrets -n maas-db "*) printf 'RkFLRV9jbGllbnRfc2VjcmV0' ;;   # base64 of FAKE_client_secret
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
 STUB
@@ -42,16 +43,17 @@ done
 case "$url" in
   */protocol/openid-connect/token)
     if [ -f "$STUB_DIR/bad-login" ]; then echo '{"error":"invalid_grant","error_description":"Invalid user credentials"}'
+    elif [ -f "$STUB_DIR/no-grant" ]; then echo '{"error":"unauthorized_client","error_description":"Client not allowed for direct access grants"}'
     else echo '{"access_token":"FAKE_token"}'; fi ;;
   */v1/chat/completions)
+    if [ -f "$STUB_DIR/untrusted" ]; then echo "curl: (60) SSL certificate problem: self-signed certificate in certificate chain" >&2; exit 60; fi
     printf 'HTTP/2 200\r\nx-grid-site: site-b\r\n\r\n' > "$headers"
     echo '{"choices":[{"message":{"content":"Hello there, nice to meet."}}]}' > "$out"; printf 200 ;;
 esac
 STUB
 chmod +x "$T/bin/oc" "$T/bin/curl"
 
-D="$T/repo"; mkdir -p "$D/root"; cp -R "$SRC/scripts" "$D/"; cp "$SRC/root/kustomization.yaml" "$D/root/"
-printf 'catalogRevision=main\nidpIssuerURL=https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants\n' > "$D/root/inputs.env"
+D="$T/repo"; mkdir -p "$D"; cp -R "$SRC/scripts" "$D/"
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
 for n in hub site-b; do mkdir -p "$D/.config/$n"; : > "$D/.config/$n/kubeconfig"; done
 printf 'FAKE_password' > "$T/pw"
@@ -61,14 +63,21 @@ t "prints the reply" 0 "^Hello there, nice to meet.$" "${ARGS[@]}"
 t "  ... the HTTP status" 0 "^HTTP 200$" "${ARGS[@]}"
 t "  ... and the site that served it" 0 "^x-grid-site: site-b$" "${ARGS[@]}"
 env PATH="$T/bin:$PATH" STUB_DIR="$T" "$D/scripts/tenant-call.sh" "${ARGS[@]}" >/dev/null 2>&1; cp "$T/curl.log" "$T/calls"
-c "token from the issuer in inputs.env" 0 "curl .*https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants/protocol/openid-connect/token" cat "$T/calls"
+c "token from the library Keycloak's saas realm" 0 "curl .*https://keycloak-maas-db.apps.hub.example.com/realms/saas/protocol/openid-connect/token" cat "$T/calls"
+c "  ... as the library's client tenant-demo" 0 "client_id=tenant-demo" cat "$T/calls"
 c "call to the site's MaaS host" 0 "https://maas.apps.site-b.example.com/v1/chat/completions" cat "$T/calls"
 c "no secret on curl's command line" 0 "^clean$" bash -c 'grep -q FAKE_ "$0" && echo leaked || echo clean' "$T/calls"
 touch "$T/bad-login"
 t "a refused login says why" 1 "the IdP gave no token for alice: Invalid user credentials" "${ARGS[@]}"
 rm "$T/bad-login"
 t "missing arguments: usage" 2 "usage: tenant-call.sh" --user alice
-sed -i.bak 's#^idpIssuerURL=.*#idpIssuerURL=#' "$D/root/inputs.env"
-t "an unset issuer points to set-inputs.sh" 1 "idpIssuerURL isn't set in root/inputs.env" "${ARGS[@]}"
+touch "$T/no-grant"
+t "no password grant on the library's client: names the limit" 1 "Client not allowed for direct access grants.*upstream-main-limits.md, L6" "${ARGS[@]}"
+rm "$T/no-grant"
+touch "$T/untrusted"
+t "an untrusted MaaS certificate: names the limit" 1 "maas.apps.site-b.example.com.*not trusted.*upstream-main-limits.md, L5" "${ARGS[@]}"
+rm "$T/untrusted"
+touch "$T/no-route"
+t "no Keycloak Route on the hub: says so" 1 "no Route maas-db/keycloak on the hub" "${ARGS[@]}"
 
 echo "tenant-call tests: $((total-fails)) ok, $fails failed"; exit "$fails"

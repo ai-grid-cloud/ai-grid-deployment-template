@@ -91,9 +91,9 @@ else
   fi
 fi
 
-idp=$(oc get applications.argoproj.io tenant-idp -n openshift-gitops \
+idp=$(oc get applications.argoproj.io keycloak -n openshift-gitops \
   -o jsonpath='{.status.sync.status} {.status.health.status}' 2>/dev/null)
-echo "tenant-idp: ${idp:-not created yet}"
+echo "keycloak: ${idp:-not created yet}"
 
 host=$(oc get route ai-grid-provider-console -n ai-grid-provider-console -o jsonpath='{.spec.host}' 2>/dev/null)
 if [ -n "$host" ]; then echo "Console: https://$host"; else echo "Console: no Route yet"; fi
