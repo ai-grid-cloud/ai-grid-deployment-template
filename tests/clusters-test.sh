@@ -233,9 +233,20 @@ chmod 644 "$d/.config/clusters.yaml"
 t "a readable private file stops" 1 "mode 644: run chmod 600 .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
 d=$(repo publicsecret "hub: {name: hub, api: 'https://h:6443'}
 github: {catalogToken: x}")
-t "secrets in the committed clusters.yaml stop" 1 "move the file to .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
+t "secrets in the committed clusters.yaml stop" 1 "move the secrets to .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
 d=$(priv nocatalog "hub: {api: 'https://h:6443'} # no catalog")
 t "private file without a catalog: stops early" 1 "set repositories.catalog in .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(priv scalargithub "hub: {api: 'https://h:6443'}
+github: '$SECRET-scalar'")
+t "github: as a value, not a map: named by path" 1 "github must be a map" bash "$d/scripts/clusters.sh" --rows "$d"
+t "  ... the value never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+d=$(priv scalarcred "hub: {api: 'https://h:6443'}
+credentials: {hub: '$SECRET-scalar'}")
+t "credentials.hub as a value: named by path" 1 "credentials.hub must be a map" bash "$d/scripts/clusters.sh" --rows "$d"
+t "  ... the value never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+d=$(priv rootsecret "hub: {api: 'https://h:6443'}")
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\ngithub: {catalogToken: x}\n' > "$d/clusters.yaml"
+t "secrets in the committed clusters.yaml stop, even beside a private one" 1 "clusters.yaml is committed, so it can't hold" bash "$d/scripts/clusters.sh" --rows "$d"
 d=$(priv unknowncred "hub: {api: 'https://h:6443'}
 credentials:
   site-z: {token: x}")
@@ -270,6 +281,9 @@ t "  ... CATALOG_TOKEN_FILE wins over the file" 0 "^/x/token CATALOG_TOKEN_FILE$
 t "  ... --resolve prints paths and sources, no secret" 0 "^0$" bash -c 'HOME="$1" bash "$0/scripts/clusters.sh" --resolve "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d" "$T/home"
 sed -i.bak '/^github:/d' "$d/.config/clusters.yaml"; rm "$d/.config/clusters.yaml.bak"
 t "  ... a value removed from the file: the generated file goes" 0 "^gone$" load "$d" -- '[ ! -e "$0/.config/generated/deployment-token" ] && [ -z "$DEPLOYMENT_TOKEN_FILE" ] && echo gone'
+load "$(priv movetofile "$PRIV")" CATALOG_TOKEN_FILE=/x -- 'true' >/dev/null 2>&1 || true
+d2=$(priv movetofile2 "$PRIV"); load "$d2" -- 'true' >/dev/null
+t "  ... a secret moved to a *_FILE variable: the generated copy goes" 0 "^gone$" load "$d2" CATALOG_TOKEN_FILE=/x -- '[ ! -e "$0/.config/generated/catalog-token" ] && echo gone'
 printf 'legacy\n' > "$d/.config/catalog-token"
 t "  ... else the legacy .config/catalog-token" 0 "^legacy$" load "$d" -- 'cat "$CATALOG_TOKEN_FILE"'
 t "  ... the missing hint names the key" 0 "github.deploymentToken in .config/clusters.yaml \(make secrets NAME=github\)" load "$d" -- 'secret_missing DEPLOYMENT_TOKEN_FILE'
@@ -278,8 +292,10 @@ t "page by page: ~/.ai-grid/catalog-token" 0 "^home-token$" load "$d" -- 'cat "$
 d=$(repo withcatalog "hub: {name: hub, api: 'https://h:6443'}
 repositories: {catalog: 'https://github.com/o/c.git'}")
 t "with a catalog: no home default" 0 "^none$" load "$d" -- '[ -z "$CATALOG_TOKEN_FILE" ] && echo none'
-t "settings exported, WIPE_PROTECT_ allowed" 0 "^a,b$" load "$(repo wipe "hub: {name: hub, api: 'https://h:6443'}
-options: {WIPE_PROTECT_NAMESPACES: 'a,b'}")" -- 'echo "$WIPE_PROTECT_NAMESPACES"'
+t "settings exported, GATE_O11Y_SECONDS allowed" 0 "^99$" load "$(repo o11y "hub: {name: hub, api: 'https://h:6443'}
+options: {GATE_O11Y_SECONDS: 99}")" -- 'echo "$GATE_O11Y_SECONDS"'
+t "WIPE_PROTECT_ isn't an option (nothing reads it)" 1 "options.WIPE_PROTECT_NAMESPACES" bash "$(repo wipe "hub: {name: hub, api: 'https://h:6443'}
+options: {WIPE_PROTECT_NAMESPACES: 'a,b'}")/scripts/clusters.sh" --hub
 d=$(priv halfquay "hub: {api: 'https://h:6443'}
 quay: {username: u}")
 t "quay username without password: stops" 1 "needs both a username and a password" load "$d" -- 'true'

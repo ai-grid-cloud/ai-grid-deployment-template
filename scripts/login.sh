@@ -72,7 +72,9 @@ kubeconfig_login() { # NAME: copies credentials.NAME.kubeconfig when it logs in;
     return 1
   fi
   k=$(cluster_kubeconfig "$name"); mkdir -p "$(dirname "$k")"; chmod 700 "$(dirname "$k")"
-  rm -f "$k.new"; ( umask 077; cat "$p" > "$k.new" ); chmod 600 "$k.new"; mv -f "$k.new" "$k"
+  # Flattened, so certificate paths relative to the original keep working.
+  rm -f "$k.new"; ( umask 077; KUBECONFIG=$p oc config view --raw --flatten > "$k.new" ) || { rm -f "$k.new"; return 2; }
+  chmod 600 "$k.new"; mv -f "$k.new" "$k"
   echo "Logged in to $name as $(KUBECONFIG=$k oc whoami), with the kubeconfig $p."
 }
 
@@ -104,6 +106,7 @@ password_source() { # NAME: sets user, pass and src; 1 when there's no password,
     [ -n "$pass" ] || { echo "error: $name: credentials.$name.username needs credentials.$name.password in .config/clusters.yaml" >&2; return 2; }
   fi
   trim user; pass=${pass%$'\r'}
+  [[ "$user$pass" != *[$'\n\r']* ]] || { echo "error: $name: the username or password in $src has a line break" >&2; return 2; }
 }
 
 certificate_or() { # NAME ERR WHAT: says certificate problem when ERR is one, else WHAT
@@ -169,9 +172,13 @@ write_kubeconfig() { # NAME: writes NAME's kubeconfig from $token, then checks i
 }
 
 token_login() { # NAME: the first credential that logs in (see the header); writes NAME's kubeconfig
-  local name=$1 token src user pass rc tried=""
-  kubeconfig_login "$name" && return 0 || rc=$?
-  [ "$rc" = 1 ] || return 1
+  local name=$1 token src user pass rc tried="" tv uv
+  tv=AI_GRID_TOKEN_$(upper "$name") uv=AI_GRID_USERNAME_$(upper "$name")
+  # The environment wins over the file: with AI_GRID_ credentials set, skip the file's kubeconfig.
+  if [ -z "${!tv:-}${!uv:-}" ]; then
+    kubeconfig_login "$name" && return 0 || rc=$?
+    [ "$rc" = 1 ] || return 1
+  fi
   token_source "$name" && rc=0 || rc=$?
   [ "$rc" != 2 ] || return 1
   if [ "$rc" = 0 ]; then
