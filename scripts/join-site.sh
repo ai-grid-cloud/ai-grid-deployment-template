@@ -5,8 +5,8 @@
 #   scripts/join-site.sh [NAME]     NAME defaults to the only site in clusters.yaml
 #
 # First it checks that your commits are pushed, and waits until the hub's
-# deployment-root has synced origin/main's commit, so the site's files are on
-# the hub before its labels: up to JOIN_WAIT_SECONDS (default 600), checking
+# deployment-root has synced origin/main's commit, so the hub runs what you
+# pushed before the site gets its labels: up to JOIN_WAIT_SECONDS (default 600), checking
 # every JOIN_WAIT_INTERVAL seconds (default 15). JOIN_SITE_NO_WAIT=1 skips both.
 # A site already labelled as clusters.yaml says is left alone, with no wait.
 set -euo pipefail

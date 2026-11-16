@@ -256,7 +256,14 @@ t "credentials for an unknown cluster" 1 "credentials for clusters it doesn't na
 d=$(priv credtypo "hub: {api: 'https://h:6443'}
 credentials:
   hub: {tokn: x}")
-t "an unknown credential key" 1 "credentials.hub.tokn" bash "$d/scripts/clusters.sh" --rows "$d"
+t "an unknown credential key: the section and a count, never the key" 1 "unknown keys \(typos\?\): credentials.hub \(1 unknown key\)$" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(priv githubkeys "hub: {api: 'https://h:6443'}
+github: {'$SECRET-as-a-key': x, other: y}")
+t "unknown github keys: counted, never named" 1 "github \(2 unknown keys\)$" bash "$d/scripts/clusters.sh" --rows "$d"
+t "  ... the key never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+d=$(priv scalarsites "hub: {api: 'https://h:6443'}
+sites: x")
+t "a scalar sites: must be a list" 1 "sites must be a list" bash "$d/scripts/clusters.sh" --rows "$d"
 d=$(priv placeholder2 "hub: {api: 'https://h:6443'}
 github: {catalogToken: 'REQUIRED-$SECRET'}")
 t "a secret's placeholder: named by key" 1 "set these in .config/clusters.yaml: github.catalogToken" bash "$d/scripts/clusters.sh" --rows "$d"

@@ -41,8 +41,9 @@ if [ ! -f "$file" ]; then
     # A first run: start the private file from the example, for you to fill in.
     ( umask 077; mkdir -p "$cfg"; cp "$root/clusters-example.yaml" "$file" )
     chmod 700 "$cfg"; chmod 600 "$file"
-    echo "Created .config/clusters.yaml from clusters-example.yaml: edit it, then run make secrets again." >&2
-    exit 1
+    # Not an error: the first step of a new deployment.
+    echo "Created .config/clusters.yaml from clusters-example.yaml: edit it, then run make secrets again."
+    exit 0
   fi
   ( umask 077; mkdir -p "$cfg"; cp "$root/clusters.yaml" "$file" )
   chmod 700 "$cfg"; chmod 600 "$file"

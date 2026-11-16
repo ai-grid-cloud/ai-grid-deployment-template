@@ -24,10 +24,11 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 
 To add your `quay.io/rhoai` robot account, do one of the following:
 
-- If you follow the page-by-page guide, with a committed `clusters.yaml`, log in to `quay.io` with the robot account:
+- If you follow the page-by-page guide, with a committed `clusters.yaml`, log in to `quay.io/rhoai` with the robot
+  account:
 
   ```sh
-  podman login quay.io
+  podman login quay.io/rhoai
   ```
 
   To use an auth file other than the one `podman login` writes, add `QUAY_AUTH_FILE=AUTH_FILE` to the `make`
