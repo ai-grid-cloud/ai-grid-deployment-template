@@ -20,10 +20,6 @@ worker nodes or the network.
 - [ ] **Network:** each cluster has a load-balancer provider for Submariner's LoadBalancer Service, each cluster
   reaches the other clusters' load balancers on UDP 4500 and 4490, and every router name answers `AAAA` queries
   without `NXDOMAIN`.
-- [ ] **On each `ingress` or `combined` site, a cert-manager ClusterIssuer that issues publicly trusted certificates
-  by DNS-01,** for the site's MaaS certificate. If a site has none, add one, as
-  [MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)
-  describes. An extra site that only serves models can have the role `inference` and needs no issuer.
 - [ ] **A `quay.io/rhoai` robot account:** its username and password. This template installs a pre-release
   OpenShift AI 3.6 build from `quay.io/rhoai`; Red Hat gives `quay.io/rhoai` robot accounts to early-access partners,
   so ask your Red Hat contact.
@@ -57,7 +53,7 @@ The install writes to two GitHub repositories and needs a token for each.
 
 3. Create the deployment token. Create a second fine-grained token the same way, named such as
    `ai-grid-deployment`, with **Contents** set to **Read and write** on your deployment repository only. Keep it for
-   step 6. `make install` pushes your settings and the sites' files with it.
+   step 6. `make install` pushes your settings with it.
 
 ### Set up your deployment repository
 
@@ -152,8 +148,8 @@ Confirm that every cluster and credential is ready before anything is installed.
 
    `make prereqs` prints one line per check, starting with `ok`, `MISSING`, `OLD`, `FAIL` or `skipped`. It checks
    the tools, the `quay.io/rhoai` login, the catalog token, and, for each cluster in `.config/clusters.yaml`, that
-   it's reachable, runs OpenShift 4.21 or later, has a default StorageClass and gives you `cluster-admin`, and that
-   each `ingress` or `combined` site has a DNS-01 ClusterIssuer. It changes nothing.
+   it's reachable, runs OpenShift 4.21 or later, has a default StorageClass and gives you `cluster-admin`. It changes
+   nothing.
 
    Fix each `MISSING`, `OLD` or `FAIL` line, then run it again. Everything is ready when it prints no `MISSING`,
    `OLD` or `FAIL` lines.
@@ -240,10 +236,9 @@ Each step prints `== STEP` as it starts. Before the first one, the install turns
 5. `acm`: waits until ACM is running.
 6. `console-secrets`: creates the provider console's Secrets from your catalog token.
 7. `hub-apps`: waits until every hub Application is `Synced` and `Healthy`, except those that wait for a site.
-8. `site-files`: writes the values and MaaS certificate files of each `ingress` or `combined` site, and pushes.
-9. `site NAME`: for each site, checks it and imports it into ACM, then waits until it's available.
-10. `provider-admin`: creates the provider-admin ServiceAccount and its token.
-11. `ready`: runs the ready check until it passes, which writes `.install/outputs.json`.
+8. `site NAME`: for each site, checks it and imports it into ACM, then waits until it's available.
+9. `provider-admin`: creates the provider-admin ServiceAccount and its token.
+10. `ready`: runs the ready check until it passes, which writes `.install/outputs.json`.
 
 ## Outputs and the provider-admin token
 
@@ -268,8 +263,7 @@ command line. It lasts 168 hours. To get a new one, run `make provider-admin`.
 
 ## Add a site to the grid
 
-`make install` leaves each site imported but outside the grid, with the files an `ingress` or `combined` site needs
-already pushed. To add a site, do one of the following:
+`make install` leaves each site imported but outside the grid. To add a site, do one of the following:
 
 - In the provider console, click **Clusters**, and add the site to AI Grid with its role.
 - From your deployment repository, label the site with the role and location from `.config/clusters.yaml`:
@@ -327,7 +321,6 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
   `api-ca.crt`. If the router serves a custom certificate, use the CA that issued it instead of `router-ca`.
 - **A general `quay.io` account:** put its name and password under `quay:`. The install uses it for `quay.io/rhoai`
   as it would a robot account, so it works only when that account can pull from `quay.io/rhoai`.
-- **Several DNS-01 issuers on a site:** set `issuer:` on that site, such as `issuer: letsencrypt-dns`.
 - **Another library revision:** set `repositories.library` to a branch, tag or commit, or leave it empty to keep the
   template's own commit pin.
 - **Another token lifetime:** set `PROVIDER_ADMIN_TOKEN_DURATION` under `options:` for `make install`, or in the
@@ -342,9 +335,8 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
 
 ## Known limits
 
-- An `ingress` or `combined` site needs a DNS-01 ClusterIssuer that issues publicly trusted certificates
-  ([MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)).
-  Supplying a certificate another way is a later option.
+- The MaaS gateway uses the cluster's internal certificate, so tenants' clients don't trust it until you add your own
+  certificate.
 - `make install` always installs its own Keycloak. Using an existing one, with `KEYCLOAK` under `options:`, comes
   later; any value but `install` stops the install.
 - Starting over means new clusters, and new deployment and catalog repositories. `make install` doesn't uninstall;
