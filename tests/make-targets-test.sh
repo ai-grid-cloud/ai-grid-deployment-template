@@ -109,4 +109,24 @@ t "make help lists install" 0 "^install: Install the hub and import every site, 
 t "make login NONINTERACTIVE=1 passes --non-interactive" 0 "^scripts/login.sh --non-interactive *$" make -n -C "$one" login NONINTERACTIVE=1
 t "make login without it: unchanged" 0 "^scripts/login.sh *$" make -n -C "$one" login
 
+t "make help lists inputs, check and console-call" 0 "inputs:.*check:.*console-call:" bash -c 'make -s -C "$0" help | tr "\n" " "' "$one"
+t "make help marks test for maintainers" 0 "^test: .*for maintainers" make -s -C "$one" help
+t "make inputs runs set-inputs.sh with no argument" 0 "^scripts/set-inputs.sh *$" make -n -C "$one" inputs
+t "make inputs CATALOG= passes it" 0 "^scripts/set-inputs.sh 'https://github.com/acme/cat.git' *$" make -n -C "$one" inputs CATALOG=https://github.com/acme/cat.git
+t "make check runs check-deployment.sh" 0 "^scripts/check-deployment.sh *$" make -n -C "$one" check
+t "console-call needs METHOD" 2 "set METHOD, such as: make console-call METHOD=ai_grid.v1.Tenants/List" make -s -C "$one" console-call
+t "console-call: BODY and BODY_FILE together stop" 2 "set BODY or BODY_FILE, not both" make -s -C "$one" console-call METHOD=m BODY='{}' BODY_FILE=f
+t "console-call defaults the body to {}" 0 "^scripts/console-call.sh 'm' '\{\}' *$" make -n -C "$one" console-call METHOD=m
+t "console-call BODY= passes it" 0 "^scripts/console-call.sh 'm' '\{\"a\":1\}' *$" make -n -C "$one" console-call METHOD=m 'BODY={"a":1}'
+printf '{"b":2}' > "$T/body.json"
+t "console-call BODY_FILE= passes the file's contents" 0 'console-call.sh .m. "\$\(cat ' make -n -C "$one" console-call METHOD=m BODY_FILE="$T/body.json"
+# A copy whose console-call.sh prints its arguments, one per line, to run the target for real.
+cc=$(repo cc site-b:combined); printf '#!/bin/bash\nprintf "%%s\\n" "$@"\n' > "$cc/scripts/console-call.sh"
+printf '%s' '{"a":"it'"'"'s"}' > "$T/quote-body"
+t "console-call BODY with a single quote stays one word" 0 "^ok$" bash -c 'want=$(cat "$1"); out=$(make -s -C "$0" console-call METHOD=m BODY="$want"); [ "$out" = "m"$'"'"'\n'"'"'"$want" ] && echo ok' "$cc" "$T/quote-body"
+mkdir -p "$T/a b"; printf '{"b":3}' > "$T/a b/x.json"
+t "console-call BODY_FILE with a space in its path is read" 0 '^\{"b":3\}$' make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/a b/x.json"
+t "console-call BODY_FILE that doesn't exist stops" 2 "no file $T/nope.json" make -s -C "$one" console-call METHOD=m BODY_FILE="$T/nope.json"
+t "make install HUB_ONLY=1 passes --hub-only" 0 "^scripts/install.sh --hub-only *$" make -n -C "$one" install HUB_ONLY=1
+
 echo "make-targets tests: $((total-fails)) ok, $fails failed"; exit "$fails"

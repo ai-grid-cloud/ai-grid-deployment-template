@@ -57,6 +57,6 @@ t "  ... and the token is never in argv or output" 0 "^ok$" bash -c '! grep -qF 
 
 t "an empty catalog has nothing to remove" 0 "already empty" make -s -C "$D" empty-catalog CONFIRM=1
 sed -i.bak 's#^catalogRepoURL=.*#catalogRepoURL=#' "$D/root/inputs.env"; rm "$D/root/inputs.env.bak"
-t "no catalogRepoURL names set-inputs.sh" 1 "set-inputs.sh" "$D/scripts/empty-catalog.sh"
+t "no catalogRepoURL names make inputs" 1 "run make inputs" "$D/scripts/empty-catalog.sh"
 
 echo "empty-catalog tests: $((total-fails)) ok, $fails failed"; exit "$fails"

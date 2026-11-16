@@ -10,7 +10,7 @@
 # KEYCLOAK_REALM default to the template's tenant-idp and tenants (console-secrets).
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
-.PHONY: help secrets login prereqs bootstrap status console-secrets test update \
+.PHONY: help secrets login prereqs inputs check bootstrap status console-secrets console-call test update \
   site-check site-wipe site-import site-join site-status tenant-user tenant-call \
   empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
 
@@ -18,6 +18,8 @@ export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NA
 # SITE=NAME. Targets that change a cluster without asking preview by default;
 # CONFIRM=1 runs them.
 SITE ?=
+# A value as one single-quoted shell word, its own quotes escaped.
+shq = '$(subst ','\'',$(1))'
 need = $(if $($(1)),,$(error set $(1), such as: make $@ $(1)=$(2)))
 
 help: ## Show the targets
@@ -33,6 +35,12 @@ prereqs: ## Report what is installed and what isn't found; never blocks
 	-@scripts/library.sh >/dev/null
 	@python3 scripts/prereqs.py
 
+inputs: ## Set root/inputs.env and the portal redirect, then check; CATALOG=URL, else repositories.catalog (page 2)
+	@scripts/set-inputs.sh $(if $(CATALOG),$(call shq,$(CATALOG)))
+
+check: ## Check this repository before you push it: renders, every input set; read-only (page 2)
+	@scripts/check-deployment.sh
+
 bootstrap: ## Install OpenShift GitOps on the hub and apply root/ (page 3)
 	@scripts/bootstrap-hub.sh
 
@@ -42,7 +50,13 @@ status: ## Show how the hub's install is going; read-only (pages 3 and 4)
 console-secrets: ## Create the console's secrets from your catalog token (page 4)
 	@scripts/create-console-secrets.sh
 
-test: ## Run the scripts' tests
+console-call: ## Call the console's API as your hub login: METHOD=..., BODY='JSON' or BODY_FILE=... (page 7)
+	@$(call need,METHOD,ai_grid.v1.Tenants/List)
+	@$(if $(and $(BODY),$(BODY_FILE)),$(error set BODY or BODY_FILE, not both))
+	@$(if $(BODY_FILE),test -f $(call shq,$(BODY_FILE)) || { echo "error: no file $(BODY_FILE)" >&2; exit 2; })
+	@scripts/console-call.sh $(call shq,$(METHOD)) $(if $(BODY_FILE),"$$(cat $(call shq,$(BODY_FILE)))",$(call shq,$(if $(BODY),$(BODY),{})))
+
+test: ## Run the template's own tests (for maintainers)
 	@for t in tests/*-test.sh; do bash "$$t" || exit 1; done
 
 update: ## Merge the template's latest main into this repository; never pushes

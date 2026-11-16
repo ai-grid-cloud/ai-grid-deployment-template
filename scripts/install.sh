@@ -23,7 +23,7 @@
 # The hub phase, each step printing "== STEP":
 #   login            scripts/login.sh --non-interactive
 #   inputs           scripts/set-library.sh LIBRARY_REVISION (when set),
-#                    scripts/set-inputs.sh CATALOG_REPO_URL, a check that
+#                    scripts/set-inputs.sh (make inputs), a check that
 #                    root/inputs.env names the same catalog, then
 #                    scripts/git-push.sh of root/ and the tenant IdP settings
 #   catalog          scripts/empty-catalog.sh --check: the catalog repository
@@ -287,7 +287,7 @@ pushed=""
 
 hub_phase
 if [ -n "$hub_only" ]; then
-  echo "make install --hub-only: the hub is installed (hub only: no sites, provider-admin or ready check)."
+  echo "make install HUB_ONLY=1: the hub is installed (hub only: no sites, provider-admin or ready check)."
   exit 0
 fi
 sites_phase

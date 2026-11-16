@@ -5,7 +5,7 @@
 deployment_render() {
   DEPLOYMENT_ROOT="$(oc kustomize "$1/root")" && return 0
   if grep -q 'inputs.env' "$1/root/kustomization.yaml" 2>/dev/null && [ ! -f "$1/root/inputs.env" ]; then
-    echo "error: root/inputs.env is missing: run scripts/set-inputs.sh CATALOG_REPO_URL (install guide, page 2)" >&2
+    echo "error: root/inputs.env is missing: run make inputs (install guide, page 2)" >&2
   else
     echo "error: oc kustomize $1/root failed" >&2
   fi
