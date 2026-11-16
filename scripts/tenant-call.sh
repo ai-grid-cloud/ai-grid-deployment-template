@@ -10,7 +10,9 @@
 # maas.APPS_DOMAIN, from the site (the only site unless --site names one). The
 # password, client secret and token stay in files; nothing prints them. It
 # prints the reply's text, the HTTP status and the x-grid-site header, and exits
-# 1 unless the status is 200.
+# 1 unless the status is 200. The MaaS gateway needs a publicly trusted
+# certificate: with the cluster's internal one, curl stops on it (a known limit;
+# the check is never skipped).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 dir="$(cd "$here/.." && pwd)"

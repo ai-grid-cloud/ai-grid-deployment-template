@@ -97,6 +97,10 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
    gets the user's token from your tenant Keycloak (the `idpIssuerURL` in `root/inputs.env`), calls the site's MaaS
    hostname, and prints no password or token. You should see a short reply, `HTTP 200` and `x-grid-site: SITE`.
 
+   > **Note:** `make tenant-call` needs a publicly trusted certificate on the site's MaaS gateway. With the
+   > cluster's internal certificate, which the install leaves, it stops with a certificate error. To add your own,
+   > see [MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md).
+
 Tenants normally call with an API key, and create keys in the Org UI at `https://maas.SITE_APPS_DOMAIN/maas-portal`.
 For API keys, refusal checks and revoking a key, see [tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/tenant-access.md). To remove what you created,
 see [operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/operate.md#remove-a-subscription-model-or-organization).

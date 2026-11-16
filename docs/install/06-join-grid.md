@@ -51,14 +51,16 @@ OpenShift AI takes up to an hour on a new cluster, and less on one that ran Open
    make site-status
    ```
 
-   You should see `MaaS https://maas.SITE_APPS_DOMAIN/v1/models: 401`: no token yet. The MaaS gateway uses the
-   cluster's internal certificate, so tenants' clients don't trust it until you add your own
-   ([MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)).
+   You should see `MaaS https://maas.SITE_APPS_DOMAIN/v1/models: answers with the cluster's internal certificate,
+   which isn't publicly trusted`. The MaaS gateway is up, but it uses the cluster's internal certificate, so
+   tenants' clients don't trust it until you add your own
+   ([MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)). With your own certificate, you see `401`
+   instead: no token yet.
 
 ## Checkpoint
 
 - The site's DataScienceCluster is `Ready` and its GridSite `Available`.
 - `make status` lists no hub Application as not `Synced` and `Healthy`.
-- `https://maas.SITE_APPS_DOMAIN` answers `401`.
+- `make site-status` says the MaaS gateway answers (with the internal certificate, or `401` with your own).
 
 Next: [7. First use](07-first-use.md)
