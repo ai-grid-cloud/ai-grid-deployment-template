@@ -9,7 +9,7 @@
 #   --step hub     the hub, before and after its infrastructure step: OpenShift
 #                  version, a default StorageClass, cert-manager's CRDs, the
 #                  quay.io/rhoai pull-secret file ($RHOAI_QUAY_PULL_SECRET_FILE)
-#                  and the object-storage Secret (apps/object-storage/README.md)
+#                  and the object-storage Secret (the library's apps/odf writes it)
 #   --step spoke   a spoke (with no --cluster, the only site in clusters.yaml) before it joins ACM: OpenShift version, a default
 #                  StorageClass (the hub's policies deliver its pull secret),
 #                  and a previous install (a klusterlet, a DataScienceCluster, a model,
@@ -104,7 +104,7 @@ if [ "$step" = hub ]; then
   if oc_ get secret thanos-object-storage -n open-cluster-management-observability -o name >/dev/null 2>&1; then
     report OK "object storage" "open-cluster-management-observability/thanos-object-storage"
   else
-    report MISSING "object storage" "Secret open-cluster-management-observability/thanos-object-storage (apps/object-storage)"
+    report MISSING "object storage" "Secret open-cluster-management-observability/thanos-object-storage (apps/odf writes it once ODF is installed)"
   fi
 fi
 

@@ -5,7 +5,7 @@
 #   scripts/ready-check.sh
 #
 # Inputs: clusters.yaml, each cluster's login (.config/NAME/kubeconfig, from make
-# login), root/kustomization.yaml (the library pin), the branch root/inputs.env
+# login), root/applicationset.yaml (the library pin), the branch root/inputs.env
 # names as deploymentRevision (default main) on origin, read with git ls-remote
 # and git fetch, with no prompt (when DEPLOYMENT_TOKEN_FILE, default
 # .config/deployment-token, names a readable file, git reads the token from it
@@ -24,10 +24,10 @@
 #   - each site is an available ManagedCluster with no ai-grid/ or location
 #     label, and has no DataScienceCluster: imported, not added to the grid (a
 #     missing resource type counts as none; any other API error is a FAIL);
-#   - each ingress or combined site has its files here and on origin's
-#     deploymentRevision (make site-add), deployment-root is Synced at that
-#     branch's head, and the certificate's issuer is
-#     a DNS-01 ClusterIssuer on the site;
+#   - deployment-root is Synced at the head of origin's deploymentRevision;
+#   - each ingress or combined site gets a WARN: on the library's main branch
+#     its MaaS gateway keeps the cluster-internal certificate, which tenants'
+#     clients don't trust (docs/upstream-main-limits.md, L5);
 #   - the console lists no organizations, models or subscriptions (WARN, not
 #     checked, without the provider-admin token).
 # With no FAIL it writes .install/outputs.json (git-ignored): the hub's name, API
@@ -121,7 +121,7 @@ check "MultiClusterHub Running" mch_running
 # never another Route someone added to the namespace.
 check "provider console answers" route_answers ai-grid-provider-console ai-grid-provider-console
 console_host=$(route_host ai-grid-provider-console ai-grid-provider-console)
-check "Keycloak answers" route_answers tenant-idp keycloak
+check "Keycloak answers" route_answers maas-db keycloak
 check "Perses Service ${PERSES_SERVICE} has a ready endpoint (in-cluster)" service_ready "${PERSES_SERVICE%%/*}" "${PERSES_SERVICE#*/}"
 check "Thanos query answers" route_answers "${THANOS_ROUTE%%/*}" "${THANOS_ROUTE#*/}"
 loki=$(oc get lokistack usage-logs -n redhat-ods-monitoring -o json 2>/dev/null |
@@ -130,7 +130,7 @@ if [ "$loki" = True ]; then ok "LokiStack redhat-ods-monitoring/usage-logs Ready
 else fail "LokiStack redhat-ods-monitoring/usage-logs Ready: ${loki:-not created yet}"; fi
 
 # The sites: imported and waiting, with what a later Add needs.
-sites_json='[]' root_checked=""
+sites_json='[]'
 for name in $(site_names); do
   role=$(cluster_field "$name" role)
   check "site $name: ManagedCluster available" managedcluster_available "$name"
@@ -157,33 +157,17 @@ for name in $(site_names); do
 
   case "$role" in
     combined|ingress)
-      read_main
-      missing=""
-      for f in "apps/$name-maas-tls.yaml" "sites/$name/maas-tls/certificate.yaml" "values/clusters/$name/rhoai.yaml"; do
-        [ -e "$dir/$f" ] && [ -z "$main_err" ] && git -C "$dir" cat-file -e "$main_sha:$f" 2>/dev/null || missing+="${missing:+, }$f"
-      done
-      if [ -n "$main_err" ]; then fail "site $name ($role): its files on origin's $branch: $main_err"
-      elif [ -z "$missing" ]; then ok "site $name ($role): its files are here and on origin's $branch"
-      else fail "site $name ($role): missing here or on origin's $branch: $missing (make site-add SITE=$name, then commit and push)"; fi
-      if [ -z "$root_checked" ]; then
-        root_checked=1
-        if [ -z "$main_err" ]; then check "deployment-root Synced at origin's $branch ($main_sha)" root_synced_to "$main_sha"
-        else fail "deployment-root Synced at origin's $branch: $main_err"; fi
-      fi
-      issuer=$(sed -n -E '/issuerRef:/,$ s/^[[:space:]]+name:[[:space:]]*([^[:space:]#]+).*/\1/p' \
-        "$dir/sites/$name/maas-tls/certificate.yaml" 2>/dev/null | head -n1)
-      if [ -z "$issuer" ]; then fail "site $name: no issuer in sites/$name/maas-tls/certificate.yaml"
-      elif [ -n "$sk" ]; then
-        issuers=$(KUBECONFIG=$sk oc get clusterissuers.cert-manager.io -o json 2>/dev/null |
-          jq -r '.items[] | select(any(.spec.acme.solvers[]?; .dns01 != null)) | .metadata.name' 2>/dev/null || true)
-        if grep -qx -- "$issuer" <<<"$issuers"; then ok "site $name: ClusterIssuer $issuer is DNS-01"
-        else fail "site $name: ClusterIssuer $issuer isn't a DNS-01 ClusterIssuer on it; those are: $(echo ${issuers:-none})"; fi
-      fi ;;
+      warn "site $name ($role): its MaaS gateway will present the cluster-internal certificate, which tenants' clients don't trust (docs/upstream-main-limits.md, L5)" ;;
   esac
   sites_json=$(jq -c --arg n "$name" --arg r "$role" --arg l "$(cluster_field "$name" location)" \
     --arg a "$(cluster_field "$name" api)" --arg d "$domain" \
     '. + [{name: $n, role: $r, location: $l, api: $a, appsDomain: $d, acmName: $n}]' <<<"$sites_json")
 done
+
+# deployment-root follows origin's deploymentRevision.
+read_main
+if [ -z "$main_err" ]; then check "deployment-root Synced at origin's $branch ($main_sha)" root_synced_to "$main_sha"
+else fail "deployment-root Synced at origin's $branch: $main_err"; fi
 
 # No test content: the console lists no organizations, models or subscriptions.
 none_listed() { # SERVICE NOUN: ai_grid.v1.SERVICE/List lists no NOUN
@@ -210,16 +194,17 @@ fi
 
 [ "$failed" = 0 ] || { echo "Not ready: see FAIL above."; exit 1; }
 
-rev=$(sed -n -E 's/^[[:space:]]*libraryRevision:[[:space:]]*([^[:space:]#]+).*/\1/p' "$dir/root/kustomization.yaml" | head -n1)
-lib=$(sed -n -E 's/^[[:space:]]*libraryRepoURL:[[:space:]]*([^[:space:]#]+).*/\1/p' "$dir/root/kustomization.yaml" | head -n1)
+. "$here/library.sh"
+rev=$(library_pin "$dir" libraryRevision)
+lib=$(library_pin "$dir" libraryRepoURL)
 mkdir -p "$dir/.install"
 jq -n --arg hub "$hub" --arg api "$(cluster_field "$hub" api)" \
   --arg console "$(url "$console_host")" \
-  --arg keycloak "$(url "$(route_host tenant-idp keycloak)")" \
+  --arg keycloak "$(url "$(route_host maas-db keycloak)")" \
   --arg perses "https://${PERSES_SERVICE#*/}.${PERSES_SERVICE%%/*}.svc:8080" \
   --arg thanos "$(url "$(route_host "${THANOS_ROUTE%%/*}" "${THANOS_ROUTE#*/}")")" \
   --arg token "$token_rel" --arg lib "$lib" --arg rev "$rev" --argjson sites "$sites_json" \
-  '{hub: {name: $hub, api: $api, consoleURL: $console, keycloakURL: $keycloak, keycloakRealm: "tenants",
+  '{hub: {name: $hub, api: $api, consoleURL: $console, keycloakURL: $keycloak, keycloakRealm: "saas",
           persesURL: $perses, thanosURL: $thanos, lokiStack: "redhat-ods-monitoring/usage-logs"},
     providerAdminTokenFile: $token, library: {url: $lib, revision: $rev}, sites: $sites}' \
   > "$dir/.install/outputs.json.tmp"

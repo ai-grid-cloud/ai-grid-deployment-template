@@ -20,7 +20,7 @@
 #   inputs           scripts/set-library.sh LIBRARY_REVISION (when set),
 #                    scripts/set-inputs.sh CATALOG_REPO_URL, a check that
 #                    root/inputs.env names the same catalog, then
-#                    scripts/git-push.sh of root/ and the tenant IdP settings
+#                    scripts/git-push.sh of root/ and hub/catalog/
 #   catalog          scripts/empty-catalog.sh --check: the catalog repository
 #                    must hold nothing but its README; the install never empties it
 #   bootstrap        scripts/bootstrap-hub.sh, unless Application deployment-root
@@ -32,18 +32,9 @@
 #                    safe to rerun
 #   hub-apps         gate hub-apps: every hub Application Synced and Healthy,
 #                    except those waiting for a site
-# Then the sites phase, unless --hub-only. First, what a later console Add needs
-# (install guide, page 6):
-#   site-files       each ingress or combined site needs a DNS-01 ClusterIssuer
-#                    for its MaaS certificate, read with the site's login; with
-#                    one, scripts/add-site.sh NAME; with several, the one named
-#                    by SITE_ISSUER_<NAME> in install.env (the site's name upper-
-#                    cased, - as _, so site-b is SITE_ISSUER_SITE_B); with none,
-#                    it stops. A site whose files exist keeps them, with no
-#                    issuer check. Then one scripts/git-push.sh of apps/ sites/
-#                    values/clusters/ and gate hub-root-sites: deployment-root
-#                    Synced at that commit. Inference sites need nothing.
-# Then for each site in clusters.yaml order:
+# Then the sites phase, unless --hub-only. A site needs no files in this
+# repository: the library's main branch reads no per-site values from it
+# (docs/upstream-main-limits.md, L4). For each site in clusters.yaml order:
 #   site NAME        scripts/site-check.sh NAME, scripts/import-site.sh NAME --yes,
 #                    then gate site-NAME-import: ManagedCluster NAME available
 # then gate hub-apps-final: every hub Application Synced and Healthy, except
@@ -95,7 +86,7 @@ run_step() { # STEP SCRIPT [ARG...]: runs a script; stops the install at STEP wh
 
 # The settings install.env may hold; anything else is a typo, so it stops.
 known_setting() {
-  [[ "$1" =~ ^(LIBRARY_REVISION|CATALOG_REPO_URL|DEPLOYMENT_TOKEN_FILE|CATALOG_TOKEN_FILE|QUAY_AUTH_FILE|KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_[A-Z_]+|SITE_ISSUER_[A-Z0-9_]+)$ ]]
+  [[ "$1" =~ ^(LIBRARY_REVISION|CATALOG_REPO_URL|DEPLOYMENT_TOKEN_FILE|CATALOG_TOKEN_FILE|QUAY_AUTH_FILE|KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_[A-Z_]+)$ ]]
 }
 
 read_install_env() { # reads $dir/install.env into exported variables; stops on a problem
@@ -211,7 +202,7 @@ step_inputs() {
     echo "error: root/inputs.env names the catalog $have, but install.env's CATALOG_REPO_URL is $want; set-inputs.sh keeps a value that's set. Edit catalogRepoURL in root/inputs.env, or delete that line so set-inputs.sh writes it again." >&2
     stopped inputs
   fi
-  run_step inputs git-push.sh "install: inputs and library pin" root/ tenant-idp/manifests/settings.yaml
+  run_step inputs git-push.sh "install: inputs and library pin" root/ hub/catalog/
   pushed=$(git -C "$dir" rev-parse HEAD)
 }
 
@@ -272,61 +263,11 @@ step_site() { # NAME: check the site, import it into the hub's ACM, wait until i
   hub_gate "site-$name-import" "$GATE_SITE_IMPORT_SECONDS" managedcluster_available "$name"
 }
 
-site_issuers() { # NAME: the site's DNS-01 ClusterIssuers, one per line (add-site.sh's filter); 2 on an oc error
-  local json rc
-  json=$(KUBECONFIG=$(cluster_kubeconfig "$1") oc_read get clusterissuers.cert-manager.io -o json) && rc=0 || rc=$?
-  [ "$rc" = 1 ] && return 0                     # no cert-manager, or no ClusterIssuer
-  if [ "$rc" != 0 ]; then echo "error: can't read $1's ClusterIssuers: ${json#oc error: }" >&2; return 2; fi
-  jq -r '.items[] | select(any(.spec.acme.solvers[]?; .dns01 != null)) | .metadata.name' <<<"$json"
-}
-
-site_files_present() { # NAME: the three files add-site.sh writes all exist, so it reads no issuer
-  [ -e "$dir/apps/$1-maas-tls.yaml" ] && [ -e "$dir/sites/$1/maas-tls/certificate.yaml" ] &&
-    [ -e "$dir/values/clusters/$1/rhoai.yaml" ]
-}
-
-# The MaaS files of every ingress and combined site, committed, pushed and
-# synced to the hub, so a later console Add of the site finds them. A site
-# whose files exist keeps them, as add-site.sh does, with no issuer check.
-step_site_files() {
-  local name role issuers var chosen n any=""
-  step site-files
-  for name in $(site_names); do
-    role=$(cluster_field "$name" role)
-    case "$role" in ingress|combined) ;; *) continue ;; esac
-    any=1
-    if site_files_present "$name"; then run_step site-files add-site.sh "$name"; continue; fi
-    issuers=$(site_issuers "$name") || stopped site-files
-    n=$(grep -c . <<<"$issuers" || true)
-    var="SITE_ISSUER_$(tr 'a-z-' 'A-Z_' <<<"$name")"
-    chosen=${!var:-}
-    if [ "$n" = 0 ]; then
-      echo "error: $name ($role) has no DNS-01 ClusterIssuer for its MaaS certificate; add one, or give it role inference." >&2
-      stopped site-files
-    elif [ -n "$chosen" ]; then
-      grep -qx -- "$chosen" <<<"$issuers" || {
-        echo "error: $var=$chosen isn't a DNS-01 ClusterIssuer on $name; those are: $(echo $issuers)" >&2
-        stopped site-files; }
-      run_step site-files add-site.sh "$name" "$chosen"
-    elif [ "$n" = 1 ]; then
-      run_step site-files add-site.sh "$name"
-    else
-      echo "error: $name has several DNS-01 ClusterIssuers: $(echo $issuers). Set $var in install.env to the one that issues publicly trusted certificates for its apps domain." >&2
-      stopped site-files
-    fi
-  done
-  [ -n "$any" ] || { echo "No ingress or combined site: no site files."; return 0; }
-  run_step site-files git-push.sh "install: site files" apps/ sites/ values/clusters/
-  pushed=$(git -C "$dir" rev-parse HEAD)
-  hub_gate hub-root-sites "$GATE_ROOT_SECONDS" root_synced_to "$pushed"
-}
-
 # Each site from clusters.yaml, in file order, then the hub's Applications
 # again. hub-apps-final, like the ready check (scripts/ready-check.sh), lets
 # through the Applications that wait for a site: no site is in the grid yet.
 sites_phase() {
   local name
-  step_site_files
   for name in $(site_names); do step_site "$name"; done
   hub_gate hub-apps-final "$GATE_HUB_APPS_SECONDS" apps_healthy
 }

@@ -111,7 +111,7 @@ all_out=""
 
 setup fresh; run
 t "fresh: runs every hub step in order" eval '[ "$rc" = 0 ] &&
-  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;add-site.sh site-a;git-push.sh install: site files apps/ sites/ values/clusters/;site-check.sh site-a;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
+  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ hub/catalog/;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;site-check.sh site-a;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
 
 t "end: provider-admin then ready-check, then the outputs line" eval '[ "$rc" = 0 ] &&
   [ "$(grep -E "^(== (provider-admin|ready)|gate (hub-apps-final|ready))" <<<"$out" | sed -E "s/ after .*//" | tr "\n" ";")" = "gate hub-apps-final: passed;== provider-admin;== ready;gate ready: passed;" ] &&
@@ -251,53 +251,25 @@ set_role() { # SITE ROLE: changes the site's role in clusters.yaml
   g -C "$D" commit -qam "role $1 $2"
 }
 
-setup noissuer; set_role site-a ingress
-issuers site-a http01:letsencrypt-http
+setup ingress; set_role site-a ingress
+rm "$W/issuers-site-a.json"
 run
-t "ingress site without DNS-01 issuer: stops and names it" eval '[ "$rc" = 1 ] &&
-  grep -qF "site-a (ingress) has no DNS-01 ClusterIssuer for its MaaS certificate; add one, or give it role inference." <<<"$out" &&
-  grep -qx "make install stopped at site-files. Fix the cause, then run make install again." <<<"$out" &&
-  ! grep -qE "^(add-site|import-site)" "$W/calls.log" && ! grep -q "install: site files" "$W/calls.log"'
+t "an ingress site: no site files and no issuer check (upstream main reads none)" eval '[ "$rc" = 0 ] &&
+  ! grep -q "^add-site" "$W/calls.log" && ! grep -q "install: site files" "$W/calls.log" &&
+  ! grep -q "clusterissuers" "$W/argv.log" && ! grep -q "^== site-files" <<<"$out" &&
+  grep -q "^import-site.sh site-a --yes" "$W/calls.log"'
 
 setup inference; set_role site-a inference
 rm "$W/issuers-site-a.json"
 run
-t "inference site needs none" eval '[ "$rc" = 0 ] && ! grep -q "^add-site" "$W/calls.log" &&
-  ! grep -q "install: site files" "$W/calls.log" && ! grep -q "clusterissuers" "$W/argv.log" &&
+t "inference site: the same" eval '[ "$rc" = 0 ] && ! grep -q "^add-site" "$W/calls.log" &&
   grep -q "^import-site.sh site-a --yes" "$W/calls.log"'
 
 setup issuerset
-issuers site-a dns01:acme-staging dns01:acme-prod
 echo 'SITE_ISSUER_SITE_A=acme-prod' >> "$D/install.env"; g -C "$D" commit -qam issuer
 run
-t "two DNS-01 issuers and SITE_ISSUER_ set: passes it" eval '[ "$rc" = 0 ] &&
-  grep -qx "add-site.sh site-a acme-prod" "$W/calls.log"'
-
-setup issuerunset
-issuers site-a dns01:acme-staging dns01:acme-prod
-run
-t "two issuers and none chosen: stops and lists them" eval '[ "$rc" = 1 ] &&
-  grep -q "acme-staging" <<<"$out" && grep -q "acme-prod" <<<"$out" && grep -q "SITE_ISSUER_SITE_A" <<<"$out" &&
-  grep -q "stopped at site-files" <<<"$out" && ! grep -qE "^(add-site|import-site)" "$W/calls.log"'
-
-setup filesthere
-issuers site-a dns01:acme-staging dns01:acme-prod
-mkdir -p "$D/apps" "$D/sites/site-a/maas-tls" "$D/values/clusters/site-a"
-: > "$D/apps/site-a-maas-tls.yaml"; : > "$D/sites/site-a/maas-tls/certificate.yaml"; : > "$D/values/clusters/site-a/rhoai.yaml"
-g -C "$D" add apps sites values && g -C "$D" commit -qm "site-a files"
-run
-t "rerun, site files already there: no issuer check, even with several" eval '[ "$rc" = 0 ] &&
-  grep -qx "add-site.sh site-a" "$W/calls.log" && ! grep -q "clusterissuers" "$W/argv.log" &&
-  grep -q "^import-site.sh site-a --yes" "$W/calls.log"'
-
-setup sitefiles; two_sites
-printf '%s\n' '- {name: site-c, role: ingress, location: eu, api: "https://api.site-c.example.com:6443"}' >> "$D/clusters.yaml"
-g -C "$D" commit -qam site-c
-issuers site-c dns01:other
-run
-t "site files pushed once, then the root gate" eval '[ "$rc" = 0 ] &&
-  [ "$(grep -E "^(add-site|git-push.sh install: site|site-check)" "$W/calls.log" | sed "s/ *\$//" | tr "\n" ";")" = "add-site.sh site-a;add-site.sh site-c;git-push.sh install: site files apps/ sites/ values/clusters/;site-check.sh site-a;site-check.sh site-b;site-check.sh site-c;" ] &&
-  [ "$(sed -n "/^== site-files/,/^== site site-a/p" <<<"$out" | grep -c "gate hub-root-sites: passed")" = 1 ]'
+t "SITE_ISSUER_ is an unknown setting here" eval '[ "$rc" = 1 ] && grep -q "unknown setting SITE_ISSUER_SITE_A" <<<"$out" &&
+  [ ! -s "$W/calls.log" ]'
 
 t "no token value in any output" eval '[ -n "$all_out" ] && ! grep -qF "$SENTINEL" <<<"$all_out" &&
   ! grep -rqF "$SENTINEL" "$T"/*/repo/.install "$T"/*/stub/calls.log "$T"/*/stub/argv.log 2>/dev/null'

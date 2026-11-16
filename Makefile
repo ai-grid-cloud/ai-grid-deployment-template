@@ -7,7 +7,7 @@
 # $XDG_RUNTIME_DIR/containers/auth.json; ALLOW_GENERIC_LOGIN=1 lets bootstrap
 # use a general quay.io login. CATALOG_TOKEN_FILE defaults to
 # ~/.ai-grid/catalog-token; KEYCLOAK_NAMESPACE and KEYCLOAK_REALM to the
-# template's tenant-idp and tenants (console-secrets).
+# library Keycloak's maas-db and saas (console-secrets).
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
 .PHONY: help login prereqs bootstrap status console-secrets test update \
@@ -54,7 +54,7 @@ site-wipe: ## Preview removing a site's old install; CONFIRM=1 removes it (page 
 site-import: ## Preview importing a site into the hub's ACM; CONFIRM=1 imports it (page 5)
 	@scripts/import-site.sh $(SITE) $(if $(CONFIRM),--yes)
 
-site-add: ## Write an ingress or combined site's files; ISSUER=... if it has several (page 6)
+site-add: ## Say what a site needs in this repository: nothing on the library's main branch (page 6)
 	@n=$$(scripts/clusters.sh --site $(SITE)) && scripts/add-site.sh "$$n" $(ISSUER)
 
 site-join: ## Label a site on the hub so the hub installs it (page 6)
