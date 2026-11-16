@@ -6,6 +6,10 @@ must be yours. Follow the pages in order; each ends with a checkpoint that must 
 
 Tested on 2026-11-10: a hub on OpenShift 4.22 with ACM 2.17, and one combined site on OpenShift 4.21, on AWS.
 
+> **This branch installs from the library's `main` branch** and hasn't been run on a cluster. Where these pages
+> differ from [what `main` can do](../upstream-main-limits.md), that page wins: no tenant IdP of your own, no site
+> files, and no publicly trusted MaaS certificate.
+
 For what AI Grid is and how its parts fit together, see [How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/README.md#how-ai-grid-works).
 
 ## Follow these in order

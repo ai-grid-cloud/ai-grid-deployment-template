@@ -26,12 +26,8 @@ job can supply the same files.
 
 You need the clusters from [before you start](01-before-you-start.md): a hub and one or more sites on OpenShift 4.21
 or later, with nothing of AI Grid on them, and the same network and tools. Each site has the role `combined`,
-`ingress` or `inference`, and at least one site must be `ingress` or `combined`: `scripts/set-inputs.sh` needs one for
-the tenant portal's sign-in redirect.
-
-If a site has the role `ingress` or `combined`, it needs a cert-manager ClusterIssuer that issues publicly trusted
-certificates by DNS-01, for its MaaS certificate. `make install` checks for one and stops if there's none. An
-`inference` site needs no issuer.
+`ingress` or `inference`. On the library's `main` branch no site needs a ClusterIssuer
+([limits](../upstream-main-limits.md)).
 
 ### Repositories and tokens
 
@@ -107,8 +103,7 @@ In `install.env`, set `CATALOG_REPO_URL` to your catalog repository's URL, such 
 `https://github.com/my-org/ai-grid-catalog.git`. The other values have defaults that match the file names above.
 `install.env` holds no secrets. It also sets the following, each explained in the file:
 
-- `LIBRARY_REVISION`: the library branch, tag or commit to pin. Each `make install` resolves it to its current commit and pins that commit. The default, `deployment-template`, follows the library branch this template is tested against; set another branch, tag or commit to test a library change, or leave it empty to keep the template's own commit pin.
-- `SITE_ISSUER_NAME`: which DNS-01 ClusterIssuer to use, when an `ingress` or `combined` site has several.
+- `LIBRARY_REVISION`: the library branch, tag or commit to pin. Each `make install` resolves it to its current commit and pins that commit. The default, empty, keeps the template's own pin, upstream `main` plus PR 322; `main` follows upstream `main`.
 - `GATE_*_SECONDS`: each readiness check's time limit.
 
 If the environment variable `AI_GRID_GIT_TOKEN_FILE` is set, the console's Secrets use the token file it names instead
@@ -149,11 +144,9 @@ The steps, in order:
 6. **`console-secrets`:** the console's Secrets ([page 4](04-hub-components.md#1-create-the-consoles-secrets)).
 7. **`hub-apps`:** waits until every hub Application is `Synced` and `Healthy`, except those that wait for a site to join the grid.
    On a new hub this takes about 50 minutes; the limit is 90 minutes (`GATE_HUB_APPS_SECONDS=5400`).
-8. **`site-files`:** for each `ingress` or `combined` site, its values and MaaS certificate files
-   ([page 6, part 1](06-join-grid.md#1-add-the-sites-values)), pushed.
-9. **`site NAME`:** for each site, the infrastructure check and the import into ACM ([page 5](05-prepare-site.md)).
-10. **`provider-admin`:** the provider-admin ServiceAccount and its token.
-11. **`ready`:** the ready check, which also writes `.install/outputs.json`.
+8. **`site NAME`:** for each site, the infrastructure check and the import into ACM ([page 5](05-prepare-site.md)).
+9. **`provider-admin`:** the provider-admin ServiceAccount and its token.
+10. **`ready`:** the ready check, which also writes `.install/outputs.json`.
 
 To install the hub alone, without the sites, the provider-admin token or the ready check, run:
 
@@ -201,7 +194,7 @@ The ready check writes `.install/outputs.json`, which git ignores. It has these 
 |---|---|
 | `hub.name`, `hub.api` | The hub's name in `clusters.yaml` and its API URL |
 | `hub.consoleURL` | The provider console |
-| `hub.keycloakURL`, `hub.keycloakRealm` | The tenant Keycloak and its realm, `tenants` |
+| `hub.keycloakURL`, `hub.keycloakRealm` | The library's Keycloak and its realm, `saas` |
 | `hub.persesURL` | Perses's in-cluster URL; it isn't reachable from outside the hub |
 | `hub.thanosURL` | The Thanos query Route |
 | `hub.lokiStack` | The usage-log LokiStack, `redhat-ods-monitoring/usage-logs` |
@@ -236,9 +229,9 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
 
 ## Known limits
 
-- An `ingress` or `combined` site needs a DNS-01 ClusterIssuer that issues publicly trusted certificates. Supplying
-  a certificate another way is a later option.
-- `make install` always installs its own Keycloak. Using an existing one, with `KEYCLOAK` in `install.env`, comes
-  later; any value but `install` stops the install.
+- On the library's `main` branch: no publicly trusted MaaS certificate, no tenant IdP of your own, and `make
+  tenant-call` stops at sign-in ([limits](../upstream-main-limits.md)).
+- `make install` always installs the library's Keycloak. Using an existing one, with `KEYCLOAK` in `install.env`,
+  comes later; any value but `install` stops the install.
 - Starting over means new clusters, and new deployment and catalog repositories. `make install` doesn't uninstall;
   to remove AI Grid from clusters, see [Uninstall](08-uninstall.md).

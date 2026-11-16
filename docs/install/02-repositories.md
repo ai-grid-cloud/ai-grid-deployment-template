@@ -129,7 +129,7 @@ ok       reachable                        https://api.hub.example.com:6443
 ok       OpenShift 4.21 or later          4.22.18
 ...
 Site site-east-1 (combined)
-ok       ClusterIssuer                    letsencrypt-dns (DNS-01)
+ok       ClusterIssuer                    not needed: upstream main can't attach a MaaS certificate (...)
 ...
 Catalog token
 ok       catalog token file               /home/user/.ai-grid/catalog-token (mode 600, not empty)
@@ -149,20 +149,22 @@ scripts/set-inputs.sh CATALOG_REPO_URL
 ```
 
 Replace `CATALOG_REPO_URL` with your catalog repository's URL, such as
-`https://github.com/my-org/ai-grid-catalog.git`. The script reads the apps domains through your cluster logins,
-prints each value it sets, and then runs `scripts/check-deployment.sh`:
+`https://github.com/my-org/ai-grid-catalog.git`. The script reads no cluster. It prints each value it sets, and then
+runs `scripts/check-deployment.sh`:
 
 | File | Value | Set to |
 |---|---|---|
 | `root/inputs.env` | `deploymentRepoURL` | Your deployment repository's URL, from `git remote get-url origin` |
 | `root/inputs.env` | `deploymentRevision`, `catalogRevision` | `main` |
 | `root/inputs.env` | `catalogRepoURL` | `CATALOG_REPO_URL` |
-| `root/inputs.env` | `idpIssuerURL` | `https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants`, with the hub's apps domain |
-| `tenant-idp/manifests/settings.yaml` | `portalRedirectURI` | `https://maas.SITE_APPS_DOMAIN/*`, with the apps domain of the first `combined` or `ingress` site |
+| `hub/catalog/*.yaml` | the catalog repository and revision | `catalogRepoURL` and `catalogRevision` from `root/inputs.env`, on every run |
+
+There's no tenant IdP input: on the library's `main` branch the tenant IdP is the library's Keycloak
+([L3](../upstream-main-limits.md#l3-the-tenant-idp-is-the-librarys-keycloak)).
 
 `root/inputs.env` is yours: the template doesn't have it, so `make update` never changes it.
 `root/kustomization.yaml` copies its values over the root's `REQUIRED-` placeholders; leave those. A value that's
-already set is kept, so you can run the script again.
+already set in it is kept, so you can run the script again; `hub/catalog/` always follows it.
 
 You should see `root renders; every input is set; every repository is an input.` at the end. If you see
 `unset inputs:` or `placeholders left in your files:`, set the values it names and run `scripts/check-deployment.sh`.
@@ -176,7 +178,7 @@ Keep every other value. Each one is a tested choice: for what it means and how t
 Commit your clusters file and the files `scripts/set-inputs.sh` changed, and push:
 
 ```sh
-git add clusters.yaml root tenant-idp && git commit -m "deployment: set our names" && git push origin HEAD:main
+git add clusters.yaml root hub && git commit -m "deployment: set our names" && git push origin HEAD:main
 ```
 
 Run `git status` first if you changed anything else. If git says there's nothing to commit, your repository is

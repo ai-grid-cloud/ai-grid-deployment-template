@@ -34,7 +34,7 @@ OK       OpenShift 4.21 or later                  4.22.18
 OK       default StorageClass                     gp3-csi
 OK       cert-manager CRDs
 OK       quay.io/rhoai pull secret file           $RHOAI_QUAY_PULL_SECRET_FILE
-MISSING  object storage                           Secret open-cluster-management-observability/thanos-object-storage (apps/object-storage)
+MISSING  object storage                           Secret open-cluster-management-observability/thanos-object-storage (apps/odf writes it once ODF is installed)
 ```
 
 `MISSING object storage` is expected: ODF object storage installs it on the next page. For any other `MISSING` line, see

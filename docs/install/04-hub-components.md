@@ -5,18 +5,18 @@ Keycloak. On this page you create the console's secrets, which waits for the ins
 
 ## 1. Create the console's secrets
 
-The provider console needs your catalog token for its git writer, and an admin login for the tenant Keycloak. Neither
+The provider console needs your catalog token for its git writer, and an admin login for the library's Keycloak. Neither
 goes in git. Create the secrets:
 
 ```sh
 make console-secrets
 ```
 
-It first waits until the tenant Keycloak's Application `tenant-idp` is `Synced` and `Healthy` and the console's Route
+It first waits until the library Keycloak's Application `keycloak` is `Synced` and `Healthy` and the console's Route
 exists, printing what it waits for, for up to 30 minutes. The install takes about 20 minutes after the bootstrap,
-mostly for the tenant Keycloak. Then it reads your catalog token from `~/.ai-grid/catalog-token`
+mostly for Keycloak. Then it reads your catalog token from `~/.ai-grid/catalog-token`
 ([set up your deployment repository](02-repositories.md#2-create-your-catalog-repository-and-its-token)), or from
-`CATALOG_TOKEN_FILE` if you set it, uses your tenant Keycloak in `tenant-idp`, and restarts the console to read the
+`CATALOG_TOKEN_FILE` if you set it, uses the library's Keycloak (realm `saas` in `maas-db`), and restarts the console to read the
 new Secrets. It prints no secret value. If it times out, run `make status` (next step). For every variable, and for a
 hub whose ingress certificate isn't publicly trusted, see
 [provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/05-console-and-model-delivery.md#provider-console).

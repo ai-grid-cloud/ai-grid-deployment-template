@@ -20,7 +20,7 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 | default StorageClass | Annotate one StorageClass `storageclass.kubernetes.io/is-default-class=true`. |
 | cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or select `apps/cert-manager` ([cert-manager](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/00-platform-services.md#cert-manager)). |
 | quay.io/rhoai pull secret file | Log in to `quay.io` with a `quay.io/rhoai` robot token, as follows this table ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
-| object storage | Expected with `apps/object-storage/s4` or `odf` selected: it appears when you [install the hub components](04-hub-components.md). If you bring your own bucket, create the Secret now ([object storage](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/01-acm.md#object-storage)). |
+| object storage | Expected: the library's `apps/odf` creates it when you [install the hub components](04-hub-components.md). On the library's `main` branch there's no other object store ([L9](../upstream-main-limits.md#l9-odf-is-the-only-observability-object-store)). |
 
 To log in to `quay.io`:
 
@@ -84,18 +84,12 @@ Then run `make status` again: the restarts stop and the Applications progress wi
 
 **Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#2-verify)). After a site joins, check the site's Submariner gateways ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/01-acm.md#submariner)).
 
-## A site's `rhoai-SITE` Application doesn't appear or doesn't render
-
-**Cause:** an ingress or combined site has no `values/clusters/SITE/rhoai.yaml` with its MaaS hostname prefix.
-
-**Fix:** add it ([join the site to the grid, part 1](06-join-grid.md#1-add-the-sites-values)) and push.
-
 ## Tenants get certificate errors on the MaaS hostname
 
 **Cause:** the MaaS gateway presents its in-cluster service certificate on the public hostname.
 
-**Fix:** give the gateway a trusted certificate through the site's values file
-([join the site to the grid, part 1](06-join-grid.md#1-add-the-sites-values); [MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)).
+**Fix:** none on the library's `main` branch: a trusted certificate needs a site value, which it reads only from the
+library ([L5](../upstream-main-limits.md#l5-the-maas-gateway-presents-the-cluster-internal-certificate)).
 
 ## `KserveReady` flaps `False` on a site
 

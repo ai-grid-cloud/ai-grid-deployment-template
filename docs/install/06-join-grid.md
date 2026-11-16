@@ -6,24 +6,17 @@ With several sites, add the site's name, such as `make site-join SITE=SITE_NAME`
 
 ## 1. Add the site's values
 
-A site that runs the MaaS gateway (role `combined` or `ingress`) needs three files in your deployment repository
-**before** you label it: its values, and a publicly trusted certificate for its MaaS hostname,
-`maas.SITE_APPS_DOMAIN`. Without the values file, the site's `rhoai` Application doesn't render. Write them from
-`site-template/`:
+On the library's `main` branch a site needs no files in your deployment repository: the library reads no per-site
+values from it ([L4](../upstream-main-limits.md#l4-a-sites-values-come-only-from-the-library)). So the site's MaaS
+gateway keeps its cluster-internal certificate, which tenants' clients don't trust
+([L5](../upstream-main-limits.md#l5-the-maas-gateway-presents-the-cluster-internal-certificate)). Check:
 
 ```sh
 make site-add
 ```
 
-It reads the site's apps domain, uses the site's DNS-01 ClusterIssuer, writes the three files, runs
-`scripts/check-deployment.sh`, and prints the commands to commit and push them. If the site has several DNS-01
-ClusterIssuers, it lists them: run it again with the one that issues publicly trusted certificates for the site's
-apps domain, such as `make site-add ISSUER=ISSUER_NAME`. It keeps files that already exist, and needs the
-issuer only to write a missing one. An `inference` site needs no files.
-
-You should see `root renders; every input is set; every repository is an input.` Then run the `git add`,
-`git commit` and `git push` commands it printed. What the files do, and other ways to get the certificate:
-[MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md).
+You should see `no files to write` for a `combined` or `ingress` site, or `it needs no MaaS files` for an
+`inference` site. It writes nothing and reads no cluster.
 
 ## 2. Label the site
 
@@ -34,7 +27,7 @@ make site-join
 ```
 
 It first checks that your commits are pushed, and waits until the hub's `deployment-root` has synced your latest
-commit, up to 10 minutes, so the site's files are on the hub before its labels. If the site already has those
+commit, up to 10 minutes. If the site already has those
 labels, it says `labels already set` and changes nothing. The console shows the location.
 For `ingress` and `inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/README.md#what-you-choose-per-site).
 
@@ -45,8 +38,7 @@ Applications. Show them:
 make site-status
 ```
 
-Under `Applications` you should see `rhoai-SITE-…`, `cluster-config-SITE-…`, `acm-submariner-SITE`, `maas-db-SITE`
-and `SITE-maas-tls`. Most appear within a couple of minutes. `rhoai-SITE-…` can take up to 30 minutes: the hub's
+Under `Applications` you should see `rhoai-SITE-…`, `acm-submariner-SITE` and `maas-db-SITE`. Most appear within a couple of minutes. `rhoai-SITE-…` can take up to 30 minutes: the hub's
 `rhoai` Application creates it on its next sync retry after the site joins (page 4).
 OpenShift AI takes up to an hour on a new cluster, and less on one that ran OpenShift AI before.
 

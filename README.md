@@ -1,15 +1,19 @@
-> **Prototype:** this template pins one fixed commit of
-> [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) from branch
-> `deployment-template`, until its changes merge into `main`. The commit is `libraryRevision` in
-> `root/kustomization.yaml`. `make install` pins that branch's current commit instead (`LIBRARY_REVISION` in
-> `install.env`).
+> **Experiment, branch `feat/upstream-main`:** this branch installs from the library's `main` branch, with no
+> library changes. It pins
+> [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) at `498527d`,
+> upstream `main` plus PR 322 (`libraryRevision` in `root/applicationset.yaml`). What `main` can't do for a
+> deployment repository, and what this branch does about it, is in
+> [docs/upstream-main-limits.md](docs/upstream-main-limits.md); where a guide page differs, that page wins.
+> The links to the library's install reference point at the commit that has it, `b96c265` on
+> `feat/deployment-inputs-v2`, because `main` has none.
 
 # AI Grid deployment template
 
 A GitHub template for an AI Grid **deployment repository**. You create your own repository from it, and your hub's
 Argo CD installs AI Grid from that repository:
 
-- **On the hub:** ACM, the grid, the MaaS database and Redis, a Keycloak for tenants, and the provider console.
+- **On the hub:** ACM, the grid, the MaaS database and Redis, the library's Keycloak for tenants, and the provider
+  console.
 - **On each site:** OpenShift AI with MaaS and the grid, in the site's role.
 
 The template carries choices tested end to end on 2026-11-10, so you change only your names.
@@ -22,7 +26,7 @@ The template carries choices tested end to end on 2026-11-10, so you change only
 | Your deployment repository, from this template | The library pin, which components run, your inputs, each site's files, the install guide and its scripts | You |
 | Your catalog repository, created in the install guide | Models and subscriptions | The provider console |
 
-The hub's Argo CD reads all three. Your deployment repository pins the library in `root/kustomization.yaml`, which
+The hub's Argo CD reads all three. Your deployment repository pins the library in `root/applicationset.yaml`, which
 comes from the template, and names your repositories, the catalog among them, in `root/inputs.env`, which is yours
 and which the template doesn't have; to upgrade, you move the library pin. For more, see
 [How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/README.md#how-ai-grid-works).

@@ -94,8 +94,13 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
    ```
 
    Replace `SUBSCRIPTION_ID` with the subscription you created, and `MODEL_NAME` with the model's resource name. It
-   gets the user's token from your tenant Keycloak (the `idpIssuerURL` in `root/inputs.env`), calls the site's MaaS
+   gets the user's token from the library's Keycloak (realm `saas`, client `tenant-demo`), calls the site's MaaS
    hostname, and prints no password or token. You should see a short reply, `HTTP 200` and `x-grid-site: SITE`.
+
+   On the library's `main` branch this step stops, and says why: `tenant-demo` has no password grant
+   ([L6](../upstream-main-limits.md#l6-the-tenant-client-has-no-password-grant)), and the MaaS gateway's certificate
+   isn't trusted ([L5](../upstream-main-limits.md#l5-the-maas-gateway-presents-the-cluster-internal-certificate)).
+   Until those change upstream, call the model with an API key from the Org UI, as tenants do.
 
 Tenants normally call with an API key, and create keys in the Org UI at `https://maas.SITE_APPS_DOMAIN/maas-portal`.
 For API keys, refusal checks and revoking a key, see [tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/tenant-access.md). To remove what you created,
