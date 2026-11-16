@@ -4,7 +4,7 @@
 # reports, the Applications that aren't Synced and Healthy and those whose sync
 # waits for its next retry, the MultiClusterHub's phase, Argo CD's application
 # controller (restarts, and OOMKilled or CrashLoopBackOff called out), the
-# tenant Keycloak's Application, and the provider console's Route; then, for each site in clusters.yaml, OpenShift
+# tenant Keycloak's Application, the provider console's Route and pod; then, for each site in clusters.yaml, OpenShift
 # AI's DataScienceCluster phase and its GridSite. Read-only; always exits 0
 # once it reaches the hub.
 #
@@ -97,6 +97,13 @@ echo "tenant-idp: ${idp:-not created yet}"
 
 host=$(oc get route ai-grid-provider-console -n ai-grid-provider-console -o jsonpath='{.spec.host}' 2>/dev/null)
 if [ -n "$host" ]; then echo "Console: https://$host"; else echo "Console: no Route yet"; fi
+# The console's pod: ready containers, phase, and a waiting container's reason.
+oc get pods -n ai-grid-provider-console -o json 2>/dev/null | jq -r '
+  if (.items // []) == [] then "Console pod: none yet" else .items[] |
+    (.status.containerStatuses // []) as $c |
+    "Console pod: \(.metadata.name) \([$c[] | select(.ready)] | length)/\($c | length) \(.status.phase // "Unknown")" +
+    ([$c[] | .state.waiting.reason // empty] | if length > 0 then "  !! " + join(", ") else "" end)
+  end' 2>/dev/null || echo "Console pod: none yet"
 
 # Each site, through its own login: OpenShift AI's DataScienceCluster phase and
 # the site's GridSite (Available or not).
