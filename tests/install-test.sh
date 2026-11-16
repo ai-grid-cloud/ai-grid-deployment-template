@@ -268,7 +268,8 @@ t "inference site: the same" eval '[ "$rc" = 0 ] && ! grep -q "^add-site" "$W/ca
 setup issuerset
 echo 'SITE_ISSUER_SITE_A=acme-prod' >> "$D/install.env"; g -C "$D" commit -qam issuer
 run
-t "SITE_ISSUER_ is an unknown setting here" eval '[ "$rc" = 1 ] && grep -q "unknown setting SITE_ISSUER_SITE_A" <<<"$out" &&
+t "SITE_ISSUER_ stops the install, named as removed on this branch" eval '[ "$rc" = 1 ] &&
+  grep -q "SITE_ISSUER_SITE_A is removed on this branch.*upstream-main-limits.md.*delete the line" <<<"$out" &&
   [ ! -s "$W/calls.log" ]'
 
 t "no token value in any output" eval '[ -n "$all_out" ] && ! grep -qF "$SENTINEL" <<<"$all_out" &&

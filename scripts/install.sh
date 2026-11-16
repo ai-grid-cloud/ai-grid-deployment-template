@@ -98,6 +98,8 @@ read_install_env() { # reads $dir/install.env into exported variables; stops on 
     [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] ||
       die "install.env line $n isn't NAME=VALUE"
     key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]}
+    [[ "$key" != SITE_ISSUER_* ]] ||
+      die "install.env line $n: $key is removed on this branch: no site needs a ClusterIssuer on the library's main branch (docs/upstream-main-limits.md, L5); delete the line"
     known_setting "$key" || die "install.env line $n: unknown setting $key"
     value=${value#"${value%%[![:space:]]*}"}
     if [[ "$value" =~ ^\"([^\"]*)\"[[:space:]]*(#.*)?$ || "$value" =~ ^\'([^\']*)\'[[:space:]]*(#.*)?$ ]]; then
