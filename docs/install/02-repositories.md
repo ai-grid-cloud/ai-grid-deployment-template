@@ -14,10 +14,10 @@ again.
 1. Clone your deployment repository:
 
    ```sh
-   git clone DEPLOYMENT_REPO_URL deployment && cd deployment
+   git clone https://github.com/OWNER/DEPLOYMENT_REPO.git deployment && cd deployment
    ```
 
-   Replace `DEPLOYMENT_REPO_URL` with your deployment repository's clone URL. Run every command in this guide from the
+   Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every command in this guide from the
    `deployment` directory.
 
 2. Name your clusters. Copy the example file:
@@ -146,12 +146,12 @@ Install any tool marked `MISSING` before you continue.
 Set the values that name your repositories and hosts:
 
 ```sh
-scripts/set-inputs.sh CATALOG_REPO_URL
+make inputs CATALOG=CATALOG_REPO_URL
 ```
 
 Replace `CATALOG_REPO_URL` with your catalog repository's URL, such as
-`https://github.com/my-org/ai-grid-catalog.git`. The script reads the apps domains through your cluster logins,
-prints each value it sets, and then runs `scripts/check-deployment.sh`:
+`https://github.com/my-org/ai-grid-catalog.git`. It reads the apps domains through your cluster logins, prints each
+value it sets, and then runs `make check`:
 
 | File | Value | Set to |
 |---|---|---|
@@ -163,10 +163,10 @@ prints each value it sets, and then runs `scripts/check-deployment.sh`:
 
 `root/inputs.env` is yours: the template doesn't have it, so `make update` never changes it.
 `root/kustomization.yaml` copies its values over the root's `REQUIRED-` placeholders; leave those. A value that's
-already set is kept, so you can run the script again.
+already set is kept, so you can run `make inputs` again.
 
 You should see `root renders; every input is set; every repository is an input.` at the end. If you see
-`unset inputs:` or `placeholders left in your files:`, set the values it names and run `scripts/check-deployment.sh`.
+`unset inputs:` or `placeholders left in your files:`, set the values it names and run `make check`.
 
 Keep every other value. Each one is a tested choice: for what it means and how to change it, see
 [Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/appendix-a-inputs.md) and
@@ -174,7 +174,7 @@ Keep every other value. Each one is a tested choice: for what it means and how t
 
 ## 5. Commit and push
 
-Commit your clusters file and the files `scripts/set-inputs.sh` changed, and push:
+Commit your clusters file and the files `make inputs` changed, and push:
 
 ```sh
 git add clusters.yaml root tenant-idp && git commit -m "deployment: set our names" && git push origin HEAD:main
@@ -189,7 +189,7 @@ git push origin HEAD:main
 
 ## Checkpoint
 
-- `scripts/set-inputs.sh` ended with `root renders; every input is set; every repository is an input.`
+- `make inputs` ended with `root renders; every input is set; every repository is an input.`
 - Your deployment repository is pushed, your catalog repository has a `main` branch, and your catalog token is in
   `~/.ai-grid/catalog-token`.
 

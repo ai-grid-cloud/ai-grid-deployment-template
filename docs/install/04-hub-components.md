@@ -46,10 +46,10 @@ hub whose ingress certificate isn't publicly trusted, see
 2. Check that the console pod is up:
 
    ```sh
-   scripts/with-cluster.sh hub oc get pods -n ai-grid-provider-console
+   make status
    ```
 
-   You should see the console pod `3/3 Running`. Open `https://CONSOLE_HOST` and sign in as a cluster admin.
+   You should see `Console pod: ai-grid-provider-console-... 3/3 Running`. Open `https://CONSOLE_HOST` and sign in as a cluster admin.
 
 ## Checkpoint
 

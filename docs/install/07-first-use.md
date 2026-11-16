@@ -6,8 +6,8 @@ CD delivers them to the site.
 
 Steps 2 to 4 use the console. To script them instead, take the JSON bodies from
 [call the console's API](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/05-console-and-model-delivery.md#call-the-consoles-api)
-and send them with this repository's `scripts/console-call.sh METHOD 'JSON'`, which signs in with your hub login; its
-flags differ from the library script's of the same name.
+and send them with `make console-call METHOD=METHOD BODY='JSON'`, or `BODY_FILE=FILE` for a body in a file, which
+signs in with your hub login.
 
 ## 1. Sign in to the console
 
