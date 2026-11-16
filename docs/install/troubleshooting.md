@@ -87,18 +87,13 @@ The restarts stop and the Applications progress within a few minutes.
 
 **Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#2-verify)). After a site joins, check the site's Submariner gateways ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/01-acm.md#submariner)).
 
-## A site's `rhoai-SITE` Application doesn't appear or doesn't render
-
-**Cause:** an ingress or combined site has no `values/clusters/SITE/rhoai.yaml` with its MaaS hostname prefix.
-
-**Fix:** add it ([join the site to the grid, part 1](06-join-grid.md#1-add-the-sites-values)) and push.
-
 ## Tenants get certificate errors on the MaaS hostname
 
-**Cause:** the MaaS gateway presents its in-cluster service certificate on the public hostname.
+**Cause:** the MaaS gateway presents the cluster's internal certificate, `openshift-ai-inference-service-tls`, on
+the public hostname. Clients don't trust it.
 
-**Fix:** give the gateway a trusted certificate through the site's values file
-([join the site to the grid, part 1](06-join-grid.md#1-add-the-sites-values); [MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)).
+**Fix:** add your own certificate for the MaaS hostname
+([MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)).
 
 ## `KserveReady` flaps `False` on a site
 

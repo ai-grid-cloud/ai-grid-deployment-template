@@ -38,9 +38,6 @@ sites:
     location: REQUIRED-location
     # The site's API URL, such as https://api.site-east-1.example.com:6443
     api: REQUIRED-siteAPIURL
-    # Optional. The DNS-01 ClusterIssuer for the site's MaaS certificate,
-    # needed only when an ingress or combined site has several.
-    # issuer: letsencrypt-dns
 
   # Add a site: copy the first site's lines, starting at "- name:".
 

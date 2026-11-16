@@ -130,12 +130,12 @@ ok       reachable                        https://api.hub.example.com:6443
 ok       OpenShift 4.21 or later          4.22.18
 ...
 Site site-east-1 (combined)
-ok       ClusterIssuer                    letsencrypt-dns (DNS-01)
+ok       reachable                        https://api.site-east-1.example.com:6443
 ...
 Catalog token
 ok       catalog token file               /home/user/.ai-grid/catalog-token (mode 600, not empty)
 
-24 ok, 1 missing
+23 ok, 1 missing
 Nothing was changed; fix these before the page that needs them.
 ```
 
