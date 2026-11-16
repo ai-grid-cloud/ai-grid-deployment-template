@@ -3,11 +3,10 @@
 # library at your pin into .library/ (scripts/library.sh); set LIBRARY to use
 # your own checkout.
 
-# Optional. make prereqs checks the files make install uses: QUAY_AUTH_FILE
-# and CATALOG_TOKEN_FILE under options: in clusters.yaml, then these variables,
-# then .config/quay-auth.json and .config/catalog-token (when clusters.yaml
-# names a catalog; otherwise page 2's defaults). ALLOW_GENERIC_LOGIN=1
-# lets bootstrap use a general quay.io login; KEYCLOAK_NAMESPACE and
+# Optional, for the page-by-page guide and CI: QUAY_AUTH_FILE and
+# CATALOG_TOKEN_FILE name files that win over .config/clusters.yaml's secrets
+# (scripts/clusters.sh deployment_load); ALLOW_GENERIC_LOGIN=1 lets bootstrap
+# use a general quay.io login from such a file; KEYCLOAK_NAMESPACE and
 # KEYCLOAK_REALM default to the template's tenant-idp and tenants (console-secrets).
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
@@ -91,8 +90,8 @@ uninstall-hub: ## Preview the hub's uninstall; CONFIRM=1 runs it (page 8)
 uninstall-check: ## After an uninstall, show what is left on each cluster; read-only (page 8)
 	@scripts/uninstall-check.sh
 
-install: ## Install the hub and import every site, unattended (page 9)
-	@scripts/install.sh
+install: ## Install the hub and import every site, unattended (page 9); HUB_ONLY=1 for the hub alone
+	@scripts/install.sh $(if $(filter 1,$(HUB_ONLY)),--hub-only)
 
 provider-admin: ## Create the provider-admin ServiceAccount and its token
 	@scripts/provider-admin.sh

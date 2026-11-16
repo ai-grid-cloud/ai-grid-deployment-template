@@ -78,7 +78,7 @@ t "  ... GIT_ASKPASS gives the token from the file, mode 700, removed after" \
 # The private .config/clusters.yaml: github.deploymentToken, no token file.
 D="$T/private"; g clone -q "$T/origin.git" "$D"; g -C "$D" config core.hooksPath /dev/null
 mkdir -p "$D/.config"; chmod 700 "$D/.config"
-printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\ngithub: {deploymentToken: "%s-private"}\n' "$SENTINEL" > "$D/.config/clusters.yaml"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\nrepositories: {catalog: "https://github.com/o/c.git"}\ngithub: {deploymentToken: "%s-private"}\n' "$SENTINEL" > "$D/.config/clusters.yaml"
 chmod 600 "$D/.config/clusters.yaml"; echo private > "$D/site.yaml"
 out=$(cd "$D" && env -u DEPLOYMENT_TOKEN_FILE PATH="$T/bin:$PATH" scripts/git-push.sh "private" site.yaml 2>&1) && rc=0 || rc=$?
 all_out+="$out"$'\n'

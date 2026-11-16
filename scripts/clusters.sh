@@ -96,6 +96,9 @@ clusters_load() {
       ((.sites // []) | to_entries[] | ["site \(.key + 1)", .value.name, .value.role, .value.location, .value.api])
       | map(. // "" | tostring) | @tsv' <<<"$json")
   [ -n "$rows" ] || { echo "error: clusters.yaml has no hub" >&2; return 1; }
+  # The private file is for make install, which needs the catalog: say so now, not later.
+  [ -z "$private" ] || [ -n "$(jq -r '.repositories.catalog // empty' <<<"$json")" ] ||
+    { echo "error: set repositories.catalog in .config/clusters.yaml" >&2; return 1; }
   left=$(jq -r --arg names "$(awk '{print $1}' <<<"$rows")" '
       ($names | split("\n")) as $n | (.credentials // {}) | keys - $n | .[]' <<<"$json" | tr '\n' ' ')
   [ -z "$left" ] || { echo "error: ${f#"$CLUSTERS_DIR/"}: credentials for clusters it doesn't name: ${left% }" >&2; return 1; }

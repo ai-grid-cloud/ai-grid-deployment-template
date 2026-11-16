@@ -210,7 +210,10 @@ t "a misspelled GATE_ option" 1 "unknown keys \(typos\?\): options.GATE_ROOT_SEC
 SECRET='sha256~SECRET_do_not_print_4242'
 priv() { # name body: a repository whose .config/clusters.yaml (mode 600) has that body
   local d; d=$(repo "$1" "hub: {name: hub, api: 'https://public:6443'}"); mkdir -p "$d/.config"
-  printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\n%s\n' "$2" > "$d/.config/clusters.yaml"; chmod 600 "$d/.config/clusters.yaml"; echo "$d"
+  printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\n%s\n' "$2" > "$d/.config/clusters.yaml"; chmod 600 "$d/.config/clusters.yaml"
+  # make install's catalog, which the private file needs, unless the body sets repositories: or opts out
+  case "$2" in *repositories:*|*"# no catalog"*) ;; *) echo "repositories: {catalog: 'https://github.com/o/c.git'}" >> "$d/.config/clusters.yaml" ;; esac
+  echo "$d"
 }
 PRIV="hub: {api: 'https://private:6443'}
 sites:
@@ -231,6 +234,8 @@ t "a readable private file stops" 1 "mode 644: run chmod 600 .config/clusters.ya
 d=$(repo publicsecret "hub: {name: hub, api: 'https://h:6443'}
 github: {catalogToken: x}")
 t "secrets in the committed clusters.yaml stop" 1 "move the file to .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(priv nocatalog "hub: {api: 'https://h:6443'} # no catalog")
+t "private file without a catalog: stops early" 1 "set repositories.catalog in .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
 d=$(priv unknowncred "hub: {api: 'https://h:6443'}
 credentials:
   site-z: {token: x}")
