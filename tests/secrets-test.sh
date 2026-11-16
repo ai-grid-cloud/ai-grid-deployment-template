@@ -49,6 +49,9 @@ t "  ... says what's next" grep -q "make login NONINTERACTIVE=1" <<<"$out"
 run "other\n"
 t "rerun: existing files kept, nothing asked" bash -c '[ "$0" = 0 ] && grep -qx "$1-hub" "$2/.config/hub/token" && [ ! -s "$3/podman.log" ] && grep -q "exists, kept" <<<"$4"' "$rc" "$SECRET" "$D" "$W" "$out"
 
+run "zero-hub\n" FORCE=0
+t "FORCE=0 keeps the files" grep -qx "$SECRET-hub" "$D/.config/hub/token"
+
 run "new-hub\n\n\n\n" FORCE=1
 t "FORCE=1 replaces an answered one" grep -qx "new-hub" "$D/.config/hub/token"
 t "  ... an empty answer skips it, keeping the old file" grep -qx "$SECRET-site" "$D/.config/site-b/token"

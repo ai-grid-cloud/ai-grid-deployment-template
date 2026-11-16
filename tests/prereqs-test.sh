@@ -22,7 +22,7 @@ mkbin() { # dir: a bin dir with every tool stubbed
   for t in kubectl jq; do
     printf '#!/bin/bash\ncase "$1" in version|--version) echo "%s 1.2.3"; exit ;; esac\nexec %s "$@"\n' "$t" "$(command -v "$t")" > "$b/$t"
   done
-  for t in curl openssl base64 clusteradm make; do
+  for t in curl openssl base64 clusteradm make podman; do
     printf '#!/bin/bash\necho "%s 1.2.3"\n' "$t" > "$b/$t"
   done
   # The stub oc logs its arguments and answers from files in $STUB_DIR; a
@@ -104,6 +104,8 @@ LIBD=$keep
 mkbin "$T/nojq"; rm "$T/nojq/jq"
 t "missing tool" '^MISSING +jq ' "$T/nojq" "$w"
 t "missing tool: summary and note" 'Nothing was changed' "$T/nojq" "$w"
+mkbin "$T/nopodman"; rm "$T/nopodman/podman"
+t "podman is a tool it checks" '^MISSING +podman ' "$T/nopodman" "$w"
 
 t "nothing set: registry skipped" '^skipped +registry logins +no auth file at ~/.config/containers/auth.json or \$XDG_RUNTIME_DIR/containers/auth.json; set QUAY_AUTH_FILE$' "$T/bin" "$w"
 t "no clusters.yaml: skipped, no guide page" '^skipped +cluster checks +no clusters.yaml: run cp clusters-example.yaml clusters.yaml and fill it in$' "$T/bin" "$w" --deployment "$T/other"
@@ -201,6 +203,11 @@ E5="$T/no-catalog"; settings_dep "$E5" "options:\n  QUAY_AUTH_FILE: .config/quay
 sed -i.bak 's/^repositories: .*$/repositories: {catalog: ""}/' "$E5/clusters.yaml"; rm "$E5/clusters.yaml.bak"
 ED=$E5 envt "no catalog: the home directory's auth file" "^ok +auth file +$H1/.config/containers/auth.json"
 ED=$E5 envt "no catalog: the home directory's token file" "^ok +catalog token file +$H1/.ai-grid/catalog-token"
+# The catalog only in the environment, as a CI job might set it: still make install's files.
+E6="$T/env-catalog"; settings_dep "$E6" ""
+sed -i.bak '/^repositories: /d' "$E6/clusters.yaml"; rm "$E6/clusters.yaml.bak"
+ED=$E6 envt "catalog from CATALOG_REPO_URL: make install's auth file" "auth file +$E6/.config/quay-auth.json" CATALOG_REPO_URL=https://example.com/c.git
+ED=$E6 envt "  ... without it: the home directory's" "^ok +auth file +$H1/.config/containers/auth.json"
 # An install.env, which make install no longer reads, is a FAIL with the migration.
 printf 'CATALOG_REPO_URL=https://example.com/c.git\n' > "$E4/install.env"
 ED=$E4 envt "an old install.env: FAIL with the migration" "^FAIL +install.env +no longer read: move its settings into clusters.yaml"

@@ -5,6 +5,7 @@
 #
 #   scripts/secrets.sh           asks for each secret whose file doesn't exist
 #   FORCE=1 scripts/secrets.sh   asks for every one again and replaces the files
+#                                (only 1 counts); to replace one, delete its file
 #
 # It asks, in order, for:
 #   .config/NAME/token           a token for each cluster in clusters.yaml, such
@@ -13,7 +14,8 @@
 #   .config/catalog-token        a token that can write your catalog repository
 #   .config/quay-auth.json       your quay.io/rhoai login: it runs
 #                                podman login --authfile .config/quay-auth.json quay.io/rhoai
-#                                which asks for the user name and password itself
+#                                which asks for the user name and password itself;
+#                                it needs a terminal, so CI supplies the file instead
 #
 # A token is read with the terminal's echo off and written by shell builtins, so
 # it never appears on the screen, in a command line or in the output. Each file
@@ -24,7 +26,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/clusters.sh"
 clusters_load "$here/.."
 cfg="$CLUSTERS_DIR/.config"
-force=${FORCE:-}
+force=""; [ "${FORCE:-}" != 1 ] || force=1
 ( umask 077; mkdir -p "$cfg" ); chmod 700 "$cfg"
 
 ask() { # FILE WHAT: reads one secret with echo off and writes it to FILE (mode 600)
