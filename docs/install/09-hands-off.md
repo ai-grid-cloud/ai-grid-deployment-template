@@ -7,7 +7,7 @@ You came here from the README and already created your deployment repository fro
 
 ## Before you start
 
-You need the following. In step 9, `make prereqs` checks the clusters and logins for you; it doesn't check the
+You need the following. In step 7, `make prereqs` checks the clusters and logins for you; it doesn't check the
 worker nodes or the network.
 
 - [ ] **A hub and one or more sites on OpenShift 4.21 or later,** with nothing of AI Grid on them, and a
@@ -48,17 +48,17 @@ The install writes to two GitHub repositories and needs a token for each.
    `ai-grid-catalog`. If an organization owns the repository, set **Resource owner** to that organization. Under
    **Repository access**, select **Only select repositories** and your catalog repository. Under **Permissions**,
    click **Add permissions** > **Contents**, and set it to **Read and write**. Leave every other
-   permission off. Click **Generate token**, and keep the token for step 6.
+   permission off. Click **Generate token**, and keep the token for step 5.
 
    When this token expires, the console can't save models or subscriptions until you replace it.
 
 3. Create the deployment token. Create a second fine-grained token the same way, named such as
    `ai-grid-deployment`, with **Contents** set to **Read and write** on your deployment repository only. Keep it for
-   step 6. `make install` pushes your settings and the sites' files with it.
+   step 5. `make install` pushes your settings and the sites' files with it.
 
 ### Set up your deployment repository
 
-Tell the install which clusters to use and where its credentials are.
+Tell the install which clusters and repositories to use, then give it the credentials.
 
 4. Clone your deployment repository by its HTTPS URL, because `make install` pushes with the token, not with SSH:
 
@@ -69,20 +69,20 @@ Tell the install which clusters to use and where its credentials are.
    Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every later command from the `deployment`
    directory, on branch `main`.
 
-5. Write `clusters.yaml`. Copy the example file:
+5. Write `clusters.yaml`, the one file you edit. Copy the example file:
 
    ```sh
    cp clusters-example.yaml clusters.yaml
    ```
 
-   Replace each `REQUIRED-` value, and add a block for each site. Keep the hub's name, `hub`. A site's name is a DNS
-   label; it becomes the site's ACM cluster name, and you can't change it once the site is imported. For example:
+   Replace each `REQUIRED-` value, add a block for each site, and set `repositories.catalog` to your catalog
+   repository's URL. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't change it
+   once the site is imported. For example:
 
    ```yaml
    apiVersion: ai-grid.dev/v1alpha1
    kind: Clusters
    hub:
-     name: hub
      api: https://api.hub.example.com:6443
    sites:
      - name: site-east-1
@@ -93,76 +93,55 @@ Tell the install which clusters to use and where its credentials are.
        role: inference
        location: us-east
        api: https://api.site-east-2.example.com:6443
+   repositories:
+     catalog: https://github.com/my-org/ai-grid-catalog.git
+     library: deployment-template
    ```
 
-6. Put the logins and tokens in `.config/`, which git ignores. Create the directory, readable only by you:
+   Leave `library: deployment-template`: it follows the library branch this template is tested against. The file's
+   `options:` section is optional; its defaults match the file names in step 6. `clusters.yaml` holds no secrets. A
+   key the scripts don't know, or a value still starting with `REQUIRED-`, stops them before they touch a cluster.
+
+6. Put the tokens and the `quay.io/rhoai` login in `.config/`, which git ignores:
 
    ```sh
-   mkdir -p .config && chmod 700 .config
+   make secrets
    ```
 
-   Then create these files. `NAME` is a cluster's name in `clusters.yaml`, such as `hub` or `site-east-1`.
+   It asks for each one in turn and doesn't show what you paste:
 
-   | File | What it holds |
+   | It asks for | It writes |
    |---|---|
-   | `.config/NAME/token` | A `cluster-admin` token for the cluster, such as the output of `oc whoami -t`. One per cluster. Such a token usually expires in about 24 hours; for a rerun the next day, use a kubeconfig instead (see **Other options**). |
-   | `.config/deployment-token` | The deployment token from step 3. |
-   | `.config/catalog-token` | The catalog token from step 2. |
-   | `.config/quay-auth.json` | A container auth file with your `quay.io/rhoai` login. |
+   | A `cluster-admin` token for each cluster in `clusters.yaml`, such as the output of `oc whoami -t` against that cluster | `.config/NAME/token`, where `NAME` is the cluster's name, such as `hub` or `site-east-1` |
+   | The deployment token from step 3 | `.config/deployment-token` |
+   | The catalog token from step 2 | `.config/catalog-token` |
+   | Your `quay.io/rhoai` robot account's name and token, which `podman login` asks for | `.config/quay-auth.json` |
 
-   To write a token file without showing the token, run the following, paste the token when it asks, and press
-   Enter:
+   Each file is readable only by you. An empty answer skips that file. It keeps a file that already exists; to
+   replace them all, run `make secrets FORCE=1`. A cluster token usually expires in about 24 hours; for a rerun the
+   next day, run `make secrets FORCE=1` again or use a kubeconfig instead (see [Other options](#other-options)).
 
-   ```sh
-   mkdir -p .config/NAME && (umask 077 && printf 'Paste the token: ' && read -rs t && printf '%s' "$t" > .config/NAME/token && echo)
-   ```
-
-   Replace `NAME` with the cluster's name, and run it once for each cluster. For the repository tokens, replace
-   `.config/NAME/token` with `.config/deployment-token`, then with `.config/catalog-token`.
-
-   To write the auth file with your `quay.io/rhoai` robot token, run the following and enter the robot account's
-   name and token when it asks:
-
-   ```sh
-   podman login --authfile .config/quay-auth.json quay.io/rhoai
-   ```
-
-   If you have a general `quay.io` login instead, log in to `quay.io` the same way and set `ALLOW_GENERIC_LOGIN=1` in
-   `install.env`.
-
-7. Set `install.env`. Copy the example file:
-
-   ```sh
-   cp install-example.env install.env
-   ```
-
-   In `install.env`, set `CATALOG_REPO_URL` to your catalog repository's URL, such as
-   `https://github.com/my-org/ai-grid-catalog.git`. Leave the other values: their defaults match the file names in
-   step 6, and `LIBRARY_REVISION=deployment-template` follows the library branch this template is tested against.
-   `install.env` holds no secrets. A setting `make install` doesn't know, or a value still starting with `REQUIRED-`,
-   stops it before it touches a cluster.
+   If you have a general `quay.io` login instead, log in with
+   `podman login --authfile .config/quay-auth.json quay.io` and set `ALLOW_GENERIC_LOGIN: 1` under `options:` in
+   `clusters.yaml`.
 
 ### Check the prerequisites
 
 Confirm that every cluster and credential is ready before anything is installed.
 
-8. Log in to each cluster:
+7. Log in to each cluster, then check the prerequisites:
 
    ```sh
    make login NONINTERACTIVE=1
-   ```
-
-   It writes `.config/NAME/kubeconfig` for each cluster from its token in `.config/NAME/token` and the API URL in
-   `clusters.yaml`, and keeps a kubeconfig that already works. For each cluster it prints `Logged in to NAME as USER.`
-   or `NAME: already logged in.` If it names a token file instead, put the cluster's token there and run it again.
-
-9. Check the prerequisites:
-
-   ```sh
    make prereqs
    ```
 
-   It prints one line per check, starting with `ok`, `MISSING`, `OLD`, `FAIL` or `skipped`. It checks the tools, the
+   `make login` writes `.config/NAME/kubeconfig` for each cluster from its token in `.config/NAME/token` and the API
+   URL in `clusters.yaml`, and keeps a kubeconfig that already works. For each cluster it prints
+   `Logged in to NAME as USER.` or `NAME: already logged in.` If it names a token file instead, run
+   `make secrets FORCE=1` with a fresh token for that cluster, then run it again.
+
+   `make prereqs` prints one line per check, starting with `ok`, `MISSING`, `OLD`, `FAIL` or `skipped`. It checks the tools, the
    `quay.io/rhoai` login in `QUAY_AUTH_FILE`, the catalog token in `CATALOG_TOKEN_FILE`, and, for each cluster in
    `clusters.yaml`, that it's reachable, runs OpenShift 4.21 or later, has a default StorageClass and gives you
    `cluster-admin`, and that each `ingress` or `combined` site has a DNS-01 ClusterIssuer. It changes nothing.
@@ -181,15 +160,15 @@ Confirm that every cluster and credential is ready before anything is installed.
 
 Run the install and confirm the end state.
 
-10. Commit your two files:
+8. Commit your settings:
 
     ```sh
-    git add clusters.yaml install.env && git commit -m "deployment: our clusters and install settings"
+    git add clusters.yaml && git commit -m "deployment: our clusters and repositories"
     ```
 
     `make install` pushes this commit with its own.
 
-11. Run the install:
+9. Run the install:
 
     ```sh
     make install
@@ -204,7 +183,7 @@ Run the install and confirm the end state.
 
     If it stops instead, see [If it stops](#if-it-stops).
 
-12. Check the end state, without changing anything:
+10. Check the end state, without changing anything:
 
     ```sh
     make ready-check
@@ -252,7 +231,7 @@ and content checks fail by design.
 Each step prints `== STEP` as it starts:
 
 1. `login`: writes `.config/NAME/kubeconfig` for each cluster from its token and the API URL in `clusters.yaml`.
-2. `inputs`: pins the library at `LIBRARY_REVISION`, writes your names to `root/inputs.env`, and pushes.
+2. `inputs`: pins the library at `repositories.library`, writes your names to `root/inputs.env`, and pushes.
 3. `catalog`: checks that your catalog repository holds only its README.
 4. `bootstrap`: installs OpenShift GitOps and applies your root on the hub, then waits until Argo CD has synced it.
 5. `acm`: waits until ACM is running.
@@ -302,24 +281,29 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
 ## Other options
 
 - **A CI job:** everything `make install` reads is a file in your deployment repository or under `.config/`, so a CI
-  job supplies the same files.
+  job supplies the same files instead of running `make secrets`. A setting that `clusters.yaml` leaves out of
+  `options:` comes from the environment variable of the same name.
+- **A repository set up with `install.env`:** `make install` no longer reads it, and stops while it exists. Move its
+  settings into `clusters.yaml`: `CATALOG_REPO_URL` and `LIBRARY_REVISION` become `repositories.catalog` and
+  `repositories.library`, each `SITE_ISSUER_NAME` becomes that site's `issuer:`, and the rest go under `options:`
+  with the same names. Then delete `install.env`.
 - **A kubeconfig instead of a token:** put a working kubeconfig, such as the installer's `auth/kubeconfig`, in
   `.config/NAME/kubeconfig`. `make install` keeps a kubeconfig that works.
 - **An untrusted API certificate:** put the CA of the cluster's API in `.config/NAME/ca.crt`.
 - **A token from the environment:** instead of `.config/NAME/token`, set `AI_GRID_TOKEN_NAME`, the cluster's name
   upper-cased with `-` turned into `_`, such as `AI_GRID_TOKEN_SITE_B`.
-- **A general `quay.io` login:** set `ALLOW_GENERIC_LOGIN=1` in `install.env` when your auth file has a `quay.io`
-  login but no `quay.io/rhoai` entry.
-- **Several DNS-01 issuers on a site:** set `SITE_ISSUER_SITE_NAME` in `install.env`, the site's name upper-cased with
-  `-` turned into `_`, such as `SITE_ISSUER_SITE_B=letsencrypt-dns`.
-- **Another library revision:** set `LIBRARY_REVISION` in `install.env` to a branch, tag or commit, or leave it empty
-  to keep the template's own commit pin.
-- **Another token lifetime:** set `PROVIDER_ADMIN_TOKEN_DURATION` in `install.env` for `make install`, or in the
-  environment for `make provider-admin`.
+- **A general `quay.io` login:** set `ALLOW_GENERIC_LOGIN: 1` under `options:` in `clusters.yaml` when your auth
+  file has a `quay.io` login but no `quay.io/rhoai` entry.
+- **Several DNS-01 issuers on a site:** set `issuer:` on that site in `clusters.yaml`, such as
+  `issuer: letsencrypt-dns`.
+- **Another library revision:** set `repositories.library` in `clusters.yaml` to a branch, tag or commit, or leave it
+  empty to keep the template's own commit pin.
+- **Another token lifetime:** set `PROVIDER_ADMIN_TOKEN_DURATION` under `options:` in `clusters.yaml` for
+  `make install`, or in the environment for `make provider-admin`.
 - **Another catalog token file for the console:** if the environment variable `AI_GRID_GIT_TOKEN_FILE` is set, the
   console's Secrets use the file it names instead of `CATALOG_TOKEN_FILE`.
-- **Longer or shorter waits:** each `GATE_*_SECONDS` value in `install.env` sets a readiness check's time limit, in
-  seconds. The hub's Applications get 90 minutes (`GATE_HUB_APPS_SECONDS=5400`).
+- **Longer or shorter waits:** each `GATE_*_SECONDS` value under `options:` in `clusters.yaml` sets a readiness check's time limit, in
+  seconds. The hub's Applications get 90 minutes (`GATE_HUB_APPS_SECONDS: 5400`).
 - **The hub alone,** without the sites, the provider-admin token or the ready check:
 
   ```sh
@@ -330,7 +314,7 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
 
 - An `ingress` or `combined` site needs a DNS-01 ClusterIssuer that issues publicly trusted certificates. Supplying
   a certificate another way is a later option.
-- `make install` always installs its own Keycloak. Using an existing one, with `KEYCLOAK` in `install.env`, comes
+- `make install` always installs its own Keycloak. Using an existing one, with `KEYCLOAK` under `options:`, comes
   later; any value but `install` stops the install.
 - Starting over means new clusters, and new deployment and catalog repositories. `make install` doesn't uninstall;
   to remove AI Grid from clusters, see [Uninstall](08-uninstall.md).
