@@ -14,11 +14,13 @@
 # template has none, and root/kustomization.yaml copies its values into the
 # root. A value that's already set, in either file, is left alone.
 #
-# Usage: scripts/set-inputs.sh CATALOG_REPO_URL
+# CATALOG_REPO_URL defaults to clusters.yaml's repositories.catalog (make inputs).
+#
+# Usage: scripts/set-inputs.sh [CATALOG_REPO_URL]
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 dir="$(cd "$here/.." && pwd)"
-[ $# -eq 1 ] || { echo "usage: set-inputs.sh CATALOG_REPO_URL" >&2; exit 2; }
+[ $# -le 1 ] || { echo "usage: set-inputs.sh [CATALOG_REPO_URL]" >&2; exit 2; }
 
 https_url() { # a git remote URL -> https://HOST/OWNER/REPO.git, no credentials
   local u=${1%/}
@@ -32,12 +34,13 @@ https_url() { # a git remote URL -> https://HOST/OWNER/REPO.git, no credentials
   echo "$u"
 }
 
-catalog=$(https_url "$1")
+. "$here/clusters.sh"
+clusters_load "$dir"; settings_apply
+want=${1:-${CATALOG_REPO_URL:-}}
+[ -n "$want" ] || { echo "error: set repositories.catalog in clusters.yaml to your catalog repository's URL, then run make inputs again" >&2; exit 1; }
+catalog=$(https_url "$want")
 origin=$(git -C "$dir" remote get-url origin 2>/dev/null) || { echo "error: this repository has no origin remote" >&2; exit 1; }
 deployment=$(https_url "$origin")
-
-. "$here/clusters.sh"
-clusters_load "$dir"
 site=""
 for s in $(site_names); do
   case "$(cluster_field "$s" role)" in combined|ingress) site=$s; break ;; esac

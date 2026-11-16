@@ -24,7 +24,7 @@ inputs="$dir/root/inputs.env"
 value() { [ -f "$inputs" ] && sed -n "s/^$1=//p" "$inputs" | tail -n1; }
 url=$(value catalogRepoURL || true) rev=$(value catalogRevision || true); rev=${rev:-main}
 case "$url" in ""|REQUIRED-*)
-  echo "error: root/inputs.env has no catalogRepoURL: run scripts/set-inputs.sh CATALOG_REPO_URL (page 2)" >&2; exit 1 ;;
+  echo "error: root/inputs.env has no catalogRepoURL: run make inputs (page 2)" >&2; exit 1 ;;
 esac
 if [ -f "$dir/.config/clusters.yaml" ] || [ -f "$dir/clusters.yaml" ]; then
   . "$dir/scripts/clusters.sh"; deployment_load "$dir" || exit 1
