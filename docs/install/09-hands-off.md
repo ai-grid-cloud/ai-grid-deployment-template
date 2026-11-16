@@ -1,167 +1,211 @@
 # Install with one command
 
-`make install` installs the hub and imports every site into ACM, with no prompt and no browser, so a test suite or a
-CI job can start from blank clusters. It runs the same scripts as pages 2 to 5, and between them waits on named
-readiness checks instead of your judgement.
+At the end of this page, `make install` has installed the hub and imported every site into ACM, with no prompt and no
+browser, and has written the endpoints a test suite needs to `.install/outputs.json`.
 
-When it finishes, you have:
+You came here from the README and already created your deployment repository from the template.
 
-- the hub, fully installed: ACM, Argo CD, Keycloak, the MaaS database, the provider console and monitoring, with
-  every hub Application `Synced` and `Healthy`, except those that
-  [wait for a site to join the grid](04-hub-components.md#2-verify). They turn healthy after you add the first site;
-- every site in `clusters.yaml` imported into the hub's ACM and available, but **not added to the grid**: no
-  `ai-grid/` or `location` label and no OpenShift AI on it;
-- no organizations, models or subscriptions;
-- `.install/outputs.json`, the endpoints a test suite needs, and a provider-admin token for the console's API.
+## Before you start
 
-Adding a site to the grid is your next step, or your test suite's
-([add a site to the grid](#add-a-site-to-the-grid)).
+Check each item. Run the cluster commands while you're logged in to that cluster with `oc`.
 
-## Set up once
+- [ ] **A hub and one or more sites on OpenShift 4.21 or later,** with nothing of AI Grid on them, and a
+  `cluster-admin` login and the API URL for each:
 
-Do this once per install. Everything `make install` reads afterwards is a file in your deployment repository, so a CI
-job can supply the same files.
+  ```sh
+  oc version
+  oc whoami --show-server
+  ```
 
-### Clusters
+- [ ] **A default StorageClass on each cluster.** One line ends in `(default)`:
 
-You need the clusters from [before you start](01-before-you-start.md): a hub and one or more sites on OpenShift 4.21
-or later, with nothing of AI Grid on them, and the same network and tools. Each site has the role `combined`,
-`ingress` or `inference`, and at least one site must be `ingress` or `combined`: `scripts/set-inputs.sh` needs one for
-the tenant portal's sign-in redirect.
+  ```sh
+  oc get storageclass
+  ```
 
-If a site has the role `ingress` or `combined`, it needs a cert-manager ClusterIssuer that issues publicly trusted
-certificates by DNS-01, for its MaaS certificate. `make install` checks for one and stops if there's none. An
-`inference` site needs no issuer.
+- [ ] **Two worker nodes on each cluster** for Submariner's gateways. On a compact cluster or single-node OpenShift,
+  you label the gateway nodes by hand.
 
-### Repositories and tokens
+  ```sh
+  oc get nodes -l node-role.kubernetes.io/worker
+  ```
 
-1. Create your deployment repository from the template ([start here](../../README.md#start-here)), and your catalog
-   repository and its token ([page 2, part 2](02-repositories.md#2-create-your-catalog-repository-and-its-token)).
-   The catalog repository must hold nothing but its README.
-2. Create a second fine-grained token, with **Contents** set to **Read and write** on your deployment repository only.
-   `make install` pushes your inputs and the sites' files with it.
-3. Clone your deployment repository by its HTTPS URL, because `make install` pushes with the token, not with SSH:
+- [ ] **Network:** each cluster has a load-balancer provider for Submariner's LoadBalancer Service, each cluster
+  reaches the other clusters' load balancers on UDP 4500 and 4490, and every router name answers `AAAA` queries
+  without `NXDOMAIN`.
+- [ ] **A role for each site:** `combined` (tenants enter and models run), `ingress` (tenants enter, no models) or
+  `inference` (models only). At least one site is `ingress` or `combined`.
+- [ ] **On each `ingress` or `combined` site, a cert-manager ClusterIssuer that issues publicly trusted certificates
+  by DNS-01,** for the site's MaaS certificate. The following command prints the site's DNS-01 issuers; if it prints
+  nothing, add one, or give the site the role `inference`:
+
+  ```sh
+  oc get clusterissuers -o json | jq -r '.items[] | select(any(.spec.acme.solvers[]?; .dns01 != null)) | .metadata.name'
+  ```
+
+- [ ] **A `quay.io/rhoai` login** in a container auth file. This template installs a pre-release OpenShift AI 3.6
+  build from `quay.io/rhoai`; Red Hat gives `quay.io/rhoai` robot tokens to early-access partners, so ask your Red Hat
+  contact. The following command prints `true`:
+
+  ```sh
+  jq '.auths | has("quay.io/rhoai")' ~/.config/containers/auth.json
+  ```
+
+- [ ] **Tools:** `oc`, `kubectl`, `git`, `jq`, `curl`, `openssl`, `base64`, `python3`, `clusteradm` and `make`.
+  The following command prints the name of each one that's missing:
+
+  ```sh
+  for t in oc kubectl git jq curl openssl base64 python3 clusteradm make; do command -v "$t" >/dev/null || echo "missing: $t"; done
+  ```
+
+## Install
+
+1. Create your catalog repository. The provider console writes your models and subscriptions there.
+   [Create a new repository](https://github.com/new), name it, such as `ai-grid-catalog`, make it public, and turn
+   on **Add README**. With the GitHub CLI instead:
+
+   ```sh
+   gh repo create OWNER/CATALOG_REPO --add-readme --public
+   ```
+
+   Leave it holding nothing but its README: `make install` stops if it holds anything else.
+
+2. Create the catalog token.
+   [Create a fine-grained token](https://github.com/settings/personal-access-tokens/new), named such as
+   `ai-grid-catalog`. Under **Repository access**, select **Only select repositories** and your catalog repository.
+   Under **Permissions**, click **Add permissions** > **Contents**, and set it to **Read and write**. Leave every other
+   permission off. Click **Generate token**, and keep the token for step 6.
+
+   When this token expires, the console can't save models or subscriptions until you replace it.
+
+3. Create the deployment token. Create a second fine-grained token the same way, named such as
+   `ai-grid-deployment`, with **Contents** set to **Read and write** on your deployment repository only. Keep it for
+   step 6. `make install` pushes your settings and the sites' files with it.
+
+4. Clone your deployment repository by its HTTPS URL, because `make install` pushes with the token, not with SSH:
 
    ```sh
    git clone https://github.com/OWNER/DEPLOYMENT_REPO.git deployment && cd deployment
    ```
 
-   Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every command on this page from the
-   `deployment` directory, on branch `main`.
+   Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every later command from the `deployment`
+   directory, on branch `main`.
 
-### `clusters.yaml`
+5. Write `clusters.yaml`. Copy the example file:
 
-Copy the example file:
+   ```sh
+   cp clusters-example.yaml clusters.yaml
+   ```
 
-```sh
-cp clusters-example.yaml clusters.yaml
-```
+   Replace each `REQUIRED-` value, and add a block for each site. Keep the hub's name, `hub`. A site's name is a DNS
+   label; it becomes the site's ACM cluster name, and you can't change it once the site is imported. For example:
 
-Replace each `REQUIRED-` value, as on [page 2](02-repositories.md#1-clone-your-repository-and-log-in-to-your-clusters),
-and add a block for each site. Keep the hub's name, `hub`. Set each site's `role`: the install prepares each site for
-that role, and `make site-join` uses it later. A site's name becomes its ACM cluster name.
+   ```yaml
+   apiVersion: ai-grid.dev/v1alpha1
+   kind: Clusters
+   hub:
+     name: hub
+     api: https://api.hub.example.com:6443
+   sites:
+     - name: site-east-1
+       role: combined
+       location: us-east
+       api: https://api.site-east-1.example.com:6443
+     - name: site-east-2
+       role: inference
+       location: us-east
+       api: https://api.site-east-2.example.com:6443
+   ```
 
-### Secret files under `.config/`
+6. Put the logins and tokens in `.config/`, which git ignores. Create the directory, readable only by you:
 
-`make install` reads its secrets only from files under `.config/`, which git ignores. Create the directory, readable
-only by you:
+   ```sh
+   mkdir -p .config && chmod 700 .config
+   ```
 
-```sh
-mkdir -p .config && chmod 700 .config
-```
+   Then create these files. `NAME` is a cluster's name in `clusters.yaml`, such as `hub` or `site-east-1`.
 
-Put these files in it. `NAME` is the cluster's name in `clusters.yaml`, such as `hub`.
+   | File | What it holds |
+   |---|---|
+   | `.config/NAME/token` | A `cluster-admin` token for the cluster, such as the output of `oc whoami -t`. One per cluster. |
+   | `.config/deployment-token` | The deployment token from step 3. |
+   | `.config/catalog-token` | The catalog token from step 2. |
+   | `.config/quay-auth.json` | Your container auth file with the `quay.io/rhoai` login. |
 
-| File | What it holds |
-|---|---|
-| `.config/NAME/token` | A `cluster-admin` token for the cluster, such as from `oc whoami -t`. One per cluster. |
-| `.config/NAME/kubeconfig` | Instead of a token: a working kubeconfig, such as the installer's `auth/kubeconfig`. |
-| `.config/NAME/ca.crt` | Optional: the CA of the cluster's API, when your system doesn't trust its certificate. |
-| `.config/deployment-token` | The token that can push to your deployment repository. |
-| `.config/catalog-token` | The token that can write your catalog repository. |
-| `.config/quay-auth.json` | A container auth file with a `quay.io/rhoai` login, such as a copy of `~/.config/containers/auth.json`. |
+   To write a token file without showing the token, run the following, paste the token when it asks, and press
+   Enter:
 
-For a cluster with a token file, `make install` writes `.config/NAME/kubeconfig` from the token and the API URL in
-`clusters.yaml`. A kubeconfig that already works is kept as it is. Instead of a token file, you can set the
-environment variable `AI_GRID_TOKEN_NAME`, with the cluster's name upper-cased and `-` turned into `_`, such as
-`AI_GRID_TOKEN_SITE_B`.
+   ```sh
+   mkdir -p .config/NAME && (umask 077 && printf 'Paste the token: ' && read -rs t && printf '%s' "$t" > .config/NAME/token && echo)
+   ```
 
-To write a token file without showing the token, run the following, and paste the token when it asks:
+   Replace `NAME` with the cluster's name, and run it once for each cluster. For the repository tokens, replace
+   `.config/NAME/token` with `.config/deployment-token`, then with `.config/catalog-token`.
 
-```sh
-mkdir -p .config/NAME && (umask 077 && printf 'Paste the token: ' && read -rs t && printf '%s' "$t" > .config/NAME/token && echo)
-```
+   To copy your container auth file:
 
-Replace `NAME` with the cluster's name. For the repository tokens, write `.config/deployment-token` and
-`.config/catalog-token` the same way.
+   ```sh
+   (umask 077 && cp ~/.config/containers/auth.json .config/quay-auth.json)
+   ```
 
-### `install.env`
+7. Set `install.env`. Copy the example file:
 
-Copy the example file:
+   ```sh
+   cp install-example.env install.env
+   ```
 
-```sh
-cp install-example.env install.env
-```
+   In `install.env`, set `CATALOG_REPO_URL` to your catalog repository's URL, such as
+   `https://github.com/my-org/ai-grid-catalog.git`. Leave the other values: their defaults match the file names in
+   step 6, and `LIBRARY_REVISION=deployment-template` follows the library branch this template is tested against.
+   `install.env` holds no secrets. A setting `make install` doesn't know, or a value still starting with `REQUIRED-`,
+   stops it before it touches a cluster.
 
-In `install.env`, set `CATALOG_REPO_URL` to your catalog repository's URL, such as
-`https://github.com/my-org/ai-grid-catalog.git`. The other values have defaults that match the file names above.
-`install.env` holds no secrets. It also sets the following, each explained in the file:
+8. Commit your two files:
 
-- `LIBRARY_REVISION`: the library branch, tag or commit to pin. Each `make install` resolves it to its current commit and pins that commit. The default, `deployment-template`, follows the library branch this template is tested against; set another branch, tag or commit to test a library change, or leave it empty to keep the template's own commit pin.
-- `SITE_ISSUER_NAME`: which DNS-01 ClusterIssuer to use, when an `ingress` or `combined` site has several.
-- `GATE_*_SECONDS`: each readiness check's time limit.
+   ```sh
+   git add clusters.yaml install.env && git commit -m "deployment: our clusters and install settings"
+   ```
 
-If the environment variable `AI_GRID_GIT_TOKEN_FILE` is set, the console's Secrets use the token file it names instead
-of `CATALOG_TOKEN_FILE`.
+   `make install` pushes this commit with its own.
 
-A line `make install` doesn't know, or a value still starting with `REQUIRED-`, stops it before it touches a
-cluster.
+9. Run the install:
 
-### Commit
+   ```sh
+   make install
+   ```
 
-Commit your two files:
+   On new clusters it takes about 75 minutes; waiting for the hub's Applications takes about 55 of them. It prints
+   `== STEP` as each step starts, and ends with:
 
-```sh
-git add clusters.yaml install.env && git commit -m "deployment: our clusters and install settings"
-```
+   ```text
+   Installed. Outputs: .install/outputs.json
+   ```
 
-`make install` pushes this commit with its own.
+   If it stops instead, see [If it stops](#if-it-stops).
 
-## Run it
+10. Check the end state, without changing anything:
 
-```sh
-make install
-```
+    ```sh
+    make ready-check
+    ```
 
-It prints `== STEP` as each step starts, and ends with:
+    It prints one `OK`, `WARN` or `FAIL` line per check, and ends with:
 
-```text
-Installed. Outputs: .install/outputs.json
-```
+    ```text
+    Ready. Outputs: .install/outputs.json
+    ```
 
-The steps, in order:
+    A `WARN` line lists the hub Applications that wait for a site to join the grid. They turn healthy after you add
+    the first site.
 
-1. **`login`:** a kubeconfig for each cluster from `.config/`.
-2. **`inputs`:** your names in `root/inputs.env` (`scripts/set-inputs.sh`), pushed.
-3. **`catalog`:** checks that your catalog repository holds only its README.
-4. **`bootstrap`:** OpenShift GitOps and your root on the hub ([page 3](03-prepare-hub.md)).
-5. **`acm`:** waits until ACM is running.
-6. **`console-secrets`:** the console's Secrets ([page 4](04-hub-components.md#1-create-the-consoles-secrets)).
-7. **`hub-apps`:** waits until every hub Application is `Synced` and `Healthy`, except those that wait for a site to join the grid.
-   On a new hub this takes about 50 minutes; the limit is 90 minutes (`GATE_HUB_APPS_SECONDS=5400`).
-8. **`site-files`:** for each `ingress` or `combined` site, its values and MaaS certificate files
-   ([page 6, part 1](06-join-grid.md#1-add-the-sites-values)), pushed.
-9. **`site NAME`:** for each site, the infrastructure check and the import into ACM ([page 5](05-prepare-site.md)).
-10. **`provider-admin`:** the provider-admin ServiceAccount and its token.
-11. **`ready`:** the ready check, which also writes `.install/outputs.json`.
+You now have:
 
-To install the hub alone, without the sites, the provider-admin token or the ready check, run:
+- the hub, installed: ACM, Argo CD, Keycloak, the MaaS database, the provider console and monitoring;
+- every site imported into the hub's ACM and available, but **not in the grid**: no `ai-grid/` or `location` label
+  and no OpenShift AI on it;
+- no organizations, models or subscriptions.
 
-```sh
-scripts/install.sh --hub-only
-```
-
-## Run it again after a failure
+## If it stops
 
 When a step fails, `make install` prints why, then stops with a line like the following:
 
@@ -169,33 +213,38 @@ When a step fails, `make install` prints why, then stops with a line like the fo
 make install stopped at hub-apps. Fix the cause, then run make install again.
 ```
 
-If the line names a readiness check, such as `hub-apps` or `site-site-b-import`, the evidence is printed above it and
-saved in `.install/report.txt`: `make status`, `make site-status` for a site, and the conditions of whatever isn't
-ready. If the line names a step, the step's own error is above it. If it stopped at `ready`, the ready check's last
-output is in `.install/ready-check.txt`.
+- If the line names a readiness check, such as `hub-apps` or `site-site-b-import`, the evidence is above it and in
+  `.install/report.txt`: `make status`, `make site-status` for a site, and the conditions of whatever isn't ready.
+- If the line names a step, the step's own error is above it.
+- If it stopped at `ready`, the ready check's last output is in `.install/ready-check.txt`.
 
-Fix the cause, then run the same command:
+`.install/report.txt` can quote your manifests: read it before you share it.
 
-```sh
-make install
-```
+Fix the cause, then run `make install` again. Every step first checks whether its work is done and skips it if so,
+so the install picks up where it stopped. On a finished install, a second run changes nothing on the clusters except
+a fresh provider-admin token, and passes the ready check again, but only before your tests start. Once a test adds a
+site to the grid or creates an organization, model or subscription, the `catalog` step and the ready check's label
+and content checks fail by design.
 
-Every step first checks whether its work is done and skips it if so, so the install picks up where it stopped. On a
-finished install, a second run changes nothing on the clusters except a fresh provider-admin token, which it writes to
-`.config/provider-admin-token`, and it passes the ready check again, but only before your tests start.
-Once a test adds a site to the grid or creates an organization, model or subscription, the `catalog` step and the ready
-check's label and content checks fail by design. `.install/report.txt` can quote your manifests: read it before you
-share it.
+## What the install does
 
-To check the end state again, without changing anything, before your tests start, run:
+Each step prints `== STEP` as it starts:
 
-```sh
-make ready-check
-```
+1. `login`: writes `.config/NAME/kubeconfig` for each cluster from its token and the API URL in `clusters.yaml`.
+2. `inputs`: pins the library at `LIBRARY_REVISION`, writes your names to `root/inputs.env`, and pushes.
+3. `catalog`: checks that your catalog repository holds only its README.
+4. `bootstrap`: installs OpenShift GitOps and applies your root on the hub, then waits until Argo CD has synced it.
+5. `acm`: waits until ACM is running.
+6. `console-secrets`: creates the provider console's Secrets from your catalog token.
+7. `hub-apps`: waits until every hub Application is `Synced` and `Healthy`, except those that wait for a site.
+8. `site-files`: writes the values and MaaS certificate files of each `ingress` or `combined` site, and pushes.
+9. `site NAME`: for each site, checks it and imports it into ACM, then waits until it's available.
+10. `provider-admin`: creates the provider-admin ServiceAccount and its token.
+11. `ready`: runs the ready check until it passes, which writes `.install/outputs.json`.
 
-## Hand off to a test suite
+## Outputs and the provider-admin token
 
-The ready check writes `.install/outputs.json`, which git ignores. It has these keys:
+`.install/outputs.json`, which git ignores, has these keys:
 
 | Key | Value |
 |---|---|
@@ -212,17 +261,12 @@ The ready check writes `.install/outputs.json`, which git ignores. It has these 
 The provider-admin token is in `.config/provider-admin-token`. It belongs to ServiceAccount
 `ai-grid-test/provider-admin`, which is bound to the console's ClusterRole `ai-grid-provider-admin`, so a test suite
 can call the console's API with no browser. Send it as an `Authorization: Bearer` header from a file, never on a
-command line. It lasts 168 hours, or `PROVIDER_ADMIN_TOKEN_DURATION`: set it in `install.env` for `make install`, or
-in the environment for `make provider-admin`. To get a new one, run:
-
-```sh
-make provider-admin
-```
+command line. It lasts 168 hours. To get a new one, run `make provider-admin`.
 
 ## Add a site to the grid
 
 `make install` leaves each site imported but outside the grid, with the files an `ingress` or `combined` site needs
-already pushed. To add a site, use either of these:
+already pushed. To add a site, do one of the following:
 
 - In the provider console, click **Clusters**, and add the site to AI Grid with its role.
 - From your deployment repository, label the site with the role and location from `clusters.yaml`:
@@ -231,8 +275,35 @@ already pushed. To add a site, use either of these:
   make site-join SITE=SITE_NAME
   ```
 
-The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it, see
-[page 6, part 3](06-join-grid.md#3-verify).
+The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it, run
+`make site-status SITE=SITE_NAME`.
+
+## Other options
+
+- **A CI job:** everything `make install` reads is a file in your deployment repository or under `.config/`, so a CI
+  job supplies the same files.
+- **A kubeconfig instead of a token:** put a working kubeconfig, such as the installer's `auth/kubeconfig`, in
+  `.config/NAME/kubeconfig`. `make install` keeps a kubeconfig that works.
+- **An untrusted API certificate:** put the CA of the cluster's API in `.config/NAME/ca.crt`.
+- **A token from the environment:** instead of `.config/NAME/token`, set `AI_GRID_TOKEN_NAME`, the cluster's name
+  upper-cased with `-` turned into `_`, such as `AI_GRID_TOKEN_SITE_B`.
+- **A general `quay.io` login:** set `ALLOW_GENERIC_LOGIN=1` in `install.env` when your auth file has a `quay.io`
+  login but no `quay.io/rhoai` entry.
+- **Several DNS-01 issuers on a site:** set `SITE_ISSUER_SITE_NAME` in `install.env`, the site's name upper-cased with
+  `-` turned into `_`, such as `SITE_ISSUER_SITE_B=letsencrypt-dns`.
+- **Another library revision:** set `LIBRARY_REVISION` in `install.env` to a branch, tag or commit, or leave it empty
+  to keep the template's own commit pin.
+- **Another token lifetime:** set `PROVIDER_ADMIN_TOKEN_DURATION` in `install.env` for `make install`, or in the
+  environment for `make provider-admin`.
+- **Another catalog token file for the console:** if the environment variable `AI_GRID_GIT_TOKEN_FILE` is set, the
+  console's Secrets use the file it names instead of `CATALOG_TOKEN_FILE`.
+- **Longer or shorter waits:** each `GATE_*_SECONDS` value in `install.env` sets a readiness check's time limit, in
+  seconds. The hub's Applications get 90 minutes (`GATE_HUB_APPS_SECONDS=5400`).
+- **The hub alone,** without the sites, the provider-admin token or the ready check:
+
+  ```sh
+  scripts/install.sh --hub-only
+  ```
 
 ## Known limits
 

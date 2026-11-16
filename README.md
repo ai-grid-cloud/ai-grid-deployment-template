@@ -47,10 +47,11 @@ and which the template doesn't have; to upgrade, you move the library pin. For m
    gh repo create OWNER/DEPLOYMENT_REPO --template ai-grid-cloud/ai-grid-deployment-template --public
    ```
 
-2. Follow the [install guide](docs/install/README.md) in your new repository.
+2. Choose how to install:
 
-   To install unattended with one command, for a test suite or a CI job, see
-   [Install with one command](docs/install/09-hands-off.md).
+   - To install the hub and import your sites with one unattended command, such as for a test suite or a CI job,
+     follow [Install with one command](docs/install/09-hands-off.md).
+   - To install page by page, follow the [install guide](docs/install/README.md).
 
 ## Update from the template
 
