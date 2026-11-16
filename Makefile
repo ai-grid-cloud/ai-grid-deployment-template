@@ -3,17 +3,14 @@
 # library at your pin into .library/ (scripts/library.sh); set LIBRARY to use
 # your own checkout.
 
-# Optional. QUAY_AUTH_FILE defaults to ~/.config/containers/auth.json, else
-# $XDG_RUNTIME_DIR/containers/auth.json; ALLOW_GENERIC_LOGIN=1 lets bootstrap
-# use a general quay.io login. CATALOG_TOKEN_FILE defaults to
-# ~/.ai-grid/catalog-token; KEYCLOAK_NAMESPACE and KEYCLOAK_REALM to the
-# template's tenant-idp and tenants (console-secrets). When install.env exists,
-# make prereqs checks the files make install uses: install.env's QUAY_AUTH_FILE
-# and CATALOG_TOKEN_FILE beat these variables, and their defaults are
-# .config/quay-auth.json and .config/catalog-token.
+# Optional. make prereqs checks the files make install uses: QUAY_AUTH_FILE
+# and CATALOG_TOKEN_FILE under options: in clusters.yaml, then these variables,
+# then .config/quay-auth.json and .config/catalog-token. ALLOW_GENERIC_LOGIN=1
+# lets bootstrap use a general quay.io login; KEYCLOAK_NAMESPACE and
+# KEYCLOAK_REALM default to the template's tenant-idp and tenants (console-secrets).
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
-.PHONY: help login prereqs bootstrap status console-secrets test update \
+.PHONY: help secrets login prereqs bootstrap status console-secrets test update \
   site-check site-wipe site-import site-add site-join site-status tenant-user tenant-call \
   empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
 
@@ -25,6 +22,9 @@ need = $(if $($(1)),,$(error set $(1), such as: make $@ $(1)=$(2)))
 
 help: ## Show the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /: /'
+
+secrets: ## Ask for each cluster token, the two GitHub tokens and the quay.io login; write them to .config/ (FORCE=1 replaces)
+	@FORCE=$(FORCE) scripts/secrets.sh
 
 login: ## Log in to each cluster in clusters.yaml that needs it; NAME=... for one; NONINTERACTIVE=1 for no browser
 	@scripts/login.sh $(if $(filter 1,$(NONINTERACTIVE)),--non-interactive) $(NAME)

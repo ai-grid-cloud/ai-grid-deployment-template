@@ -98,6 +98,7 @@ t "make provider-admin runs scripts/provider-admin.sh" 0 "^scripts/provider-admi
 : > "$STUB_LOG"
 t "make ready-check is read-only" 0 "^ok$" bash -c 'PATH="$1:$PATH" make -s -C "$0" ready-check >/dev/null 2>&1;
   grep -q "get " "$2" && ! grep -E " oc (apply|create|patch|delete|label)" "$2" && echo ok' "$one" "$T/bin" "$STUB_LOG"
+t "make help lists secrets" 0 "^secrets: Ask for each cluster token" make -s -C "$one" help
 t "make help lists install" 0 "^install: Install the hub and import every site, unattended \(page 9\)$" make -s -C "$one" help
 t "make login NONINTERACTIVE=1 passes --non-interactive" 0 "^scripts/login.sh --non-interactive *$" make -n -C "$one" login NONINTERACTIVE=1
 t "make login without it: unchanged" 0 "^scripts/login.sh *$" make -n -C "$one" login
