@@ -3,7 +3,7 @@
 Problems you can hit while following this guide. Each entry gives the symptom, the cause and the fix. For problems
 after install, see the library's [troubleshooting](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/troubleshooting.md). The [hub](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/README.md) and [spokes](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/README.md) pages list more under **Known issues**.
 
-## `check-deployment.sh` reports `unset inputs` or `placeholders left in your files`
+## The deployment check reports `unset inputs` or `placeholders left in your files`
 
 **Cause:** an input in `root/inputs.env` is empty, or a value in another file is still a `REQUIRED-NAME` placeholder.
 
@@ -19,14 +19,27 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 | OpenShift version | Upgrade the cluster to 4.21 or later. |
 | default StorageClass | Annotate one StorageClass `storageclass.kubernetes.io/is-default-class=true`. |
 | cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or select `apps/cert-manager` ([cert-manager](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/00-platform-services.md#cert-manager)). |
-| quay.io/rhoai pull secret file | Add your `quay.io/rhoai` robot account, as follows this table ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
+| quay.io/rhoai pull secret file | Add your `quay.io/rhoai` robot account in the way that matches your guide, as the steps after this table describe ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
 | object storage | Expected with `apps/object-storage/s4` or `odf` selected: it appears when you [install the hub components](04-hub-components.md). If you bring your own bucket, create the Secret now ([object storage](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/01-acm.md#object-storage)). |
 
-To add your `quay.io/rhoai` robot account's name and token to `.config/clusters.yaml`:
+To add your `quay.io/rhoai` robot account, do one of the following:
 
-```sh
-make secrets NAME=quay
-```
+- If you follow the page-by-page guide, with a committed `clusters.yaml`, log in to `quay.io` with the robot account:
+
+  ```sh
+  podman login quay.io
+  ```
+
+  To use an auth file other than the one `podman login` writes, add `QUAY_AUTH_FILE=AUTH_FILE` to the `make`
+  command. Don't run `make secrets` here: it moves your settings to `.config/clusters.yaml`, and the scripts then
+  ignore your committed `clusters.yaml`.
+
+- If you follow [Install with one command](09-hands-off.md), with `.config/clusters.yaml`, add the robot account's
+  username and password to it:
+
+  ```sh
+  make secrets NAME=quay
+  ```
 
 ## `make bootstrap` refuses a general `quay.io` login
 
@@ -42,11 +55,7 @@ make bootstrap ALLOW_GENERIC_LOGIN=1
 
 **Cause:** your root's `values` don't set input `NAME`, or set it empty or with `"`, `'`, `\` or `@`.
 
-**Fix:** set it in `root/inputs.env` if it's one of yours, or in `root/kustomization.yaml` ([inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/appendix-a-inputs.md#inputs)), check it, and push:
-
-```sh
-scripts/check-deployment.sh
-```
+**Fix:** set it in `root/inputs.env` if it's one of yours, or in `root/kustomization.yaml` ([inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/appendix-a-inputs.md#inputs)), and push.
 
 To read the message on the hub, show the hub's status. The message is on the line that starts with
 `!! The root ApplicationSet apps`:
@@ -62,21 +71,15 @@ Argo CD controller: its last termination is `OOMKilled`, or it's in `CrashLoopBa
 
 **Cause:** Argo CD's application controller runs out of memory before the hub's settings raise its limit.
 
-**Fix:** run the bootstrap again, with the same `make bootstrap` command you ran on
-[page 3](03-prepare-hub.md#1-install-openshift-gitops-and-apply-your-root). It sets the controller's memory, and
-reapplies the same root and registry logins:
+**Fix:** run the bootstrap again, which sets the controller's memory and reapplies the same root and registry
+logins, then run the install again:
 
 ```sh
 make bootstrap
+make install
 ```
 
-If your auth file has a general `quay.io` login, allow it as on page 3:
-
-```sh
-make bootstrap ALLOW_GENERIC_LOGIN=1
-```
-
-Then run `make status` again: the restarts stop and the Applications progress within a few minutes.
+The restarts stop and the Applications progress within a few minutes.
 
 ## Hub Applications for Submariner, `limitador-redis` or the MaaS database stay unhealthy
 

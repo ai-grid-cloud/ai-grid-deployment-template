@@ -2,7 +2,7 @@
 > [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) from branch
 > `deployment-template`, until its changes merge into `main`. The commit is `libraryRevision` in
 > `root/kustomization.yaml`. `make install` pins that branch's current commit instead (`repositories.library` in
-> `clusters.yaml`).
+> `.config/clusters.yaml`).
 
 # AI Grid deployment template
 
@@ -50,8 +50,7 @@ and which the template doesn't have; to upgrade, you move the library pin. For m
 2. Choose how to install:
 
    - To install the hub and import your sites with one unattended command, such as for a test suite or a CI job,
-     follow [Install with one command](docs/install/09-hands-off.md): you edit one private, git-ignored file,
-     `.config/clusters.yaml`, run `make secrets` to add the logins and tokens to it, then `make install`.
+     follow [Install with one command](docs/install/09-hands-off.md).
    - To install page by page, follow the [install guide](docs/install/README.md).
 
 ## Update from the template

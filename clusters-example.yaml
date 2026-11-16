@@ -3,12 +3,9 @@
 #
 # - .config/clusters.yaml, for the one-command install (install guide, page 9).
 #   It's private: git ignores .config/, and the file also holds your secrets
-#   (the credentials:, github: and quay: sections at the end). Copy it with:
-#
-#     mkdir -p .config && chmod 700 .config
-#     cp clusters-example.yaml .config/clusters.yaml && chmod 600 .config/clusters.yaml
-#
-#   The scripts stop if the file is readable by anyone but you.
+#   (the credentials:, github: and quay: sections at the end). make secrets
+#   creates it from this file, readable only by you. The scripts stop if the
+#   file is readable by anyone but you.
 #
 # - clusters.yaml at the root of your repository, for the page-by-page guide
 #   (pages 1 to 8). You commit it, so it records which clusters make up your
@@ -49,8 +46,7 @@ sites:
 
 repositories:
   # The catalog repository the provider console writes models and
-  # subscriptions to, such as https://github.com/OWNER/CATALOG.git. make
-  # install needs it; the page-by-page guide (pages 1 to 8) doesn't read it.
+  # subscriptions to, such as https://github.com/OWNER/CATALOG.git.
   catalog: ""
   # The library revision make install pins: a branch, a tag or a full commit
   # SHA, resolved to its current commit on each run. Empty keeps the
@@ -65,8 +61,9 @@ options:
   # supported in this version.
   # KEYCLOAK: install
 
-  # 1 lets bootstrap use the general quay.io entry of an auth file you supply
-  # (QUAY_AUTH_FILE) when it has no quay.io/rhoai entry. Not needed for quay:.
+  # 1 lets bootstrap use the general quay.io entry of an auth file that the
+  # QUAY_AUTH_FILE environment variable names, when the file has no
+  # quay.io/rhoai entry. Not needed for quay:.
   # ALLOW_GENERIC_LOGIN: 1
 
   # The lifetime of the provider-admin token make install writes to
