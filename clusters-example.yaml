@@ -1,14 +1,24 @@
 # Your AI Grid deployment: its clusters, its repositories and the install's
-# options. It's the one file you edit.
+# options. It's the one file you edit. Copy it to one of two places:
 #
-# Copy this file to clusters.yaml, replace each REQUIRED- value, and commit it:
+# - .config/clusters.yaml, for the one-command install (install guide, page 9).
+#   It's private: git ignores .config/, and the file also holds your secrets
+#   (the credentials:, github: and quay: sections at the end). Copy it with:
 #
-#   cp clusters-example.yaml clusters.yaml
+#     mkdir -p .config && chmod 700 .config
+#     cp clusters-example.yaml .config/clusters.yaml && chmod 600 .config/clusters.yaml
 #
-# The install scripts read clusters.yaml to find each cluster, and your
-# repository keeps a record of which clusters make up your grid. Nothing in it
-# is secret: each cluster's token and login, and the GitHub tokens, live in the
-# git-ignored .config/ (make secrets, then make login).
+#   The scripts stop if the file is readable by anyone but you.
+#
+# - clusters.yaml at the root of your repository, for the page-by-page guide
+#   (pages 1 to 8). You commit it, so it records which clusters make up your
+#   grid, and it can't hold secrets: the scripts refuse credentials:, github:
+#   and quay: in it. Copy it with:
+#
+#     cp clusters-example.yaml clusters.yaml
+#
+# Replace each REQUIRED- value. When .config/clusters.yaml exists, the scripts
+# read it and ignore clusters.yaml.
 apiVersion: ai-grid.dev/v1alpha1
 kind: Clusters
 
@@ -35,7 +45,7 @@ sites:
     # needed only when an ingress or combined site has several.
     # issuer: letsencrypt-dns
 
-  # Add a site: copy the lines above, starting at "- name:".
+  # Add a site: copy the first site's lines, starting at "- name:".
 
 repositories:
   # The catalog repository the provider console writes models and
@@ -51,18 +61,12 @@ repositories:
 # its default. A setting left out here comes from the environment variable of
 # the same name, else the default.
 options:
-  # Files under the git-ignored .config/ that make secrets writes. Relative
-  # paths are relative to this repository; ~/ is your home.
-  # DEPLOYMENT_TOKEN_FILE: .config/deployment-token   # can push to this repository
-  # CATALOG_TOKEN_FILE: .config/catalog-token         # can write the catalog repository
-  # QUAY_AUTH_FILE: .config/quay-auth.json            # a quay.io/rhoai login
-
   # Use an existing component instead of installing one. Only "install" is
   # supported in this version.
   # KEYCLOAK: install
 
-  # 1 lets bootstrap use a general quay.io login from QUAY_AUTH_FILE when it
-  # has no quay.io/rhoai entry. Default: empty (quay.io/rhoai is required).
+  # 1 lets bootstrap use a general quay.io account, under quay:, instead of a
+  # quay.io/rhoai robot account. Default: empty (quay.io/rhoai is required).
   # ALLOW_GENERIC_LOGIN: 1
 
   # The lifetime of the provider-admin token make install writes to
@@ -77,3 +81,23 @@ options:
   # GATE_READY_SECONDS: 600        # scripts/ready-check.sh passes
   # GATE_INTERVAL: 15              # seconds between a gate's checks
   # GATE_ERROR_LIMIT: 4            # consecutive oc errors before a gate fails
+
+# Secrets: only in .config/clusters.yaml, never in the committed clusters.yaml.
+# make secrets asks for each one, without showing what you paste, and writes it
+# here. To fill them in by hand instead, uncomment these lines and replace each
+# value. Environment variables override them (install guide, page 9).
+#
+# credentials:                 # one entry for each cluster: hub, and each site's name
+#   hub:
+#     token: sha256~TOKEN        # a cluster-admin token, from oc whoami -t; or
+#   site-east-1:
+#     username: kubeadmin        # a cluster-admin username and password: the scripts
+#     password: PASSWORD         # get a fresh token on every run, so a rerun works the
+#                                # next day; or
+#     # kubeconfig: /path/to/kubeconfig   # a working kubeconfig to copy
+# github:
+#   deploymentToken: github_pat_TOKEN   # can push to this repository
+#   catalogToken: github_pat_TOKEN      # can write the catalog repository
+# quay:                          # your quay.io/rhoai robot account
+#   username: rhoai+robot
+#   password: PASSWORD
