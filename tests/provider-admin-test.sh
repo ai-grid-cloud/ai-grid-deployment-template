@@ -74,7 +74,8 @@ t "creates SA, binding and token file" 0 "console accepted the provider-admin to
   'grep -q "Authorization: Bearer SENTINEL" "$W/headers"' \
   '! grep -q SENTINEL "$W/curl.log"' '! grep -qE -- " (-k|--insecure) " "$W/curl.log"' \
   'grep -q "https://console.apps.hub.example.com/ai_grid.v1.Clusters/List" "$W/curl.log"' \
-  'grep -q "Connect-Protocol-Version: 1" "$W/curl.log"'
+  'grep -q "Connect-Protocol-Version: 1" "$W/curl.log"' \
+  '[ -s "$W/curl.log" ] && [ -z "$(grep -v -e "--max-time 20" "$W/curl.log")" ]'
 
 W="$T/norole"; mkdir -p "$W"; touch "$W/no-clusterrole"; rm -f "$TOK"; run
 t "no ClusterRole: stops" 1 "ClusterRole ai-grid-provider-admin" \

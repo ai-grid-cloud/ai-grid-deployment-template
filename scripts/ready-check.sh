@@ -188,7 +188,7 @@ done
 # No test content: the console lists no organizations, models or subscriptions.
 none_listed() { # SERVICE NOUN: ai_grid.v1.SERVICE/List lists no NOUN
   local code n
-  code=$(curl -sS -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
+  code=$(curl -sS --max-time 20 -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
     -H 'Connect-Protocol-Version: 1' --data-binary '{}' -w '%{http_code}' \
     "https://$console_host/ai_grid.v1.$1/List" 2>/dev/null) || code=000
   n=$(jq -r '.total // (.items | length)' "$tmp/body" 2>/dev/null || true)

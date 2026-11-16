@@ -146,6 +146,7 @@ t "all ready: OK and outputs.json" 0 "^OK " \
   'grep -q "^OK .*no models" <<<"$out"' 'grep -q "^OK .*no subscriptions" <<<"$out"' \
   'grep -q "https://console.apps.hub.example.com/ai_grid.v1.Models/List" "$W/curl.log"' \
   'grep -q "https://console.apps.hub.example.com/ai_grid.v1.Subscriptions/List" "$W/curl.log"' \
+  '[ -z "$(grep ai_grid.v1 "$W/curl.log" | grep -v -e "--max-time 20")" ]' \
   'grep -q "^OK .*Perses" <<<"$out"' \
   '! grep -qwE "apply|create|delete|patch|edit|label|annotate|replace|scale|rollout" "$W/argv.log"'
 
