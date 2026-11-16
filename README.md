@@ -1,7 +1,8 @@
 > **Prototype:** this template pins one fixed commit of
 > [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) from branch
-> `feat/deployment-inputs`, until that branch merges into `main`. The commit is `libraryRevision` in
-> `root/kustomization.yaml`.
+> `deployment-template`, until its changes merge into `main`. The commit is `libraryRevision` in
+> `root/kustomization.yaml`. `make install` pins that branch's current commit instead (`LIBRARY_REVISION` in
+> `install.env`).
 
 # AI Grid deployment template
 
