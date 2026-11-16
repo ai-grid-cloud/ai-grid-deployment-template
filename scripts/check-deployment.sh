@@ -4,15 +4,15 @@
 # REQUIRED-<name> placeholder is left in the repository's other YAML or JSON
 # files, and every repository the root and its apps/*.yaml read is one of the
 # three set as inputs (libraryRepoURL, deploymentRepoURL, catalogRepoURL) or an
-# @input@ token. The last check catches a URL left over from a repository you
-# copied.
+# @input@ token, and hub/catalog/ names the catalog repository and revision
+# inputs.env does. The repository check catches a URL left over from a
+# repository you copied.
 #
 # Usage: scripts/check-deployment.sh [DEPLOYMENT_DIR]   (default: this repository)
 set -Eeuo pipefail
 dir=${1:-$(cd "$(dirname "$0")/.." && pwd)}
 [ $# -le 1 ] && [ -d "$dir/root" ] || { echo "Usage: check-deployment.sh [DEPLOYMENT_DIR] (a checkout with root/)" >&2; exit 2; }
 . "$(dirname "$0")/deployment-inputs.sh"
-. "$(dirname "$0")/library.sh"
 deployment_render "$dir"
 out=$DEPLOYMENT_ROOT
 left="$(printf '%s\n' "$out" | grep -v 'regexFind "REQUIRED-' | grep -oE 'REQUIRED-[a-zA-Z]+' | sed 's/^REQUIRED-//' | sort -u | tr '\n' ' ' || true)"
@@ -25,12 +25,9 @@ placeholders="$(cd "$dir" && grep -rnoE --include='*.yaml' --include='*.yml' --i
 [ -z "$left$placeholders" ] || exit 1
 # clusters.yaml, when there is one: a hub, and sites with known roles.
 if [ -f "$dir/clusters.yaml" ]; then . "$(dirname "$0")/clusters.sh"; clusters_load "$dir" || exit 1; fi
-# Every input the library declares (its bootstrap/hub generator values) must
-# be set: replacing the values map can drop one without leaving a marker.
-library_dir "$dir"
-declared="$(oc kustomize "$LIB/bootstrap/hub" | sed -n 's/^ *\([a-zA-Z]*\): REQUIRED-\1$/\1/p' | sort -u)"
+# Every input the root declares must be set to a value.
 unset_inputs=""
-for n in $declared; do
+for n in deploymentRepoURL deploymentRevision catalogRepoURL catalogRevision libraryRepoURL libraryRevision; do
   v="$(deployment_input "$n")"
   [ -n "$v" ] && [ "$v" = "${v#REQUIRED-}" ] || unset_inputs="$unset_inputs $n"
 done
@@ -43,4 +40,11 @@ stray="$( { printf '%s\n' "$out"; cat "$dir"/apps/*.yaml 2>/dev/null || true; } 
   sed -n "s/^ *repoURL: *//p" | tr -d "'\"" | grep -v '^@[a-zA-Z]*@$' | norm | sort -u |
   grep -vxF -f <(printf '%s\n' "$allowed") || true)"
 [ -z "$stray" ] || { echo "repositories that aren't your library, deployment or catalog input:"; echo "$stray"; exit 1; }
+# hub/catalog/ (scripts/set-inputs.sh writes it from inputs.env).
+want="$(deployment_input catalogRepoURL) $(deployment_input catalogRevision)"
+have="$(yq '.. | select(tag == "!!map") | (.repoURL, .revision, .targetRevision, .sourceRepos[]?) | select(. != null)' \
+  "$dir"/hub/catalog/*.yaml 2>/dev/null | grep -vx -- --- | sort -u | tr '\n' ' ')"
+for v in $have; do
+  case " $want " in *" $v "*) ;; *) echo "hub/catalog names $have; your inputs are $want: run scripts/set-inputs.sh"; exit 1 ;; esac
+done
 echo "root renders; every input is set; every repository is an input."

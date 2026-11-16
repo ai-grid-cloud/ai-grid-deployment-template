@@ -1,0 +1,167 @@
+# The hub's root ApplicationSet, for the upstream library's main branch. It is
+# modelled on the library's bootstrap/dedicated-hub/applicationset.yaml, and
+# differs from it in these ways (docs/upstream-main-limits.md lists what it can't
+# change):
+# - It reads the library at one pinned commit (libraryRevision below), not at
+#   HEAD. The templatePatch also pins every library source of each generated
+#   Application. Objects those Applications render that read the library
+#   themselves still read HEAD.
+# - It has no sample model or MaaS subscription, and doesn't select acm-models:
+#   the catalog's AppProjects and ApplicationSets are this repository's
+#   hub/catalog (apps/catalog.yaml). acm-models' only other object is a
+#   GitOpsCluster that duplicates argo-registration's.
+# - Keycloak is the library's core profile (no example tenant realms).
+# - The console writes to this deployment's catalog repository.
+# - ai-grid-o11y is this repository's apps/ai-grid-o11y.yaml.
+# - It doesn't select the library's dedicated-hub-root, which would replace this
+#   ApplicationSet with upstream's. deployment-root (self.yaml) syncs root/
+#   instead.
+# - cert-manager is the platform's. metallb serves only lab clusters labelled
+#   ai-grid/metallb-pool. Neither is selected.
+#
+# To upgrade the library, change libraryRevision (scripts/set-library.sh); the
+# anchors below reuse it. The other inputs come from inputs.env
+# (kustomization.yaml).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    applicationsSync: sync
+    # Keep deployed resources when the root or a generated Application is removed.
+    preserveResourcesOnDeletion: true
+  generators:
+    # 0: the library's components this hub runs.
+    - git:
+        # Every input. Components in this repository (apps/*.yaml) write them as
+        # @<name>@; the templatePatch replaces them. The REQUIRED- values come
+        # from inputs.env (kustomization.yaml).
+        values: &inputs
+          libraryRepoURL: &libraryRepoURL https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git
+          libraryRevision: &libraryRevision 498527d3c73f9ca3491d100853fe552813a5ad24
+          deploymentRepoURL: REQUIRED-deploymentRepoURL
+          deploymentRevision: REQUIRED-deploymentRevision
+          catalogRepoURL: REQUIRED-catalogRepoURL
+          catalogRevision: REQUIRED-catalogRevision
+        repoURL: *libraryRepoURL
+        revision: *libraryRevision
+        files:
+          # Platform services.
+          - path: apps/gitops-config/application.yaml
+          - path: apps/external-secrets/application.yaml
+          # ACM, the multicluster engine and Submariner; ODF is generator 1.
+          - path: apps/acm/application.yaml
+          # Grid.
+          - path: apps/grid-bootstrap/application.yaml
+          - path: apps/ai-grid-policies/application.yaml
+          # MaaS shared services on the hub.
+          - path: apps/maas-db/application.yaml
+          - path: apps/limitador-redis/application.yaml
+          # Tenant identity: the library's Keycloak (core profile, below).
+          - path: apps/keycloak/application.yaml
+          # Provider console. Its catalog is apps/catalog.yaml here.
+          - path: apps/console/application.yaml
+          # Site delivery.
+          - path: apps/ai-grid-spokes/application.yaml
+          - path: apps/argo-registration/application.yaml
+          - path: apps/rhoai/application.yaml
+          - path: apps/rhoai-prerequisites/application.yaml
+          # Usage logs; ai-grid-o11y is apps/ai-grid-o11y.yaml here.
+          - path: apps/ai-grid-usage-logs/application.yaml
+    # 1: ODF, whose operator channel follows the hub's OpenShift minor version:
+    # it waits for ACM's registration of the hub and its version label.
+    - matrix:
+        generators:
+          - git:
+              repoURL: *libraryRepoURL
+              revision: *libraryRevision
+              files:
+                - path: apps/odf/application.yaml
+              values: *inputs
+          - clusters:
+              selector:
+                matchLabels:
+                  apps.open-cluster-management.io/cluster-name: local-cluster
+                matchExpressions:
+                  - key: openshiftVersion-major-minor
+                    operator: Exists
+    # 2: this deployment's own components, apps/*.yaml in this repository.
+    - git:
+        repoURL: REQUIRED-deploymentRepoURL
+        revision: REQUIRED-deploymentRevision
+        files:
+          - path: apps/*.yaml
+        values: *inputs
+  template:
+    metadata:
+      name: '{{.metadata.name}}'
+      namespace: '{{.metadata.namespace}}'
+    spec:
+      project: '{{.spec.project}}'
+      destination:
+        server: '{{.spec.destination.server}}'
+        namespace: '{{.spec.destination.namespace}}'
+  # Per component:
+  # - every source that reads the library: at libraryRevision.
+  # - grid-bootstrap: a new grid generates its CA and binds the global cluster
+  #   set (as upstream's dedicated-hub root).
+  # - odf: the channel follows the hub's version; a hub labelled
+  #   ai-grid/odf-operatorgroup=existing keeps its own OperatorGroup.
+  # - keycloak: the core profile, the saas broker realm with no example tenants.
+  # - console: commits models and subscriptions to catalogRepoURL.
+  # - limitador-redis: Limitador runs on the sites, so no storage config here.
+  # - rhoai: grid-bootstrap owns the global binding.
+  # Then every @<name>@ is replaced from the generator's values. An unset input
+  # fails the Application with "missing input: <name>"; an empty one, or one
+  # with ", ', \ or @, with "invalid input: <name>".
+  templatePatch: |
+    {{- $spec := .spec }}
+    {{- $lib := trimSuffix ".git" .values.libraryRepoURL }}
+    {{- $sources := list }}
+    {{- if hasKey $spec "source" }}{{ $sources = append $sources $spec.source }}{{ end }}
+    {{- if hasKey $spec "sources" }}{{ range $spec.sources }}{{ $sources = append $sources . }}{{ end }}{{ end }}
+    {{- range $sources }}
+    {{- if eq (trimSuffix ".git" .repoURL) $lib }}{{ $_ := set . "targetRevision" $.values.libraryRevision }}{{ end }}
+    {{- end }}
+    {{- if eq .metadata.name "grid-bootstrap" }}
+    {{- range $spec.sources }}{{ if hasKey . "helm" }}
+    {{- $_ := set .helm "parameters" (list (dict "name" "external.certManager.ca.mode" "value" "Generate") (dict "name" "managedClusters.createClusterSetBinding" "value" "true")) }}
+    {{- end }}{{ end }}
+    {{- end }}
+    {{- if eq .metadata.name "odf" }}
+    {{- $params := list (dict "name" "openshift.version" "value" (index .metadata.labels "openshiftVersion-major-minor")) }}
+    {{- if eq (index .metadata.labels "ai-grid/odf-operatorgroup") "existing" }}
+    {{- $params = append $params (dict "name" "operatorGroup.create" "value" "false") }}
+    {{- end }}
+    {{- $_ := set $spec.source.helm "parameters" $params }}
+    {{- end }}
+    {{- if eq .metadata.name "keycloak" }}
+    {{- $_ := set $spec.source "path" "apps/keycloak/overlays/core" }}
+    {{- end }}
+    {{- if eq .metadata.name "console" }}
+    {{- range $spec.sources }}{{ if hasKey . "helm" }}
+    {{- $git := .helm.valuesObject.backend.git }}
+    {{- $_ := set $git "url" $.values.catalogRepoURL }}
+    {{- $_ := set $git "branch" $.values.catalogRevision }}
+    {{- end }}{{ end }}
+    {{- end }}
+    {{- if eq .metadata.name "limitador-redis" }}
+    {{- $_ := set $spec.source "directory" (dict "exclude" "{04-limitador-redis-secret.yaml,20-limitador-storage.yaml}") }}
+    {{- end }}
+    {{- if eq .metadata.name "rhoai" }}
+    {{- $_ := set $spec.source "directory" (dict "exclude" "00-managed-cluster-set-binding-grid.yaml") }}
+    {{- end }}
+    {{- $json := toJson $spec }}
+    {{- range $name, $value := $.values }}
+    {{- if or (eq $value "") (regexMatch `["'\\@]` $value) }}{{ fail (printf "invalid input: %s (empty, or contains \" ' \\ or @)" $name) }}{{ end }}
+    {{- $json = replace (printf "@%s@" $name) $value $json }}
+    {{- end }}
+    {{- with regexFind "@[a-zA-Z]+@" $json }}{{ fail (printf "missing input: %s" (trimAll "@" .)) }}{{ end }}
+    {{- with regexFind "REQUIRED-[a-zA-Z]+" $json }}{{ fail (printf "missing input: %s" (trimPrefix "REQUIRED-" .)) }}{{ end }}
+    spec: {{ $json }}

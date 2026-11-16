@@ -79,7 +79,7 @@ w=$(world all-ok); A=$(authfile both quay.io/rhoai registry.stage.redhat.io)
 TOK="$T/token"; printf 'x' > "$TOK"; chmod 600 "$TOK"
 mkdep() { # name clusters-body: a deployment at the pin with that clusters.yaml and a login for each cluster
   local d="$T/$1"; mkdir -p "$d/root"
-  printf '        libraryRevision: %s\n' "$("$GIT" -C "$LIBD" rev-parse HEAD)" > "$d/root/kustomization.yaml"
+  printf '        libraryRevision: &libraryRevision %s\n' "$("$GIT" -C "$LIBD" rev-parse HEAD)" > "$d/root/applicationset.yaml"
   printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\n%b\n' "$2" > "$d/clusters.yaml"
   for n in $(grep -oE 'name: [a-z0-9-]+' "$d/clusters.yaml" | cut -d' ' -f2); do mkdir -p "$d/.config/$n"; : > "$d/.config/$n/kubeconfig"; done
   echo "$d"
@@ -87,7 +87,7 @@ mkdep() { # name clusters-body: a deployment at the pin with that clusters.yaml 
 D=$(mkdep deployment "hub: {name: hub, api: 'https://api.hub:6443'}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: 'https://api.site-b:6443'}")
 ALL=(--deployment "$D" --quay-auth-file "$A" --catalog-token-file "$TOK")
 t "all ok: no problem lines" '^[0-9]+ ok$' "$T/bin" "$w" "${ALL[@]}"
-t "all ok: site ClusterIssuer with DNS-01" '^ok +ClusterIssuer +le-dns \(DNS-01\)' "$T/bin" "$w" "${ALL[@]}"
+t "site ClusterIssuer: not needed on upstream main, and why" '^ok +ClusterIssuer +not needed: upstream main can.t attach a MaaS certificate \(docs/upstream-main-limits.md, L5\)' "$T/bin" "$w" "${ALL[@]}"
 t "all ok: catalog pulls" '^ok +pull the pinned catalog +quay.io/rhoai/rhoai-fbc-fragment' "$T/bin" "$w" "${ALL[@]}"
 if grep -qE "$TOKEN|$PASSWORD" "$w/argv.log"; then echo "   FAIL a secret reached oc's argv"; fails=$((fails+1)); else echo "   ok   no secret on oc's argv"; fi
 if grep -qwE 'apply|create|delete|patch|edit|label|annotate|replace|scale' "$w/argv.log"; then
@@ -95,7 +95,7 @@ if grep -qwE 'apply|create|delete|patch|edit|label|annotate|replace|scale' "$w/a
 total=$((total+2))
 
 t "library at the pin" '^ok +library at your pin' "$T/bin" "$w" "${ALL[@]}"
-mkdir -p "$T/other/root"; echo "  libraryRevision: 0123456789abcdef0123456789abcdef01234567" > "$T/other/root/kustomization.yaml"
+mkdir -p "$T/other/root"; echo "  libraryRevision: &libraryRevision 0123456789abcdef0123456789abcdef01234567" > "$T/other/root/applicationset.yaml"
 t "library not at the pin" '^FAIL +library at your pin +.* not 0123456789ab: git -C ' "$T/bin" "$w" --deployment "$T/other"
 keep=$LIBD; LIBD="$T/no-library"
 t "library not cloned" '^FAIL +library at your pin +no library checkout at .*no-library: run scripts/library.sh' "$T/bin" "$w" "${ALL[@]}"
@@ -129,10 +129,8 @@ echo '{"items":[{"metadata":{"name":"gp2"}}]}' > "$w/storageclasses.json"
 t "OpenShift 4.20 is OLD" '^OLD +OpenShift 4.21 or later +4.20.5' "$T/bin" "$w" --deployment "$D"
 t "not cluster-admin" '^MISSING +cluster-admin' "$T/bin" "$w" --deployment "$D"
 t "no default StorageClass" '^MISSING +default StorageClass' "$T/bin" "$w" --deployment "$D"
-echo '{"items":[{"metadata":{"name":"self-signed"},"spec":{"selfSigned":{}}}]}' > "$w/clusterissuers.json"
-t "ClusterIssuer without DNS-01" '^MISSING +ClusterIssuer +self-signed \(no DNS-01\)' "$T/bin" "$w" --deployment "$D"
 touch "$w/fail-issuers"
-t "no cert-manager" '^MISSING +ClusterIssuer +error: the server' "$T/bin" "$w" --deployment "$D"
+t "no cert-manager on a site: no ClusterIssuer check" '^ok +ClusterIssuer +not needed' "$T/bin" "$w" --deployment "$D"
 touch "$w/fail-whoami"
 t "unreachable cluster" '^FAIL +reachable +hub: error: Unauthorized' "$T/bin" "$w" --deployment "$D"
 t "unreachable cluster skips the rest" '^skipped +cluster-admin +cluster not reachable' "$T/bin" "$w" --deployment "$D"

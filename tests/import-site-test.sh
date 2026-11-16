@@ -42,7 +42,7 @@ STUB
 chmod +x "$T/bin/oc"
 
 D="$T/repo"; mkdir -p "$D/root"; cp -R "$SRC/scripts" "$D/"
-printf '  libraryRevision: %s\n' "$(git -C "$T/lib" rev-parse HEAD)" > "$D/root/kustomization.yaml"
+printf '  libraryRepoURL: file://%s\n  libraryRevision: &libraryRevision %s\n' "$T/lib" "$(git -C "$T/lib" rev-parse HEAD)" > "$D/root/applicationset.yaml"
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
 for n in hub site-b; do
   mkdir -p "$D/.config/$n"

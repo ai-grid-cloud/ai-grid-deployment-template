@@ -1,33 +1,26 @@
 #!/usr/bin/env bash
 # Pin the library at a revision: resolve REVISION (a branch, a tag or a full
-# commit SHA) against libraryRepoURL in root/kustomization.yaml, and write the
-# SHA into the root's three pin places in one go:
+# commit SHA) against libraryRepoURL in root/applicationset.yaml, and write the
+# SHA into libraryRevision there, the root's one pin place (the generators'
+# revisions are YAML aliases of it).
 #
-#   the remote base            ...//bootstrap/hub?ref=SHA
-#   the generator revision     /spec/generators/0/git/revision's replace value
-#   values.libraryRevision     libraryRevision: SHA
-#
-# Only those three values change; every comment and line around them stays,
-# and so does a YAML anchor on the value (value: &libraryRevision SHA).
-# It prints "pinned URL at SHA (REVISION)", or "already pinned" when the root
-# already pins that SHA. It doesn't commit: commit root/kustomization.yaml
-# yourself, or with scripts/git-push.sh.
+# Only that value changes; every comment and line around it stays, and so does
+# its YAML anchor (libraryRevision: &libraryRevision SHA). It prints "pinned URL
+# at SHA (REVISION)", or "already pinned" when the root already pins that SHA.
+# It doesn't commit: commit root/applicationset.yaml yourself, or with
+# scripts/git-push.sh.
 #
 # Usage: scripts/set-library.sh REVISION
-# Exit 1 when REVISION isn't in the library or the remote base names another
-# repository than libraryRepoURL, 2 on a usage error.
+# Exit 1 when REVISION isn't in the library, 2 on a usage error.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 dir="$(cd "$here/.." && pwd)"
 [ $# -eq 1 ] && [ -n "$1" ] || { echo "usage: set-library.sh REVISION" >&2; exit 2; }
 rev=$1
-k="$dir/root/kustomization.yaml"
-url=$(sed -n -E 's/^[[:space:]]*libraryRepoURL:[[:space:]]*([^[:space:]#]+).*/\1/p' "$k" | head -n1)
+k="$dir/root/applicationset.yaml"
+. "$here/library.sh"
+url=$(library_pin "$dir" libraryRepoURL)
 [ -n "$url" ] || { echo "error: no libraryRepoURL in $k" >&2; exit 1; }
-base=$(sed -n -E 's#^[[:space:]]*-[[:space:]]+([^[:space:]]+)//bootstrap/hub\?ref=.*#\1#p' "$k" | head -n1)
-if [ -n "$base" ] && [ "${base%.git}" != "${url%.git}" ]; then
-  echo "error: the remote base in $k names $base, but libraryRepoURL is $url; make them the same repository" >&2; exit 1
-fi
 export GIT_TERMINAL_PROMPT=0
 
 refs=$(git ls-remote "$url" 2>&1) || { echo "error: can't read the library at $url: $(tail -n1 <<<"$refs")" >&2; exit 1; }
@@ -57,9 +50,7 @@ import os, re, sys
 path, sha, url, rev = sys.argv[1:]
 before = text = open(path).read()
 places = [
-    ("the remote base", r"(^\s*-\s+\S+//bootstrap/hub\?ref=)([^\s#]+)"),
-    ("the generator revision", r"(\{\s*op:\s*replace,\s*path:\s*/spec/generators/0/git/revision,\s*value:\s*(?:&[\w-]+\s+)?)([^\s,}#]+)"),
-    ("values.libraryRevision", r"(^\s*libraryRevision:\s*)([^\s#]+)"),
+    ("libraryRevision", r"(^\s*libraryRevision:[ \t]*(?:&[\w-]+[ \t]+)?)([0-9a-f]{40})\b"),
 ]
 for name, pattern in places:
     found = re.findall(pattern, text, flags=re.M)

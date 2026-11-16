@@ -119,13 +119,13 @@ def check_library(deployment):
     if not deployment:
         report("skipped", "library at your pin", "pass --deployment DIR (make prereqs does)")
         return
-    k = os.path.join(deployment, "root", "kustomization.yaml")
+    k = os.path.join(deployment, "root", "applicationset.yaml")
     try:
         text = open(k).read()
     except OSError:
         report("FAIL", "library at your pin", f"can't read {k}")
         return
-    m = re.search(r"^\s*libraryRevision:\s*(\S+)", text, re.M)
+    m = re.search(r"^\s*libraryRevision:\s*(?:&[\w-]+\s+)?([0-9a-f]+)", text, re.M)
     if not m:
         report("FAIL", "library at your pin", f"no libraryRevision in {k}")
         return
@@ -309,25 +309,11 @@ def check_cluster(name, role, kubeconfig):
         else:
             report("MISSING", "default StorageClass", "no StorageClass is marked default")
 
-    if "ClusterIssuer" not in names:
-        return
-    rc, out, err = oc("get", "clusterissuers.cert-manager.io", "-o", "json")
-    try:
-        items = json.loads(out).get("items", []) if rc == 0 else None
-    except ValueError:
-        items = None
-    if items is None:
-        report("MISSING", "ClusterIssuer", first_line(err) or "can't list ClusterIssuers (is cert-manager installed?)")
-    elif not items:
-        report("MISSING", "ClusterIssuer", "none; the site needs one that issues by DNS-01")
-    else:
-        parts = []
-        for i in items:
-            solvers = (((i.get("spec") or {}).get("acme") or {}).get("solvers")) or []
-            dns01 = any(isinstance(s, dict) and s.get("dns01") for s in solvers)
-            parts.append(f"{i['metadata']['name']} ({'DNS-01' if dns01 else 'no DNS-01'})")
-        status = "ok" if any("(DNS-01)" in p for p in parts) else "MISSING"
-        report(status, "ClusterIssuer", ", ".join(parts))
+    if "ClusterIssuer" in names:
+        # The template's other branches need a DNS-01 ClusterIssuer for the
+        # site's publicly trusted MaaS certificate; upstream main can't use one.
+        report("ok", "ClusterIssuer",
+               "not needed: upstream main can't attach a MaaS certificate (docs/upstream-main-limits.md, L5)")
 
 
 def check_catalog_token(path):
