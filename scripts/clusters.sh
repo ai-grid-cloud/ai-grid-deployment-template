@@ -19,7 +19,7 @@
 
 CLUSTERS_DIR="" CLUSTERS_ROWS="" CLUSTERS_JSON=""
 # The keys clusters.yaml's options: may hold (make install's settings).
-SETTINGS_OPTIONS_RE='DEPLOYMENT_TOKEN_FILE|CATALOG_TOKEN_FILE|QUAY_AUTH_FILE|KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_[A-Z0-9_]+'
+SETTINGS_OPTIONS_RE='DEPLOYMENT_TOKEN_FILE|CATALOG_TOKEN_FILE|QUAY_AUTH_FILE|KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_ROOT_SECONDS|GATE_MCH_SECONDS|GATE_HUB_APPS_SECONDS|GATE_SITE_IMPORT_SECONDS|GATE_READY_SECONDS|GATE_INTERVAL|GATE_ERROR_LIMIT'
 INSTALL_NS_RE='open-cluster-management|multicluster-engine|redhat-ods|redhat-ai-grid|maas|ai-grid|gitops|kuadrant|submariner'
 
 clusters_load() {
@@ -66,18 +66,16 @@ clusters_load() {
 # LIBRARY_REVISION, a site's issuer is SITE_ISSUER_<NAME> (the name upper-cased,
 # - as _), and each options key is itself. true is 1, false and null are empty.
 settings_lines() {
+  # A value spread over lines would come out as more than one setting: refuse it.
   jq -r '
-    def v: if . == true then "1" elif . == false or . == null then "" else tostring end;
+    def v: if . == true then "1" elif . == false or . == null then ""
+      else tostring | if test("[\\n\\r]") then error("a setting'"'"'s value spans lines") else . end end;
     (if (.repositories // {}) | has("catalog") then "CATALOG_REPO_URL=\(.repositories.catalog | v)" else empty end),
     (if (.repositories // {}) | has("library") then "LIBRARY_REVISION=\(.repositories.library | v)" else empty end),
     ((.sites // [])[] | select(has("issuer"))
       | "SITE_ISSUER_\(.name | ascii_upcase | gsub("-"; "_"))=\(.issuer | v)"),
-    ((.options // {}) | to_entries[] | "\(.key)=\(.value | v)")' <<<"$CLUSTERS_JSON" |
-    while IFS= read -r line; do
-      # A value spread over lines would come out as two settings: refuse it.
-      [[ "$line" =~ ^[A-Z][A-Z0-9_]*= ]] || { echo "error: clusters.yaml: a setting's value spans lines" >&2; return 1; }
-      printf '%s\n' "$line"
-    done
+    ((.options // {}) | to_entries[] | "\(.key)=\(.value | v)")' <<<"$CLUSTERS_JSON" 2>/dev/null ||
+    { echo "error: clusters.yaml: a setting's value spans lines" >&2; return 1; }
 }
 
 hub_name() { awk '$2 == "hub" {print $1}' <<<"$CLUSTERS_ROWS"; }

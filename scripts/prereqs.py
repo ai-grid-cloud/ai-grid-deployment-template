@@ -15,8 +15,9 @@ make install uses. QUAY_AUTH_FILE and CATALOG_TOKEN_FILE under options: in the
 deployment's clusters.yaml win over the environment variables of the same names; a key
 it leaves out takes the environment variable; an empty value means
 .config/quay-auth.json and .config/catalog-token; a relative path is relative to the
-deployment. When clusters.yaml can't be read or sets no repositories.catalog (the
-page-by-page guide), the environment variables apply, else
+deployment. When clusters.yaml can't be read, or there's no catalog in its
+repositories.catalog or else CATALOG_REPO_URL (the page-by-page guide), the
+environment variables apply, else
 QUAY_AUTH_FILE is the first of
 ~/.config/containers/auth.json and $XDG_RUNTIME_DIR/containers/auth.json that
 exists, and CATALOG_TOKEN_FILE is ~/.ai-grid/catalog-token if it exists. A check whose input you haven't set prints
@@ -53,6 +54,7 @@ TOOLS = [
     ("python3", ["python3", "--version"], "reads cluster state in the setup scripts"),
     ("clusteradm", ["clusteradm", "version"], "imports the site into ACM"),
     ("make", ["make", "--version"], "runs make prereqs"),
+    ("podman", ["podman", "--version"], "make secrets: the quay.io/rhoai login"),
 ]
 
 results = []
@@ -400,9 +402,11 @@ def deployment_settings(deployment):
     if p.returncode != 0:
         return None
     settings = dict(line.split("=", 1) for line in p.stdout.splitlines() if "=" in line)
-    # Without a catalog the deployment isn't set up for make install (the page-by-page
-    # guide doesn't set one), so the files it uses don't apply.
-    return settings if settings.get("CATALOG_REPO_URL") else None
+    # Without a catalog, from the file or else the environment as make install takes it,
+    # the deployment isn't set up for make install (the page-by-page guide sets none),
+    # so the files it uses don't apply.
+    catalog = settings["CATALOG_REPO_URL"] if "CATALOG_REPO_URL" in settings else os.environ.get("CATALOG_REPO_URL")
+    return settings if catalog else None
 
 
 def install_path(key, deployment, settings):
