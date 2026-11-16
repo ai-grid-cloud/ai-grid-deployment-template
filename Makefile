@@ -23,8 +23,8 @@ need = $(if $($(1)),,$(error set $(1), such as: make $@ $(1)=$(2)))
 help: ## Show the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /: /'
 
-login: ## Log in to each cluster in clusters.yaml that needs it; NAME=... for one
-	@scripts/login.sh $(NAME)
+login: ## Log in to each cluster in clusters.yaml that needs it; NAME=... for one; NONINTERACTIVE=1 for no browser
+	@scripts/login.sh $(if $(filter 1,$(NONINTERACTIVE)),--non-interactive) $(NAME)
 
 prereqs: ## Report what is installed and what isn't found; never blocks
 	-@scripts/library.sh >/dev/null

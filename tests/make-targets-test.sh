@@ -93,4 +93,7 @@ t "tenant-call SITE= passes --site" 0 "--site site-c" make -n -C "$two" tenant-c
 t "tenant-user uses the hub's login" 0 'kubeconfig "\.config/\$\(scripts/clusters\.sh --hub\)/kubeconfig"' \
   make -n -C "$one" tenant-user ORG=o TENANT_USER=u PASSWORD_FILE=p
 
+t "make login NONINTERACTIVE=1 passes --non-interactive" 0 "^scripts/login.sh --non-interactive *$" make -n -C "$one" login NONINTERACTIVE=1
+t "make login without it: unchanged" 0 "^scripts/login.sh *$" make -n -C "$one" login
+
 echo "make-targets tests: $((total-fails)) ok, $fails failed"; exit "$fails"
