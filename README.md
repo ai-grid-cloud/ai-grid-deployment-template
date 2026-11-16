@@ -48,6 +48,9 @@ and which the template doesn't have; to upgrade, you move the library pin. For m
 
 2. Follow the [install guide](docs/install/README.md) in your new repository.
 
+   To install unattended with one command, for a test suite or a CI job, see
+   [Install with one command](docs/install/09-hands-off.md).
+
 ## Update from the template
 
 Your repository doesn't follow the template by itself. To pick up the template's later fixes, merge them in from

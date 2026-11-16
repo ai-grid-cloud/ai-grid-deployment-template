@@ -23,6 +23,9 @@ For what AI Grid is and how its parts fit together, see [How AI Grid works](http
 
 To add more sites, repeat pages 5 and 6 for each.
 
+To install the hub and import your sites with one unattended command instead of pages 2 to 5, for a test suite or a
+CI job, see [9. Install with one command](09-hands-off.md).
+
 ## Reference
 
 - [Troubleshooting](troubleshooting.md): problems while following this guide.
