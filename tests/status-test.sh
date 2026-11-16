@@ -30,6 +30,7 @@ case "$a" in
   *" get applicationsets.argoproj.io apps "*) ans appset.json ;;
   *" get applications.argoproj.io "*) ans apps.json ;;
   *" get multiclusterhub "*) ans mch ;;
+  *" get pods -n ai-grid-provider-console "*) ans console-pods.json ;;
   *" get pods "*) ans pods.json ;;
   *" get placements."*) ans placements.json ;;
   *" get datasciencecluster "*) ans dsc ;;
@@ -58,6 +59,7 @@ t "fresh: no MultiClusterHub" "^MultiClusterHub: not created yet$"
 t "fresh: no controller pod" "^Argo CD controller: no pod yet$"
 t "fresh: no tenant-idp" "^tenant-idp: not created yet$"
 t "fresh: no console" "^Console: no Route yet$"
+t "fresh: no console pod" "^Console pod: none yet$"
 t "fresh: no deployment-root" "^deployment-root: not created yet$"
 
 # Installing: some Applications not ready, and the controller OOMKilled.
@@ -142,6 +144,10 @@ t "done: deployment-root Synced" "^deployment-root: Synced Healthy$"
 t "done: all Applications ready" "^Applications: all 2 Synced and Healthy$"
 t "done: no warning, no empty termination" "^Argo CD controller: openshift-gitops-application-controller-0, 0 restarts$" "!!"
 t "done: console URL" "^Console: https://console.apps.hub.example.com$"
+echo '{"items":[{"metadata":{"name":"ai-grid-provider-console-7f9c"},"status":{"phase":"Running","containerStatuses":[{"ready":true},{"ready":true},{"ready":true}]}}]}' > "$W/console-pods.json"
+t "done: console pod ready" "^Console pod: ai-grid-provider-console-7f9c 3/3 Running$"
+echo '{"items":[{"metadata":{"name":"ai-grid-provider-console-7f9c"},"status":{"phase":"Running","containerStatuses":[{"ready":true},{"ready":false,"state":{"waiting":{"reason":"CrashLoopBackOff"}}},{"ready":true}]}}]}' > "$W/console-pods.json"
+t "console pod not ready: names the reason" "^Console pod: ai-grid-provider-console-7f9c 2/3 Running  !! CrashLoopBackOff$"
 # Sites: each one's DataScienceCluster phase and GridSite, through its login.
 D="$T/repo-sites"; mkdir -p "$D/.config/hub" "$D/.config/site-b"; cp -R "$SRC/scripts" "$D/"
 : > "$D/.config/hub/kubeconfig"; : > "$D/.config/site-b/kubeconfig"
