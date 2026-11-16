@@ -199,6 +199,9 @@ d=$(repo smuggle "hub: {name: hub, api: 'https://h:6443'}
 options: {KEYCLOAK: \"a\\nPATH=/evil\"}")
 t "a second line that looks like a setting is refused" 1 "spans lines" bash "$d/scripts/clusters.sh" --settings "$d"
 t "  ... and prints no setting" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --settings "$0" 2>/dev/null | grep -c PATH= || true' "$d"
+d=$(repo keysmuggle "hub: {name: hub, api: 'https://h:6443'}
+options: {\"KEYCLOAK\\nPATH\": /evil}")
+t "a key with a line break is refused" 1 "unknown keys" bash "$d/scripts/clusters.sh" --settings "$d"
 d=$(repo gatetypo "hub: {name: hub, api: 'https://h:6443'}
 options: {GATE_ROOT_SECOND: 1}")
 t "a misspelled GATE_ option" 1 "unknown keys \(typos\?\): options.GATE_ROOT_SECOND$" bash "$d/scripts/clusters.sh" --hub

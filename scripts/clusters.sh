@@ -30,7 +30,7 @@ clusters_load() {
     { echo "error: clusters.yaml isn't valid: $json" >&2; return 1; }
   [ "$(jq -r .kind <<<"$json")" = Clusters ] || { echo "error: clusters.yaml needs kind: Clusters" >&2; return 1; }
   # A key the scripts don't read is a typo, most likely: name it.
-  left=$(jq -r --arg opts "^($SETTINGS_OPTIONS_RE)\$" '
+  left=$(jq -r --arg opts "\\A($SETTINGS_OPTIONS_RE)\\z" '
       (keys - ["apiVersion", "kind", "metadata", "hub", "sites", "repositories", "options"] | map(.)),
       ((.hub // {}) | keys - ["name", "api"] | map("hub." + .)),
       ((.sites // []) | to_entries[] | .key as $i | (.value // {}) | keys
