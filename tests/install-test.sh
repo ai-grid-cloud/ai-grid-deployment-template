@@ -75,25 +75,34 @@ setup() { # NAME: a deployment repository $D and a stub directory $W, for one ca
     [ ! -f "$STUB_DIR/site-check-$1.rc" ] || exit "$(cat "$STUB_DIR/site-check-$1.rc")"'
   fake import-site.sh "[ -f \"\$STUB_DIR/mc-\$1.json\" ] || printf '%s' '$mc_available' > \"\$STUB_DIR/mc-\$1.json\""
   fake bootstrap-hub.sh "printf '%s' '$root_at_head' > \"\$STUB_DIR/deployment-root\"; echo '{}' > \"\$STUB_DIR/hub-pull-secret\""
-  printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n- {name: site-a, role: combined, location: us-east, api: "https://api.site-a.example.com:6443"}\n' > "$D/clusters.yaml"
-  cat > "$D/install.env" <<'EOF'
-# The install's choices.
-LIBRARY_REVISION=
-CATALOG_REPO_URL=https://github.com/acme/catalog.git
-DEPLOYMENT_TOKEN_FILE=.config/deployment-token
-CATALOG_TOKEN_FILE=.config/catalog-token
-QUAY_AUTH_FILE=.config/quay-auth.json
-# KEYCLOAK=install
-EOF
+  # sites: comes last, so a test can append a site.
+  cat > "$D/clusters.yaml" <<'YAML'
+apiVersion: ai-grid.dev/v1alpha1
+kind: Clusters
+hub: {name: hub, api: "https://api.hub.example.com:6443"}
+repositories:
+  catalog: https://github.com/acme/catalog.git
+  library: ""
+options:
+  DEPLOYMENT_TOKEN_FILE: .config/deployment-token
+  CATALOG_TOKEN_FILE: .config/catalog-token
+  QUAY_AUTH_FILE: .config/quay-auth.json
+sites:
+- {name: site-a, role: combined, location: us-east, api: "https://api.site-a.example.com:6443"}
+YAML
   for f in deployment-token catalog-token; do printf '%s\n' "$SENTINEL" > "$D/.config/$f"; done
   printf '{"auths":{"quay.io/rhoai":{"auth":"%s"}}}\n' "$SENTINEL" > "$D/.config/quay-auth.json"
   mkdir -p "$D/.config/hub"; printf "users:\n- user: {token: '%s'}\n" "$SENTINEL" > "$D/.config/hub/kubeconfig"
   mkdir -p "$D/root"; printf '%s\n' deploymentRevision=main 'catalogRepoURL=git@github.com:acme/catalog' > "$D/root/inputs.env"
-  g -C "$D" init -q && g -C "$D" add clusters.yaml install.env root && g -C "$D" commit -qm seed
+  g -C "$D" init -q && g -C "$D" add clusters.yaml root && g -C "$D" commit -qm seed
   echo '{"items":[{"status":{"phase":"Running"}}]}' > "$W/mch.json"
   echo '{"items":[{"metadata":{"name":"acm"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"}}}]}' > "$W/apps.json"
   issuers site-a dns01:letsencrypt-dns
   : > "$W/calls.log"; : > "$W/argv.log"
+}
+opt() { # KEY VALUE: adds an options: entry to clusters.yaml
+  sed -i.bak "s/^options:\$/options:\\
+  $1: $2/" "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 }
 issuers() { # SITE [SOLVER:NAME...]: the site's ClusterIssuers, as its oc answers them
   local site=$1 items="" i; shift
@@ -139,10 +148,10 @@ t "rerun: every step already done; console-secrets always reruns" eval '[ "$rc" 
   grep -q "^== bootstrap" <<<"$out"'
 
 setup required
-sed -i.bak 's#^CATALOG_REPO_URL=.*#CATALOG_REPO_URL=REQUIRED-catalogRepoURL#' "$D/install.env"; rm "$D/install.env.bak"
+sed -i.bak 's#^  catalog: .*#  catalog: REQUIRED-catalogRepoURL#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 run
-t "REQUIRED- left in install.env: stops before any cluster call" eval '[ "$rc" = 1 ] &&
-  grep -q "CATALOG_REPO_URL" <<<"$out" && [ ! -s "$W/calls.log" ] && [ ! -s "$W/argv.log" ]'
+t "REQUIRED- left in clusters.yaml: stops before any cluster call" eval '[ "$rc" = 1 ] &&
+  grep -q "REQUIRED-catalogRepoURL" <<<"$out" && [ ! -s "$W/calls.log" ] && [ ! -s "$W/argv.log" ]'
 
 setup gatefail
 echo '{"items":[{"status":{"phase":"Installing"}}]}' > "$W/mch.json"
@@ -172,16 +181,37 @@ t "changed CATALOG_REPO_URL: stops and names both" eval '[ "$rc" = 1 ] &&
   grep -q "root/inputs.env" <<<"$out" && ! grep -q "^git-push.sh" "$W/calls.log"'
 
 setup quoted
-printf '%s\n' 'CATALOG_REPO_URL="https://github.com/acme/catalog.git #frag" # a comment' >> "$D/install.env"
+sed -i.bak 's%^  catalog: .*%  catalog: "https://github.com/acme/catalog.git #frag" # a comment%' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 sed -i.bak 's#^catalogRepoURL=.*#catalogRepoURL=https://github.com/acme/catalog.git \#frag#' "$D/root/inputs.env"; rm "$D/root/inputs.env.bak"
 run
-t "install.env: a quoted value keeps its #" eval '[ "$rc" = 0 ] &&
+t "clusters.yaml: a quoted value keeps its #" eval '[ "$rc" = 0 ] &&
   grep -qF "set-inputs.sh https://github.com/acme/catalog.git #frag" "$W/calls.log"'
 
 setup gatevalue
-echo 'GATE_ROOT_SECONDS=5x' >> "$D/install.env"
+opt GATE_ROOT_SECONDS 5x
 run
-t "install.env: GATE_ROOT_SECONDS=5x stops" eval '[ "$rc" = 1 ] && grep -q "GATE_ROOT_SECONDS" <<<"$out" && [ ! -s "$W/calls.log" ]'
+t "clusters.yaml: GATE_ROOT_SECONDS: 5x stops" eval '[ "$rc" = 1 ] && grep -q "GATE_ROOT_SECONDS" <<<"$out" && [ ! -s "$W/calls.log" ]'
+
+setup nocatalog
+sed -i.bak 's#^  catalog: .*#  catalog: ""#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+run
+t "no catalog in clusters.yaml: stops and names the key" eval '[ "$rc" = 1 ] && [ ! -s "$W/calls.log" ] &&
+  grep -q "set repositories.catalog in clusters.yaml" <<<"$out"'
+
+setup oldenv
+printf 'CATALOG_REPO_URL=https://github.com/acme/catalog.git\n' > "$D/install.env"
+run
+t "an install.env stops, with the migration" eval '[ "$rc" = 1 ] && [ ! -s "$W/calls.log" ] &&
+  grep -q "install.env is no longer read: move its settings into clusters.yaml" <<<"$out"'
+
+setup envfallback
+GATE_ROOT_SECONDS=5x run
+t "a setting the file leaves out comes from the environment" eval '[ "$rc" = 1 ] && grep -q "GATE_ROOT_SECONDS" <<<"$out"'
+
+setup filewins
+opt GATE_ROOT_SECONDS 600; g -C "$D" commit -qam gate
+GATE_ROOT_SECONDS=5x run
+t "the file's setting wins over the environment" eval '[ "$rc" = 0 ]'
 
 setup ocerror
 printf '%s' "$root_at_head" > "$W/deployment-root"
@@ -199,7 +229,7 @@ t "general quay.io login without ALLOW_GENERIC_LOGIN: stops before the inputs pu
 
 setup quaygeneric
 printf '{"auths":{"quay.io":{"auth":"%s"}}}\n' "$SENTINEL" > "$D/.config/quay-auth.json"
-echo 'ALLOW_GENERIC_LOGIN=1' >> "$D/install.env"; g -C "$D" commit -qam generic
+opt ALLOW_GENERIC_LOGIN 1; g -C "$D" commit -qam generic
 run
 t "general quay.io login with ALLOW_GENERIC_LOGIN=1: installs" eval '[ "$rc" = 0 ] && grep -q "^bootstrap-hub.sh" "$W/calls.log"'
 
@@ -268,7 +298,8 @@ t "inference site needs none" eval '[ "$rc" = 0 ] && ! grep -q "^add-site" "$W/c
 
 setup issuerset
 issuers site-a dns01:acme-staging dns01:acme-prod
-echo 'SITE_ISSUER_SITE_A=acme-prod' >> "$D/install.env"; g -C "$D" commit -qam issuer
+sed -i.bak 's/name: site-a, role: combined,/name: site-a, issuer: acme-prod, role: combined,/' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+g -C "$D" commit -qam issuer
 run
 t "two DNS-01 issuers and SITE_ISSUER_ set: passes it" eval '[ "$rc" = 0 ] &&
   grep -qx "add-site.sh site-a acme-prod" "$W/calls.log"'
@@ -277,7 +308,7 @@ setup issuerunset
 issuers site-a dns01:acme-staging dns01:acme-prod
 run
 t "two issuers and none chosen: stops and lists them" eval '[ "$rc" = 1 ] &&
-  grep -q "acme-staging" <<<"$out" && grep -q "acme-prod" <<<"$out" && grep -q "SITE_ISSUER_SITE_A" <<<"$out" &&
+  grep -q "acme-staging" <<<"$out" && grep -q "acme-prod" <<<"$out" && grep -q "Set issuer: on site site-a in clusters.yaml" <<<"$out" &&
   grep -q "stopped at site-files" <<<"$out" && ! grep -qE "^(add-site|import-site)" "$W/calls.log"'
 
 setup filesthere

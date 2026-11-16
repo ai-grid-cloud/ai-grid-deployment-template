@@ -166,4 +166,34 @@ touch "$T/no-token"
 t "console-call without a token says how to get one" 1 "make login NAME=hub" env PATH="$T/cbin:$PATH" "$d/scripts/console-call.sh" ai_grid.v1.Clusters/List
 rm "$T/no-token"
 
+# Install settings in clusters.yaml (repositories:, options:, a site's issuer).
+d=$(repo settings "hub: {api: 'https://h:6443'}
+sites:
+  - {name: site-b, role: combined, location: us, api: 'https://s:6443', issuer: acme-dns}
+repositories: {catalog: 'https://github.com/acme/catalog.git', library: deployment-template}
+options: {GATE_ROOT_SECONDS: 900, ALLOW_GENERIC_LOGIN: true, KEYCLOAK: install, PROVIDER_ADMIN_TOKEN_DURATION: ''}")
+t "the hub's name defaults to hub" 0 "^hub$" bash "$d/scripts/clusters.sh" --hub
+t "settings: the catalog" 0 "^CATALOG_REPO_URL=https://github.com/acme/catalog.git$" bash "$d/scripts/clusters.sh" --settings "$d"
+t "settings: the library" 0 "^LIBRARY_REVISION=deployment-template$" bash "$d/scripts/clusters.sh" --settings "$d"
+t "settings: a site's issuer" 0 "^SITE_ISSUER_SITE_B=acme-dns$" bash "$d/scripts/clusters.sh" --settings "$d"
+t "settings: a number" 0 "^GATE_ROOT_SECONDS=900$" bash "$d/scripts/clusters.sh" --settings "$d"
+t "settings: true is 1" 0 "^ALLOW_GENERIC_LOGIN=1$" bash "$d/scripts/clusters.sh" --settings "$d"
+t "settings: an empty value is kept" 0 "^PROVIDER_ADMIN_TOKEN_DURATION=$" bash "$d/scripts/clusters.sh" --settings "$d"
+d=$(repo nosettings "hub: {name: hub, api: 'https://h:6443'}")
+t "settings: none when the file sets none" 0 "^$" bash "$d/scripts/clusters.sh" --settings "$d"
+d=$(repo typo "hub: {name: hub, api: 'https://h:6443'}
+option: {GATE_ROOT_SECONDS: 1}")
+t "an unknown top-level key" 1 "unknown keys \(typos\?\): option$" bash "$d/scripts/clusters.sh" --hub
+d=$(repo typo2 "hub: {name: hub, api: 'https://h:6443'}
+repositories: {catalogue: x}
+options: {GATE_ROOT_SECOND: 1, KEYCLOAK: install}")
+t "unknown repositories and options keys" 1 "repositories.catalogue options.GATE_ROOT_SECOND|options.GATE_ROOT_SECOND repositories.catalogue|unknown keys" bash "$d/scripts/clusters.sh" --hub
+d=$(repo typo3 "hub: {name: hub, api: 'https://h:6443'}
+sites:
+  - {name: s1, role: combined, location: us, api: 'https://s:6443', isuer: x}")
+t "an unknown site key" 1 "sites\[0\].isuer" bash "$d/scripts/clusters.sh" --hub
+d=$(repo multiline "hub: {name: hub, api: 'https://h:6443'}
+options: {KEYCLOAK: \"a\\nb\"}")
+t "a value spanning lines is refused" 1 "spans lines" bash "$d/scripts/clusters.sh" --settings "$d"
+
 echo "clusters tests: $((total-fails)) ok, $fails failed"; exit "$fails"
