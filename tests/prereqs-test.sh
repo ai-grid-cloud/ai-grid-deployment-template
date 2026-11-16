@@ -163,4 +163,18 @@ H2="$T/home2"; mkdir -p "$H2"
 dflt "fallback auth file: \$XDG_RUNTIME_DIR/containers/auth.json" "^ok +auth file +$T/run1/containers/auth.json" "$H2" XDG_RUNTIME_DIR="$T/run1"
 dflt "no default token file: skipped" '^skipped +catalog token file +no ~/.ai-grid/catalog-token yet' "$H2"
 
+# install.env: make install's QUAY_AUTH_FILE and CATALOG_TOKEN_FILE, relative to the deployment.
+E="$T/with-env"; mkdir -p "$E/.config"; cp "$A" "$E/.config/quay-auth.json"
+printf 'x' > "$E/.config/catalog-token"; chmod 600 "$E/.config/catalog-token"
+printf '# settings\nCATALOG_REPO_URL=https://example.com/c.git\nQUAY_AUTH_FILE=.config/quay-auth.json  # the login\nCATALOG_TOKEN_FILE=".config/catalog-token"\n' > "$E/install.env"
+envt() { # name expect_regex [VAR=value ...]: runs from home1 against the deployment with install.env
+  local name=$1 expect=$2; shift 2; total=$((total+1))
+  local out; out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$H1" STUB_DIR="$w" "$@" "$PY" "$SCRIPT" --deployment "$E" 2>&1) || true
+  if grep -qE -- "$expect" <<<"$out" && ! grep -qE "$TOKEN|$PASSWORD" <<<"$out"; then echo "   ok   $name"; else echo "   FAIL $name; output:"; echo "$out"; fails=$((fails+1)); fi
+}
+envt "install.env names the auth file" "^ok +auth file +$E/.config/quay-auth.json"
+envt "install.env names the token file" "^ok +catalog token file +$E/.config/catalog-token"
+envt "QUAY_AUTH_FILE beats install.env" "^ok +auth file +$N" QUAY_AUTH_FILE="$N"
+envt "CATALOG_TOKEN_FILE beats install.env" "^ok +catalog token file +$TOK" CATALOG_TOKEN_FILE="$TOK"
+
 echo "prereqs tests: $((total-fails)) ok, $fails failed"; exit "$fails"
