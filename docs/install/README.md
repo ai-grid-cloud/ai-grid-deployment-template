@@ -34,7 +34,8 @@ CI job, see [9. Install with one command](09-hands-off.md).
 
 - [Troubleshooting](troubleshooting.md): problems while following this guide.
 - [Uninstall](08-uninstall.md): remove AI Grid from each site, then the hub.
-- In the library at your pin: [How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/README.md#how-ai-grid-works),
+- The library's install reference, from `feat/deployment-inputs-v2` (`b96c265`), not your pin, since `main` has
+  none; where it differs, [the limits of `main`](../upstream-main-limits.md) apply: [How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/README.md#how-ai-grid-works),
   [Operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/operate.md) (upgrade, add and remove sites, rotate credentials),
   [Tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/tenant-access.md), [Known gaps](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/known-gaps.md), [Hub](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/README.md),
   [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/README.md),

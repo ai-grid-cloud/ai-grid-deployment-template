@@ -7,8 +7,8 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 
 **Cause:** an input in `root/inputs.env` is empty, or a value in another file is still a `REQUIRED-NAME` placeholder.
 
-**Fix:** set each one it names ([set your names](02-repositories.md#4-set-your-names);
-[inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/appendix-a-inputs.md#inputs)), and run the check again.
+**Fix:** set each one it names ([set your names](02-repositories.md#4-set-your-names)), and run the check again.
+This branch's inputs are only the four in `root/inputs.env`.
 
 ## The hub check prints `MISSING`
 
@@ -18,7 +18,7 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 |---|---|
 | OpenShift version | Upgrade the cluster to 4.21 or later. |
 | default StorageClass | Annotate one StorageClass `storageclass.kubernetes.io/is-default-class=true`. |
-| cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or select `apps/cert-manager` ([cert-manager](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/00-platform-services.md#cert-manager)). |
+| cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or add `apps/cert-manager/application.yaml` to the root's selection by hand (generator 0's `files` in `root/applicationset.yaml`; [cert-manager](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/00-platform-services.md#cert-manager), v2 reference). |
 | quay.io/rhoai pull secret file | Log in to `quay.io` with a `quay.io/rhoai` robot token, as follows this table ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
 | object storage | Expected: the library's `apps/odf` creates it when you [install the hub components](04-hub-components.md). On the library's `main` branch there's no other object store ([L9](../upstream-main-limits.md#l9-odf-is-the-only-observability-object-store)). |
 
@@ -42,7 +42,8 @@ make bootstrap ALLOW_GENERIC_LOGIN=1
 
 **Cause:** your root's `values` don't set input `NAME`, or set it empty or with `"`, `'`, `\` or `@`.
 
-**Fix:** set it in `root/inputs.env` if it's one of yours, or in `root/kustomization.yaml` ([inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/appendix-a-inputs.md#inputs)), check it, and push:
+**Fix:** set it in `root/inputs.env` (`deploymentRepoURL`, `deploymentRevision`, `catalogRepoURL`,
+`catalogRevision`), or, for `libraryRepoURL` and `libraryRevision`, in `root/applicationset.yaml`; check it, and push:
 
 ```sh
 scripts/check-deployment.sh

@@ -169,7 +169,9 @@ pin, which may differ from `HEAD`'s.
 `apps/acm/manifests/observability/observability-bridge-job.yaml:28` take the
 store from ODF's Multicloud Object Gateway.
 
-**Template:** selects `apps/odf`. There's no bring-your-own or S4 object
+**Template:** selects `apps/odf`, through its own ODF generator: a git files generator matrixed with the hub's
+cluster labels, as upstream's root does. That the matrix keeps the git generator's `values` next to the cluster's
+labels is checked offline only (`tests/root-selection-test.sh` merges them itself); only a run on a hub shows it. There's no bring-your-own or S4 object
 storage (`feat/deployment-inputs-v2` commit `a058013`).
 
 ## L10: no per-deployment cluster admins
