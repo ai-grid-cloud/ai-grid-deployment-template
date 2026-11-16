@@ -21,11 +21,14 @@ worker nodes or the network.
   reaches the other clusters' load balancers on UDP 4500 and 4490, and every router name answers `AAAA` queries
   without `NXDOMAIN`.
 - [ ] **On each `ingress` or `combined` site, a cert-manager ClusterIssuer that issues publicly trusted certificates
-  by DNS-01,** for the site's MaaS certificate. If a site has none, add one, or give the site the role `inference`.
-- [ ] **A `quay.io/rhoai` robot account:** its name and token. This template installs a pre-release OpenShift AI 3.6
-  build from `quay.io/rhoai`; Red Hat gives `quay.io/rhoai` robot tokens to early-access partners, so ask your Red Hat
-  contact.
-- [ ] **Tools:** `oc`, `kubectl`, `git`, `jq`, `curl`, `openssl`, `base64`, `python3`, `clusteradm` and `make`.
+  by DNS-01,** for the site's MaaS certificate. If a site has none, add one, as
+  [MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)
+  describes. An extra site that only serves models can have the role `inference` and needs no issuer.
+- [ ] **A `quay.io/rhoai` robot account:** its username and password. This template installs a pre-release
+  OpenShift AI 3.6 build from `quay.io/rhoai`; Red Hat gives `quay.io/rhoai` robot accounts to early-access partners,
+  so ask your Red Hat contact.
+- [ ] **Tools:** `oc`, `kubectl`, `git`, `jq`, `curl`, `openssl`, `base64`, `python3`, `clusteradm` and `make`. Get
+  `clusteradm` from its [releases page](https://github.com/open-cluster-management-io/clusteradm/releases).
 
 ## Install
 
@@ -69,17 +72,19 @@ Tell the install which clusters and repositories to use, and give it the credent
    Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every later command from the `deployment`
    directory, on branch `main`.
 
-5. Write `.config/clusters.yaml`, the one file you edit. Git ignores `.config/`, so the file stays on your machine and
-   can hold your secrets. Copy the example file, readable only by you:
+5. Create `.config/clusters.yaml`, the one file you edit. Git ignores `.config/`, so the file stays on your machine
+   and can hold your secrets:
 
    ```sh
-   mkdir -p .config && chmod 700 .config
-   cp clusters-example.yaml .config/clusters.yaml && chmod 600 .config/clusters.yaml
+   make secrets
    ```
 
-   Replace each `REQUIRED-` value, add a block for each site, and set `repositories.catalog` to your catalog
-   repository's URL. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't change it
-   once the site is imported. For example:
+   The first run copies `clusters-example.yaml` to `.config/clusters.yaml`, readable only by you, and stops with
+   `edit it, then run make secrets again`.
+
+   In `.config/clusters.yaml`, replace each `REQUIRED-` value, add a block for each site, and set
+   `repositories.catalog` to your catalog repository's URL. A site's name is a DNS label; it becomes the site's ACM
+   cluster name, and you can't change it once the site is imported. For example:
 
    ```yaml
    apiVersion: ai-grid.dev/v1alpha1
@@ -100,42 +105,27 @@ Tell the install which clusters and repositories to use, and give it the credent
      library: deployment-template
    ```
 
-   Leave `library: deployment-template`: it follows the library branch this template is tested against. The file's
-   `options:` section is optional. A key the scripts don't know, or a value still starting with `REQUIRED-`, stops
-   them before they touch a cluster. If the file is readable by anyone but you, the scripts stop and tell you to run
-   `chmod 600 .config/clusters.yaml`.
-
-   If your repository already has a committed `clusters.yaml` from the page-by-page guide, the scripts read
-   `.config/clusters.yaml` instead whenever it exists. Secrets never go in the committed `clusters.yaml`: the scripts
-   refuse `credentials:`, `github:` and `quay:` there.
-
 6. Add the secrets to `.config/clusters.yaml`:
 
    ```sh
    make secrets
    ```
 
-   If only a root `clusters.yaml` exists, it first copies it to `.config/clusters.yaml`. Then it asks for each secret
-   in turn and doesn't show what you paste:
+   It asks for each secret in turn and doesn't show what you paste:
 
    | It asks for | It writes |
    |---|---|
    | For each cluster in the file, a `cluster-admin` token, such as the output of `oc whoami -t` against that cluster. If you leave the token empty, it asks for a `cluster-admin` username and password instead. | `credentials.NAME.token`, or `credentials.NAME.username` and `credentials.NAME.password`, where `NAME` is the cluster's name, such as `hub` or `site-east-1` |
    | The deployment token from step 3 | `github.deploymentToken` |
    | The catalog token from step 2 | `github.catalogToken` |
-   | Your `quay.io/rhoai` robot account's name and token | `quay.username` and `quay.password` |
+   | The `quay.io/rhoai` robot account's username and password | `quay.username` and `quay.password` |
 
-   An empty answer skips that secret. It keeps a value that's already set. To replace one cluster's credentials, run
-   `make secrets NAME=CLUSTER_NAME`; to replace the two GitHub tokens, `make secrets NAME=github`; to replace the
-   `quay.io/rhoai` robot account, `make secrets NAME=quay`; to replace them all, `make secrets FORCE=1`.
+   An empty answer skips that secret. It keeps a value that's already set. To replace one entry's secrets, set `NAME`
+   to a cluster's name, to `github` for the two GitHub tokens or to `quay` for the robot account, such as
+   `make secrets NAME=site-east-1`. To replace them all, run `make secrets FORCE=1`.
 
    A cluster token usually expires in about 24 hours. With a username and password instead, the scripts get a fresh
-   token from the cluster's OAuth server on every run, so a rerun the next day works. To replace an expired token,
-   run `make secrets NAME=CLUSTER_NAME`, or edit its value in the file.
-
-   To fill in the secrets by hand instead, uncomment the `credentials:`, `github:` and `quay:` sections at the end of
-   `.config/clusters.yaml` and replace each value. A cluster's entry can also name a working kubeconfig to copy, with
-   `kubeconfig: PATH`.
+   token from the cluster's OAuth server on every run, so a rerun the next day works.
 
 ### Check the prerequisites
 
@@ -158,19 +148,15 @@ Confirm that every cluster and credential is ready before anything is installed.
 
    Only for a cluster with none of these does it open your browser to log in, with `oc login --web`. For each cluster
    it prints `Logged in to NAME as USER.` or `NAME: already logged in.` If a cluster's login fails, replace its
-   credentials with `make secrets NAME=CLUSTER_NAME`, then run `make login` again.
+   credentials as in step 6, then run `make login` again.
 
    `make prereqs` prints one line per check, starting with `ok`, `MISSING`, `OLD`, `FAIL` or `skipped`. It checks
    the tools, the `quay.io/rhoai` login, the catalog token, and, for each cluster in `.config/clusters.yaml`, that
    it's reachable, runs OpenShift 4.21 or later, has a default StorageClass and gives you `cluster-admin`, and that
    each `ingress` or `combined` site has a DNS-01 ClusterIssuer. It changes nothing.
 
-   Fix each `MISSING`, `OLD` or `FAIL` line, then run it again. When everything is ready, its last line counts only
-   `ok` lines, with no `Nothing was changed; fix these` line after it, such as:
-
-   ```text
-   42 ok
-   ```
+   Fix each `MISSING`, `OLD` or `FAIL` line, then run it again. Everything is ready when it prints no `MISSING`,
+   `OLD` or `FAIL` lines.
 
    If a site had an earlier install, also run `make site-check SITE=SITE_NAME`. It also looks for a previous AI Grid
    install and checks that the site's apps domain resolves.
@@ -226,12 +212,13 @@ make install stopped at hub-apps. Fix the cause, then run make install again.
 ```
 
 - If the line names a readiness check, such as `hub-apps` or `site-site-east-1-import`, the evidence is printed
-  before it and is in `.install/report.txt`: `make status`, `make site-status` for a site, and the conditions of
-  whatever isn't ready.
+  before it. `.install/report.txt` holds the same evidence: the output of `make status`, of `make site-status` for a
+  site, and the conditions of whatever isn't ready.
 - If the line names a step, the step's own error is printed before it.
 - If it stopped at `ready`, the ready check's last output is in `.install/ready-check.txt`.
 
-`.install/report.txt` can quote your manifests: read it before you share it.
+`.install/report.txt` can quote your manifests: read it before you share it. For known problems and their fixes, see
+[Troubleshooting](troubleshooting.md).
 
 Fix the cause, then run `make install` again. Every step first checks whether its work is done and skips it if so,
 so the install picks up where it stopped. On a finished install, a second run changes nothing on the clusters except
@@ -303,26 +290,41 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
   |---|---|
   | `AI_GRID_TOKEN_NAME` | `credentials.NAME.token` |
   | `AI_GRID_USERNAME_NAME`, `AI_GRID_PASSWORD_NAME` | `credentials.NAME.username`, `credentials.NAME.password` |
-  | `AI_GRID_DEPLOYMENT_TOKEN` | `github.deploymentToken` |
-  | `AI_GRID_CATALOG_TOKEN` | `github.catalogToken` |
-  | `AI_GRID_QUAY_USERNAME`, `AI_GRID_QUAY_PASSWORD` | `quay.username`, `quay.password` |
+  | `AI_GRID_DEPLOYMENT_TOKEN`, else the file that `DEPLOYMENT_TOKEN_FILE` names | `github.deploymentToken` |
+  | `AI_GRID_CATALOG_TOKEN`, else the file that `CATALOG_TOKEN_FILE` names | `github.catalogToken` |
+  | `AI_GRID_QUAY_USERNAME`, `AI_GRID_QUAY_PASSWORD`, else the auth file that `QUAY_AUTH_FILE` names | `quay.username`, `quay.password` |
+
+  For each GitHub token and the `quay.io` login, the scripts use the first that's set: the `AI_GRID_` variable, the
+  file that the `*_FILE` variable names, the value in `.config/clusters.yaml`, then an older secret file,
+  `.config/deployment-token`, `.config/catalog-token` or `.config/quay-auth.json`. For a cluster's login, they use a
+  working `.config/NAME/kubeconfig`, then `credentials.NAME.kubeconfig`, then a token (`AI_GRID_TOKEN_NAME`, then
+  the file), then a username and password (the `AI_GRID_` variables, then the file).
 
   In a variable's name, `NAME` is the cluster's name upper-cased with `-` turned into `_`, such as
   `AI_GRID_TOKEN_SITE_EAST_1`. A setting that the file leaves out of `options:` comes from the environment variable
   of the same name. To make `make login` fail instead of opening a browser for a cluster with no credentials, run
   `make login NONINTERACTIVE=1`; `make install` never opens a browser.
-- **A repository set up with secret files:** if your repository already has `.config/deployment-token`,
-  `.config/catalog-token` or `.config/quay-auth.json`, `make install` still reads each one when
-  `.config/clusters.yaml` has no value for it. The `options:` keys `DEPLOYMENT_TOKEN_FILE`, `CATALOG_TOKEN_FILE` and
-  `QUAY_AUTH_FILE` are gone; the files must be at those paths.
-- **A repository set up with `install.env`:** `make install` no longer reads it, and stops while it exists. Move its
-  settings into `.config/clusters.yaml`: `CATALOG_REPO_URL` and `LIBRARY_REVISION` become `repositories.catalog` and
-  `repositories.library`, each `SITE_ISSUER_NAME` becomes that site's `issuer:`, and the rest go under `options:`
-  with the same names. Then delete `install.env`.
 - **A kubeconfig instead of a token:** set `credentials.NAME.kubeconfig` to the path of a working kubeconfig, such as
   the installer's `auth/kubeconfig`, or put the kubeconfig in `.config/NAME/kubeconfig`. `make install` keeps a
   kubeconfig that works.
-- **An untrusted API certificate:** put the CA of the cluster's API in `.config/NAME/ca.crt`.
+- **An untrusted cluster certificate:** put the CAs the cluster's certificates chain to in `.config/NAME/ca.crt`, as
+  PEM. With a username and password, the login also reaches the cluster's OAuth server, which the ingress router
+  serves, and checks it against the same file, so the file holds both the API's CA and the router's CA. To build it
+  with the installer's `auth/kubeconfig`:
+
+  ```sh
+  # The API's CA, from the installer's kubeconfig
+  oc config view --kubeconfig auth/kubeconfig --raw \
+    -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > api-ca.crt
+  # The router's CA
+  oc get secret router-ca -n openshift-ingress-operator --kubeconfig auth/kubeconfig \
+    -o jsonpath='{.data.tls\.crt}' | base64 -d > router-ca.crt
+  mkdir -p .config/NAME && cat api-ca.crt router-ca.crt > .config/NAME/ca.crt
+  ```
+
+  Without the installer's kubeconfig, run the `router-ca` command with any working `cluster-admin` login, and save
+  the last certificate that `openssl s_client -showcerts -connect api.CLUSTER_DOMAIN:6443 </dev/null` prints as
+  `api-ca.crt`. If the router serves a custom certificate, use the CA that issued it instead of `router-ca`.
 - **A general `quay.io` account:** put its name and password under `quay:`. The install uses it for `quay.io/rhoai`
   as it would a robot account, so it works only when that account can pull from `quay.io/rhoai`.
 - **Several DNS-01 issuers on a site:** set `issuer:` on that site, such as `issuer: letsencrypt-dns`.
@@ -330,20 +332,19 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
   template's own commit pin.
 - **Another token lifetime:** set `PROVIDER_ADMIN_TOKEN_DURATION` under `options:` for `make install`, or in the
   environment for `make provider-admin`.
-- **Another catalog token file for the console:** if the environment variable `AI_GRID_GIT_TOKEN_FILE` is set, the
-  console's Secrets use the file it names instead of the catalog token.
 - **Longer or shorter waits:** each `GATE_*_SECONDS` value under `options:` sets a readiness check's time limit, in
   seconds. The hub's Applications get 90 minutes (`GATE_HUB_APPS_SECONDS: 5400`).
 - **The hub alone,** without the sites, the provider-admin token or the ready check:
 
   ```sh
-  scripts/install.sh --hub-only
+  make install HUB_ONLY=1
   ```
 
 ## Known limits
 
-- An `ingress` or `combined` site needs a DNS-01 ClusterIssuer that issues publicly trusted certificates. Supplying
-  a certificate another way is a later option.
+- An `ingress` or `combined` site needs a DNS-01 ClusterIssuer that issues publicly trusted certificates
+  ([MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)).
+  Supplying a certificate another way is a later option.
 - `make install` always installs its own Keycloak. Using an existing one, with `KEYCLOAK` under `options:`, comes
   later; any value but `install` stops the install.
 - Starting over means new clusters, and new deployment and catalog repositories. `make install` doesn't uninstall;
