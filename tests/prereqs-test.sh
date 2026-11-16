@@ -22,7 +22,7 @@ mkbin() { # dir: a bin dir with every tool stubbed
   for t in kubectl jq; do
     printf '#!/bin/bash\ncase "$1" in version|--version) echo "%s 1.2.3"; exit ;; esac\nexec %s "$@"\n' "$t" "$(command -v "$t")" > "$b/$t"
   done
-  for t in curl openssl base64 clusteradm make podman; do
+  for t in curl openssl base64 clusteradm make; do
     printf '#!/bin/bash\necho "%s 1.2.3"\n' "$t" > "$b/$t"
   done
   # The stub oc logs its arguments and answers from files in $STUB_DIR; a
@@ -104,8 +104,6 @@ LIBD=$keep
 mkbin "$T/nojq"; rm "$T/nojq/jq"
 t "missing tool" '^MISSING +jq ' "$T/nojq" "$w"
 t "missing tool: summary and note" 'Nothing was changed' "$T/nojq" "$w"
-mkbin "$T/nopodman"; rm "$T/nopodman/podman"
-t "podman is a tool it checks" '^MISSING +podman ' "$T/nopodman" "$w"
 
 t "nothing set: registry skipped" '^skipped +registry logins +no auth file at ~/.config/containers/auth.json or \$XDG_RUNTIME_DIR/containers/auth.json; set QUAY_AUTH_FILE$' "$T/bin" "$w"
 t "no clusters.yaml: skipped, no guide page" '^skipped +cluster checks +no clusters.yaml: run cp clusters-example.yaml clusters.yaml and fill it in$' "$T/bin" "$w" --deployment "$T/other"
@@ -174,32 +172,40 @@ settings_dep() { # dir options-body: a deployment with a hub and that options: b
   mkdir -p "$1/.config"
   printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\nrepositories: {catalog: 'https://example.com/c.git'}\n%b\n" "$2" > "$1/clusters.yaml"
 }
-E="$T/with-env"; settings_dep "$E" "options:\n  QUAY_AUTH_FILE: .config/quay-auth.json  # the login\n  CATALOG_TOKEN_FILE: '.config/catalog-token'"
-cp "$A" "$E/.config/quay-auth.json"; printf 'x' > "$E/.config/catalog-token"; chmod 600 "$E/.config/catalog-token"
-envt() { # name expect_regex [VAR=value ...]: runs from home1 against the deployment $ED (default $E)
+envt() { # name expect_regex [VAR=value ...]: runs from home1 against the deployment $ED
   local name=$1 expect=$2; shift 2; total=$((total+1))
-  local out; out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$H1" STUB_DIR="$w" "$@" "$PY" "$SCRIPT" --deployment "${ED:-$E}" 2>&1) || true
-  if grep -qE -- "$expect" <<<"$out" && ! grep -qE "$TOKEN|$PASSWORD" <<<"$out"; then echo "   ok   $name"; else echo "   FAIL $name; output:"; echo "$out"; fails=$((fails+1)); fi
+  local out; out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$H1" STUB_DIR="$w" "$@" "$PY" "$SCRIPT" --deployment "$ED" 2>&1) || true
+  if grep -qE -- "$expect" <<<"$out" && ! grep -qE "$TOKEN|$PASSWORD|SECRET_do_not_print" <<<"$out"; then echo "   ok   $name"; else echo "   FAIL $name; output:"; echo "$out"; fails=$((fails+1)); fi
 }
-envt "clusters.yaml names the auth file" "^ok +auth file +$E/.config/quay-auth.json"
-envt "clusters.yaml names the token file" "^ok +catalog token file +$E/.config/catalog-token"
-envt "clusters.yaml beats QUAY_AUTH_FILE" "^ok +auth file +$E/.config/quay-auth.json" QUAY_AUTH_FILE="$N"
-envt "clusters.yaml beats CATALOG_TOKEN_FILE" "^ok +catalog token file +$E/.config/catalog-token" CATALOG_TOKEN_FILE="$TOK"
-# Without the two keys: install.sh's defaults, not the home directory's.
+# The private .config/clusters.yaml: the quay.io/rhoai robot account and the tokens from it.
+EP="$T/private"; mkdir -p "$EP/.config"
+printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\nrepositories: {catalog: 'https://example.com/c.git'}\nquay: {username: stub-user, password: FAKE_TOKEN_do_not_print_424242}\ngithub: {catalogToken: SECRET_do_not_print_c, deploymentToken: SECRET_do_not_print_d}\n" > "$EP/.config/clusters.yaml"
+chmod 600 "$EP/.config/clusters.yaml"
+ED=$EP envt "private file: the quay.io/rhoai login from quay:" "^ok +auth file +quay: in .config/clusters.yaml"
+ED=$EP envt "  ... has the quay.io/rhoai entry" "^ok +quay.io/rhoai login +quay.io/rhoai entry"
+ED=$EP envt "  ... pulls the catalog with it" "^ok +pull the pinned catalog"
+ED=$EP envt "  ... the catalog token from github.catalogToken" "^ok +catalog token +github.catalogToken in .config/clusters.yaml"
+ED=$EP envt "  ... the deployment token from github.deploymentToken" "^ok +deployment token +github.deploymentToken in .config/clusters.yaml"
+ED=$EP envt "  ... AI_GRID_CATALOG_TOKEN wins" "^ok +catalog token +AI_GRID_CATALOG_TOKEN" AI_GRID_CATALOG_TOKEN=x
+ED=$EP envt "  ... no temporary auth file left" "." && { total=$((total+1)); if ls "${TMPDIR:-/tmp}" 2>/dev/null | grep -q '^prereqs-quay-'; then echo "   FAIL temp auth file left"; fails=$((fails+1)); else echo "   ok     ... (none in TMPDIR)"; fi; }
+EM="$T/private-missing"; mkdir -p "$EM/.config"
+printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\nrepositories: {catalog: 'https://example.com/c.git'}\n" > "$EM/.config/clusters.yaml"; chmod 600 "$EM/.config/clusters.yaml"
+ED=$EM envt "private file without secrets: the auth file hint names quay:" "^MISSING +auth file +$EM/.config/quay-auth.json: not found; set quay.username and quay.password in .config/clusters.yaml \(make secrets NAME=quay\)"
+ED=$EM envt "  ... the token hint names github.catalogToken" "^MISSING +catalog token file +$EM/.config/catalog-token not found; set github.catalogToken in .config/clusters.yaml \(make secrets NAME=github\)"
+ED=$EM envt "  ... and the deployment token" "^MISSING +deployment token +set github.deploymentToken in .config/clusters.yaml \(make secrets NAME=github\)"
+# A catalog and no secrets: the legacy files under .config/, not the home directory's.
 E2="$T/env-defaults"; settings_dep "$E2" ""
 cp "$A" "$E2/.config/quay-auth.json"; printf 'x' > "$E2/.config/catalog-token"; chmod 600 "$E2/.config/catalog-token"
-ED=$E2 envt "no key: .config/quay-auth.json" "^ok +auth file +$E2/.config/quay-auth.json"
-ED=$E2 envt "no key: .config/catalog-token" "^ok +catalog token file +$E2/.config/catalog-token"
-ED=$E2 envt "no key: the environment still counts" "^ok +auth file +$N" QUAY_AUTH_FILE="$N"
+ED=$E2 envt "legacy: .config/quay-auth.json" "^ok +auth file +$E2/.config/quay-auth.json"
+ED=$E2 envt "legacy: .config/catalog-token" "^ok +catalog token file +$E2/.config/catalog-token"
+ED=$E2 envt "legacy: the environment still counts" "^ok +auth file +$N" QUAY_AUTH_FILE="$N"
 # The hints name the file looked for and the clusters.yaml setting, never a page.
 E3="$T/env-missing"; settings_dep "$E3" ""
-ED=$E3 envt "missing token file names CATALOG_TOKEN_FILE" "^MISSING +catalog token file +$E3/.config/catalog-token not found; set CATALOG_TOKEN_FILE under options: in clusters.yaml"
-ED=$E3 envt "missing auth file names QUAY_AUTH_FILE" "^MISSING +auth file +$E3/.config/quay-auth.json: not found; set QUAY_AUTH_FILE under options: in clusters.yaml"
-# An empty value is unset there, so install.sh's default applies, not the environment.
-E4="$T/env-empty"; settings_dep "$E4" "options:\n  QUAY_AUTH_FILE: ''"; cp "$A" "$E4/.config/quay-auth.json"
-ED=$E4 envt "an empty value: .config/quay-auth.json, not the environment" "^ok +auth file +$E4/.config/quay-auth.json" QUAY_AUTH_FILE="$N"
+ED=$E3 envt "missing token file names github.catalogToken" "^MISSING +catalog token file +$E3/.config/catalog-token not found; set github.catalogToken in .config/clusters.yaml"
+ED=$E3 envt "missing auth file names quay:" "^MISSING +auth file +$E3/.config/quay-auth.json: not found; set quay.username and quay.password in .config/clusters.yaml"
+E4="$T/env-old"; settings_dep "$E4" ""
 # A clusters.yaml with no catalog (the page-by-page guide): the home directory's files, as before.
-E5="$T/no-catalog"; settings_dep "$E5" "options:\n  QUAY_AUTH_FILE: .config/quay-auth.json"
+E5="$T/no-catalog"; settings_dep "$E5" ""
 sed -i.bak 's/^repositories: .*$/repositories: {catalog: ""}/' "$E5/clusters.yaml"; rm "$E5/clusters.yaml.bak"
 ED=$E5 envt "no catalog: the home directory's auth file" "^ok +auth file +$H1/.config/containers/auth.json"
 ED=$E5 envt "no catalog: the home directory's token file" "^ok +catalog token file +$H1/.ai-grid/catalog-token"
