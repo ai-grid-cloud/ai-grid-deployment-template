@@ -11,11 +11,13 @@ The clusters come from the deployment's clusters.yaml, each with its login in
 .config/NAME/kubeconfig. LIBRARY sets the library checkout.
 
 Without --quay-auth-file and --catalog-token-file, the two files are the ones
-make install uses. When the deployment has an install.env, its QUAY_AUTH_FILE and
-CATALOG_TOKEN_FILE win over the environment variables of the same names; a key it
-leaves out or empty takes the environment variable, else .config/quay-auth.json
-and .config/catalog-token; a relative path is relative to the deployment. With no
-install.env, the environment variables apply, else QUAY_AUTH_FILE is the first of
+make install uses. QUAY_AUTH_FILE and CATALOG_TOKEN_FILE under options: in the
+deployment's clusters.yaml win over the environment variables of the same names; a key
+it leaves out takes the environment variable; an empty value means
+.config/quay-auth.json and .config/catalog-token; a relative path is relative to the
+deployment. When clusters.yaml can't be read or sets no repositories.catalog (the
+page-by-page guide), the environment variables apply, else
+QUAY_AUTH_FILE is the first of
 ~/.config/containers/auth.json and $XDG_RUNTIME_DIR/containers/auth.json that
 exists, and CATALOG_TOKEN_FILE is ~/.ai-grid/catalog-token if it exists. A check whose input you haven't set prints
 "skipped". Every line is: status, name, detail. Statuses: ok, MISSING,
@@ -167,13 +169,10 @@ def pinned_catalog_image():
     return f"{vals['registry']}/{vals['repository']}{ref}"
 
 
-IN_ENV = " in install.env"  # added to a hint only when install.env names the file
+IN_ENV = " under options: in clusters.yaml"  # added to a hint when clusters.yaml was read
 
 
-IN_ENV = " in install.env"  # added to a hint only when install.env names the file
-
-
-def check_registry(auth_file, from_install_env=False):
+def check_registry(auth_file, from_settings=False):
     section("Registry logins (pre-release builds)")
     names = ["auth file", "quay.io/rhoai login", "registry.stage.redhat.io login", "pull the pinned catalog"]
     if not auth_file:
@@ -191,7 +190,7 @@ def check_registry(auth_file, from_install_env=False):
             report("FAIL", "auth file", f"{auth_file}: {type(e).__name__}")
         else:
             report("MISSING", "auth file",
-                   f"{auth_file}: not found; set QUAY_AUTH_FILE{IN_ENV if from_install_env else ''} "
+                   f"{auth_file}: not found; set QUAY_AUTH_FILE{IN_ENV if from_settings else ''} "
                    "to your auth file, or put it there")
         for n in names[1:]:
             report("skipped", n, "no readable auth file")
@@ -214,7 +213,7 @@ def check_registry(auth_file, from_install_env=False):
         report("ok", "quay.io/rhoai login", "quay.io/rhoai entry")
     elif has("quay.io"):
         report("ok", "quay.io/rhoai login",
-               "general quay.io entry: set ALLOW_GENERIC_LOGIN=1 in install.env (make install) "
+               "general quay.io entry: set ALLOW_GENERIC_LOGIN: 1 under options: in clusters.yaml (make install) "
                "or run make bootstrap ALLOW_GENERIC_LOGIN=1 (page by page), "
                "or add a robot token for quay.io/rhoai")
     else:
@@ -347,7 +346,7 @@ def check_cluster(name, role, kubeconfig):
         report(status, "ClusterIssuer", ", ".join(parts))
 
 
-def check_catalog_token(path, from_install_env=False):
+def check_catalog_token(path, from_settings=False):
     section("Catalog token")
     if not path:
         report("skipped", "catalog token file",
@@ -358,7 +357,7 @@ def check_catalog_token(path, from_install_env=False):
         st = os.stat(path)
     except OSError:
         report("MISSING", "catalog token file",
-               f"{path} not found; set CATALOG_TOKEN_FILE{IN_ENV if from_install_env else ''} "
+               f"{path} not found; set CATALOG_TOKEN_FILE{IN_ENV if from_settings else ''} "
                "to your token file, or put it there")
         return
     mode = stat.S_IMODE(st.st_mode)
@@ -381,42 +380,48 @@ def default_auth_file():
                           run_dir and os.path.join(run_dir, "containers", "auth.json"))
 
 
-# install.sh's defaults for a setting install.env leaves out or leaves empty.
+# install.sh's defaults for a setting clusters.yaml leaves out or leaves empty.
 INSTALL_DEFAULTS = {"QUAY_AUTH_FILE": ".config/quay-auth.json", "CATALOG_TOKEN_FILE": ".config/catalog-token"}
 
 
-def install_env_settings(deployment):
-    """{KEY: value} for QUAY_AUTH_FILE and CATALOG_TOKEN_FILE in DIR/install.env, or None
-    when there's no install.env. Parsed as scripts/install.sh reads it (NAME=VALUE lines,
-    quotes, trailing comments); never evaluated by a shell."""
-    try:
-        lines = open(os.path.join(deployment, "install.env")).read().splitlines()
-    except OSError:
+def deployment_settings(deployment):
+    """{KEY: value} for the install settings in DIR/clusters.yaml, read by scripts/clusters.sh
+    --settings as scripts/install.sh reads them, or None when it can't be read or sets no
+    repositories.catalog."""
+    if not (os.path.isfile(os.path.join(deployment, "clusters.yaml"))
+            and shutil.which("kubectl") and shutil.which("jq")):
         return None
-    found = {}
-    for line in lines:
-        m = re.match(r"^\s*(QUAY_AUTH_FILE|CATALOG_TOKEN_FILE)=(.*)$", line)
-        if not m:
-            continue
-        value = m.group(2).lstrip()
-        q = re.match(r"""^"([^"]*)"\s*(#.*)?$|^'([^']*)'\s*(#.*)?$""", value)
-        if q:
-            value = q.group(1) if q.group(1) is not None else q.group(3)
-        else:
-            value = re.sub(r"\s#.*$", "", value).rstrip()
-        found[m.group(1)] = value
-    return found
+    env = dict(os.environ, PATH=os.environ.get("PATH", "") + ":/usr/bin:/bin")
+    try:
+        p = subprocess.run(["/bin/bash", os.path.join(REPO, "scripts", "clusters.sh"), "--settings", deployment],
+                           capture_output=True, text=True, timeout=30, env=env)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if p.returncode != 0:
+        return None
+    settings = dict(line.split("=", 1) for line in p.stdout.splitlines() if "=" in line)
+    # Without a catalog the deployment isn't set up for make install (the page-by-page
+    # guide doesn't set one), so the files it uses don't apply.
+    return settings if settings.get("CATALOG_REPO_URL") else None
 
 
 def install_path(key, deployment, settings):
-    """The file make install uses for KEY, as scripts/install.sh picks it: install.env's
+    """The file make install uses for KEY, as scripts/install.sh picks it: clusters.yaml's
     value beats the environment, and an unset or empty one falls back to the
-    environment, else to .config/ in the deployment. None when there's no install.env."""
+    environment, else to .config/ in the deployment. None when clusters.yaml can't be read."""
     if settings is None:
         return None
     value = (settings[key] if key in settings else os.environ.get(key)) or INSTALL_DEFAULTS[key]
     path = os.path.expanduser(value)
     return path if os.path.isabs(path) else os.path.join(deployment, path)
+
+
+def check_old_settings(deployment):
+    """make install stops on an install.env, which earlier versions read: say so here first."""
+    if os.path.exists(os.path.join(deployment, "install.env")):
+        section("Settings")
+        report("FAIL", "install.env", "no longer read: move its settings into clusters.yaml "
+               "(see clusters-example.yaml), then delete install.env")
 
 
 def main():
@@ -426,12 +431,12 @@ def main():
     p.add_argument("--deployment", default=REPO, help="your deployment repository (default: this one)")
     p.add_argument("--library", default=LIB, help="your library checkout (default: .library) [LIBRARY]")
     p.add_argument("--quay-auth-file",
-                   help="container auth file with your quay.io login [install.env, then QUAY_AUTH_FILE]")
+                   help="container auth file with your quay.io login [clusters.yaml, then QUAY_AUTH_FILE]")
     p.add_argument("--catalog-token-file",
-                   help="file holding the catalog repository token [install.env, then CATALOG_TOKEN_FILE]")
+                   help="file holding the catalog repository token [clusters.yaml, then CATALOG_TOKEN_FILE]")
     a = p.parse_args()
     LIB = a.library
-    settings = install_env_settings(a.deployment)
+    settings = deployment_settings(a.deployment)
     a.quay_auth_file = (a.quay_auth_file or install_path("QUAY_AUTH_FILE", a.deployment, settings)
                         or os.environ.get("QUAY_AUTH_FILE") or default_auth_file())
     a.catalog_token_file = (a.catalog_token_file or install_path("CATALOG_TOKEN_FILE", a.deployment, settings)
@@ -439,6 +444,7 @@ def main():
                             or first_existing(os.path.expanduser("~/.ai-grid/catalog-token")))
 
     check_tools()
+    check_old_settings(a.deployment)
     check_library(a.deployment)
     check_registry(a.quay_auth_file, settings is not None)
     check_clusters(a.deployment)

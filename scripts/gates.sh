@@ -42,7 +42,7 @@
 #   app_rows APPS_JSON UNMATCHED one row per Application: name, sync, health,
 #                                and "site" when it waits for a site, else "-"
 #
-# Time limits, in seconds, each overridable from the environment (install.env):
+# Time limits, in seconds, each overridable from the environment (or options: in clusters.yaml):
 : "${GATE_INTERVAL:=15}"
 : "${GATE_ERROR_LIMIT:=4}"            # consecutive oc errors before a gate fails
 : "${GATE_ROOT_SECONDS:=600}"         # deployment-root Synced

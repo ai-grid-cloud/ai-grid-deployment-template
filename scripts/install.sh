@@ -5,10 +5,13 @@
 # Every step first checks whether its work is already done, so after a failure
 # you fix the cause and run it again.
 #
-# Reads install.env at the root of this repository (copied from
-# install-example.env) and stops before any cluster call when a REQUIRED-
-# value is left in it, or a file it names doesn't exist. Relative paths in it
-# are relative to this repository, and its values win over the environment's.
+# Reads its settings from clusters.yaml at the root of this repository
+# (repositories:, options:, and each site's issuer; scripts/clusters.sh
+# settings_lines) and stops before any cluster call when a REQUIRED- value is
+# left in it, or a file it names doesn't exist. Relative paths in it are
+# relative to this repository. A setting the file holds, even an empty one,
+# wins over the environment's; one it leaves out comes from the environment,
+# else its default. An install.env, which earlier versions read, stops it.
 # The token files are passed on by path (DEPLOYMENT_TOKEN_FILE to
 # scripts/git-push.sh, CATALOG_TOKEN_FILE to scripts/create-console-secrets.sh,
 # QUAY_AUTH_FILE to scripts/bootstrap-hub.sh); this script never reads a token
@@ -37,8 +40,8 @@
 #   site-files       each ingress or combined site needs a DNS-01 ClusterIssuer
 #                    for its MaaS certificate, read with the site's login; with
 #                    one, scripts/add-site.sh NAME; with several, the one named
-#                    by SITE_ISSUER_<NAME> in install.env (the site's name upper-
-#                    cased, - as _, so site-b is SITE_ISSUER_SITE_B); with none,
+#                    by the site's issuer in clusters.yaml (or the variable
+#                    SITE_ISSUER_<NAME>, the name upper-cased, - as _); with none,
 #                    it stops. A site whose files exist keeps them, with no
 #                    issuer check. Then one scripts/git-push.sh of apps/ sites/
 #                    values/clusters/ and gate hub-root-sites: deployment-root
@@ -91,36 +94,21 @@ run_step() { # STEP SCRIPT [ARG...]: runs a script; stops the install at STEP wh
   "$here/$script" "$@" || stopped "$name"
 }
 
-# --- install.env -------------------------------------------------------------
+# --- settings ----------------------------------------------------------------
 
-# The settings install.env may hold; anything else is a typo, so it stops.
-known_setting() {
-  [[ "$1" =~ ^(LIBRARY_REVISION|CATALOG_REPO_URL|DEPLOYMENT_TOKEN_FILE|CATALOG_TOKEN_FILE|QUAY_AUTH_FILE|KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_[A-Z_]+|SITE_ISSUER_[A-Z0-9_]+)$ ]]
-}
-
-read_install_env() { # reads $dir/install.env into exported variables; stops on a problem
-  local f="$dir/install.env" line key value left="" n=0
-  [ -f "$f" ] || die "no install.env: copy install-example.env to install.env, set its values and commit it"
-  while IFS= read -r line || [ -n "$line" ]; do
-    n=$((n + 1))
-    [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
-    [[ "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] ||
-      die "install.env line $n isn't NAME=VALUE"
-    key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]}
-    known_setting "$key" || die "install.env line $n: unknown setting $key"
-    value=${value#"${value%%[![:space:]]*}"}
-    if [[ "$value" =~ ^\"([^\"]*)\"[[:space:]]*(#.*)?$ || "$value" =~ ^\'([^\']*)\'[[:space:]]*(#.*)?$ ]]; then
-      value=${BASH_REMATCH[1]}                                             # quoted: kept as is
-    else
-      value=${value%%[[:space:]]#*}                                        # a trailing comment
-      value=${value%"${value##*[![:space:]]}"}
-    fi
-    [[ "$key" != GATE_* || "$value" =~ ^[0-9]+$ ]] ||
-      die "install.env line $n: $key must be a number of seconds"
-    case "$value" in *REQUIRED-*) left+="${left:+, }$key" ;; esac
+read_settings() { # clusters.yaml's settings into exported variables; stops on a problem
+  local lines line key value
+  [ ! -f "$dir/install.env" ] ||
+    die "install.env is no longer read: move its settings into clusters.yaml (CATALOG_REPO_URL and LIBRARY_REVISION under repositories: as catalog and library, SITE_ISSUER_<NAME> as that site's issuer, the rest under options:; see clusters-example.yaml), then delete install.env"
+  lines=$(settings_lines) || exit 1
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    key=${line%%=*} value=${line#*=}
     printf -v "$key" '%s' "$value"; export "${key?}"
-  done < "$f"
-  [ -z "$left" ] || die "set these in install.env: $left"
+  done <<<"$lines"
+  for key in $(compgen -v GATE_); do
+    [[ "${!key}" =~ ^[0-9]+$ ]] || die "$key must be a number of seconds, not ${!key}"
+  done
 }
 
 inputs_value() { # NAME: its value in root/inputs.env, empty when unset
@@ -154,9 +142,9 @@ abs_path() { # PATH: absolute, relative to this repository; ~/ is your home
   esac
 }
 
-check_install_env() { # the values the hub phase needs, and the files they name
+check_settings() { # the values the hub phase needs, and the files they name
   local var f
-  [ -n "${CATALOG_REPO_URL:-}" ] || die "set CATALOG_REPO_URL in install.env"
+  [ -n "${CATALOG_REPO_URL:-}" ] || die "set repositories.catalog in clusters.yaml"
   case "${KEYCLOAK:-install}" in
     install) ;;
     *) die "KEYCLOAK=${KEYCLOAK} is not supported yet: only KEYCLOAK=install is" ;;
@@ -166,7 +154,7 @@ check_install_env() { # the values the hub phase needs, and the files they name
   : "${QUAY_AUTH_FILE:=.config/quay-auth.json}"
   for var in DEPLOYMENT_TOKEN_FILE CATALOG_TOKEN_FILE QUAY_AUTH_FILE; do
     f=$(abs_path "${!var}")
-    [ -s "$f" ] || die "$var names $f, which doesn't exist or is empty: put the file there (install.env)"
+    [ -s "$f" ] || die "$var names $f, which doesn't exist or is empty: put the file there (make secrets), or set options.$var in clusters.yaml"
     printf -v "$var" '%s' "$f"; export "${var?}"
   done
   # bootstrap-hub.sh's own login check, made here so a missing login stops the
@@ -208,7 +196,7 @@ step_inputs() {
   local have want
   have=$(https_url "$(inputs_value catalogRepoURL)") want=$(https_url "$CATALOG_REPO_URL")
   if [ "$have" != "$want" ]; then
-    echo "error: root/inputs.env names the catalog $have, but install.env's CATALOG_REPO_URL is $want; set-inputs.sh keeps a value that's set. Edit catalogRepoURL in root/inputs.env, or delete that line so set-inputs.sh writes it again." >&2
+    echo "error: root/inputs.env names the catalog $have, but clusters.yaml's repositories.catalog is $want; set-inputs.sh keeps a value that's set. Edit catalogRepoURL in root/inputs.env, or delete that line so set-inputs.sh writes it again." >&2
     stopped inputs
   fi
   run_step inputs git-push.sh "install: inputs and library pin" root/ tenant-idp/manifests/settings.yaml
@@ -305,13 +293,13 @@ step_site_files() {
       stopped site-files
     elif [ -n "$chosen" ]; then
       grep -qx -- "$chosen" <<<"$issuers" || {
-        echo "error: $var=$chosen isn't a DNS-01 ClusterIssuer on $name; those are: $(echo $issuers)" >&2
+        echo "error: issuer $chosen (site $name in clusters.yaml) isn't a DNS-01 ClusterIssuer on $name; those are: $(echo $issuers)" >&2
         stopped site-files; }
       run_step site-files add-site.sh "$name" "$chosen"
     elif [ "$n" = 1 ]; then
       run_step site-files add-site.sh "$name"
     else
-      echo "error: $name has several DNS-01 ClusterIssuers: $(echo $issuers). Set $var in install.env to the one that issues publicly trusted certificates for its apps domain." >&2
+      echo "error: $name has several DNS-01 ClusterIssuers: $(echo $issuers). Set issuer: on site $name in clusters.yaml to the one that issues publicly trusted certificates for its apps domain." >&2
       stopped site-files
     fi
   done
@@ -360,12 +348,12 @@ end_phase() {
 # --- main --------------------------------------------------------------------
 
 cd "$dir"
-read_install_env
-check_install_env
-check_branch
 . "$here/clusters.sh"
-clusters_load "$dir"
-. "$here/gates.sh"   # after install.env, so its GATE_* values win
+clusters_load "$dir" || exit 1
+read_settings
+check_settings
+check_branch
+. "$here/gates.sh"   # after the settings, so their GATE_* values win
 pushed=""
 
 hub_phase
