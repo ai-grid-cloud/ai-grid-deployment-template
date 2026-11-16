@@ -107,7 +107,7 @@ In `install.env`, set `CATALOG_REPO_URL` to your catalog repository's URL, such 
 `https://github.com/my-org/ai-grid-catalog.git`. The other values have defaults that match the file names above.
 `install.env` holds no secrets. It also sets the following, each explained in the file:
 
-- `LIBRARY_REVISION`: a library branch, tag or commit to pin instead of the template's pin, to test a library change.
+- `LIBRARY_REVISION`: the library branch, tag or commit to pin. Each `make install` resolves it to its current commit and pins that commit. The default, `deployment-template`, follows the library branch this template is tested against; set another branch, tag or commit to test a library change, or leave it empty to keep the template's own commit pin.
 - `SITE_ISSUER_NAME`: which DNS-01 ClusterIssuer to use, when an `ingress` or `combined` site has several.
 - `GATE_*_SECONDS`: each readiness check's time limit.
 
