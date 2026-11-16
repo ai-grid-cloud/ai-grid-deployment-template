@@ -106,7 +106,7 @@ t "missing tool" '^MISSING +jq ' "$T/nojq" "$w"
 t "missing tool: summary and note" 'Nothing was changed' "$T/nojq" "$w"
 
 t "nothing set: registry skipped" '^skipped +registry logins +no auth file at ~/.config/containers/auth.json or \$XDG_RUNTIME_DIR/containers/auth.json; set QUAY_AUTH_FILE in install.env$' "$T/bin" "$w"
-t "no clusters.yaml: skipped" '^skipped +cluster checks +no clusters.yaml: copy clusters-example.yaml' "$T/bin" "$w" --deployment "$T/other"
+t "no clusters.yaml: skipped, no guide page" '^skipped +cluster checks +no clusters.yaml: run cp clusters-example.yaml clusters.yaml and fill it in$' "$T/bin" "$w" --deployment "$T/other"
 P=$(mkdep placeholder 'hub: {name: hub, api: REQUIRED-hubAPIURL}')
 t "clusters placeholder: skipped" '^skipped +cluster checks +.*REQUIRED-hubAPIURL' "$T/bin" "$w" --deployment "$P"
 t "site section named" '^Site site-b \(combined\)' "$T/bin" "$w" "${ALL[@]}"
@@ -114,7 +114,7 @@ t "nothing set: token skipped" '^skipped +catalog token file' "$T/bin" "$w"
 
 t "quay.io/rhoai and stage" '^ok +registry.stage.redhat.io login' "$T/bin" "$w" --quay-auth-file "$A"
 G=$(authfile generic quay.io registry.stage.redhat.io)
-t "general quay.io login: ok with the note" '^ok +quay.io/rhoai login +general quay.io entry: page 3 needs make bootstrap ALLOW_GENERIC_LOGIN=1' "$T/bin" "$w" --quay-auth-file "$G"
+t "general quay.io login: ok with the note for both paths" '^ok +quay.io/rhoai login +general quay.io entry: set ALLOW_GENERIC_LOGIN=1 in install.env \(make install\) or run make bootstrap ALLOW_GENERIC_LOGIN=1 \(page by page\), or add a robot token for quay.io/rhoai$' "$T/bin" "$w" --quay-auth-file "$G"
 N=$(authfile nostage quay.io/rhoai)
 t "no stage login: ok, optional" '^ok +registry.stage.redhat.io login +none; optional: only nightly-only runtime images need it' "$T/bin" "$w" --quay-auth-file "$N"
 O=$(authfile other docker.io)
