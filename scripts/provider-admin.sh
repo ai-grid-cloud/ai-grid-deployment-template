@@ -63,8 +63,9 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
   [ -s "$tmp/token" ] || { echo "error: oc create token gave no token" >&2; exit 1; }
   { printf 'Authorization: Bearer '; tr -d '\r\n' < "$tmp/token"; printf '\n'; } > "$tmp/auth" )
 
-console=$(oc get route -n ai-grid-provider-console -o jsonpath='{.items[*].spec.host}' 2>/dev/null || true)
-console=${console%% *}
+# The chart's Route, by name: never another Route someone added to the namespace,
+# because the token is sent to this host.
+console=$(oc get route ai-grid-provider-console -n ai-grid-provider-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
 [ -n "$console" ] || { echo "error: no console Route on $hub yet: see make status" >&2; exit 1; }
 code=$(curl -sS -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
   -H 'Connect-Protocol-Version: 1' --data-binary '{}' -w '%{http_code}' \

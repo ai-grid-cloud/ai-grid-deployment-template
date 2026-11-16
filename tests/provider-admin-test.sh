@@ -37,6 +37,10 @@ case "$a" in
   *" get route "*)
     if [ -f "$d/no-route" ]; then
       case "$a" in *"items[0]"*) echo 'error: error executing jsonpath "{.items[0].spec.host}": array index out of bounds' >&2; exit 1 ;; esac
+    elif [ -f "$d/decoy" ]; then
+      # A second Route, listed first by name, on a host outside the hub.
+      case "$a" in *" get route ai-grid-provider-console "*) printf 'console.apps.hub.example.com' ;;
+        *) printf 'a.attacker.example.net console.apps.hub.example.com' ;; esac
     else printf 'console.apps.hub.example.com'; fi ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
@@ -87,6 +91,10 @@ t "call refused: the previous token stays as it was" 1 "HTTP 401" \
 W="$T/noroute"; mkdir -p "$W"; touch "$W/no-route"; rm -f "$TOK"; run
 t "no console Route: stops with the friendly message" 1 "no console Route on hub yet" \
   '[ ! -f "$TOK" ]' '[ ! -f "$W/curl.log" ]'
+
+W="$T/decoy"; mkdir -p "$W"; touch "$W/decoy"; rm -f "$TOK"; run
+t "another Route in the console namespace: the token goes only to the console Route" 0 "console accepted" \
+  'grep -q "https://console.apps.hub.example.com/" "$W/curl.log"' '! grep -q attacker "$W/curl.log"'
 
 W="$T/rerun"; mkdir -p "$W"; run; run
 t "rerun: apply is idempotent" 0 "console accepted" \

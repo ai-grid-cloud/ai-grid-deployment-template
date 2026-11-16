@@ -112,7 +112,7 @@ ready() { # W
   echo "{\"items\":[$(app acm Synced Healthy),$(app tenant-idp Synced Healthy),$(app limitador-redis Synced Healthy)]}" > "$h/apps.json"
   echo '{"items":[{"status":{"phase":"Running"}}]}' > "$h/mch.json"
   echo "{\"items\":[$(route console console.apps.hub.example.com)]}" > "$h/route-ai-grid-provider-console.json"
-  route console console.apps.hub.example.com > "$h/route-ai-grid-provider-console-console.json"
+  route ai-grid-provider-console console.apps.hub.example.com > "$h/route-ai-grid-provider-console-ai-grid-provider-console.json"
   route keycloak keycloak.apps.hub.example.com > "$h/route-tenant-idp-keycloak.json"
   echo '{"items":[{"endpoints":[{"addresses":["10.0.0.9"],"conditions":{"ready":true}}]}]}' > "$h/perses-endpointslices.json"
   route rbac-query-proxy thanos.apps.hub.example.com > "$h/route-open-cluster-management-observability-rbac-query-proxy.json"
@@ -148,6 +148,12 @@ t "all ready: OK and outputs.json" 0 "^OK " \
   'grep -q "https://console.apps.hub.example.com/ai_grid.v1.Subscriptions/List" "$W/curl.log"' \
   'grep -q "^OK .*Perses" <<<"$out"' \
   '! grep -qwE "apply|create|delete|patch|edit|label|annotate|replace|scale|rollout" "$W/argv.log"'
+
+W="$T/decoy"; ready "$W"; rm -f "$(OUT)"
+echo "{\"items\":[$(route a a.attacker.example.net),$(route ai-grid-provider-console console.apps.hub.example.com)]}" > "$W/hub/route-ai-grid-provider-console.json"
+route a a.attacker.example.net > "$W/hub/route-ai-grid-provider-console-a.json"; run
+t "another Route in the console namespace: the token goes only to the console Route" 0 "^OK " \
+  'grep -q "https://console.apps.hub.example.com/ai_grid.v1.Tenants/List" "$W/curl.log"' '! grep -q attacker "$W/curl.log"'
 
 W="$T/labelled"; ready "$W"; mc site-b '{"ai-grid/enabled":"true","ai-grid/role":"combined"}' > "$W/hub/mc-site-b.json"
 rm -f "$(OUT)"; run

@@ -315,8 +315,6 @@ step_site_files() {
 # Each site from clusters.yaml, in file order, then the hub's Applications
 # again. hub-apps-final, like the ready check (scripts/ready-check.sh), lets
 # through the Applications that wait for a site: no site is in the grid yet.
-# The acceptance run (Z1) records which Applications, if any, still wait for a
-# site at this point.
 sites_phase() {
   local name
   step_site_files
