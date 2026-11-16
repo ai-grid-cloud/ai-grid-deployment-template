@@ -65,8 +65,8 @@ options:
   # supported in this version.
   # KEYCLOAK: install
 
-  # 1 lets bootstrap use a general quay.io account, under quay:, instead of a
-  # quay.io/rhoai robot account. Default: empty (quay.io/rhoai is required).
+  # 1 lets bootstrap use the general quay.io entry of an auth file you supply
+  # (QUAY_AUTH_FILE) when it has no quay.io/rhoai entry. Not needed for quay:.
   # ALLOW_GENERIC_LOGIN: 1
 
   # The lifetime of the provider-admin token make install writes to

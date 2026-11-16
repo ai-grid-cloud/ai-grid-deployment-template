@@ -241,8 +241,9 @@ and content checks fail by design.
 
 ## What the install does
 
-Each step prints `== STEP` as it starts. The install builds the `quay.io` auth file `.config/quay-auth.json`, which
-the `bootstrap` step uses, from `quay:`.
+Each step prints `== STEP` as it starts. Before the first one, the install turns the secrets into files under
+`.config/generated/`, readable only by you, and passes them to its scripts by path: the two GitHub tokens, and a
+`quay.io` auth file built from `quay:`, which the `bootstrap` step uses.
 
 1. `login`: writes `.config/NAME/kubeconfig` for each cluster from its credentials and the API URL in
    `.config/clusters.yaml`.
@@ -322,8 +323,8 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
   the installer's `auth/kubeconfig`, or put the kubeconfig in `.config/NAME/kubeconfig`. `make install` keeps a
   kubeconfig that works.
 - **An untrusted API certificate:** put the CA of the cluster's API in `.config/NAME/ca.crt`.
-- **A general `quay.io` account:** put its name and password under `quay:`, and set `ALLOW_GENERIC_LOGIN: 1` under
-  `options:`. Without it, the install requires a `quay.io/rhoai` robot account.
+- **A general `quay.io` account:** put its name and password under `quay:`. The install uses it for `quay.io/rhoai`
+  as it would a robot account, so it works only when that account can pull from `quay.io/rhoai`.
 - **Several DNS-01 issuers on a site:** set `issuer:` on that site, such as `issuer: letsencrypt-dns`.
 - **Another library revision:** set `repositories.library` to a branch, tag or commit, or leave it empty to keep the
   template's own commit pin.
