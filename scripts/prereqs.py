@@ -9,10 +9,13 @@ at your pin (scripts/library.sh).
 
 The clusters come from the deployment's clusters.yaml, each with its login in
 .config/NAME/kubeconfig. Each option also reads an environment variable:
-QUAY_AUTH_FILE, CATALOG_TOKEN_FILE and LIBRARY. Unset, QUAY_AUTH_FILE is the first of
-~/.config/containers/auth.json and $XDG_RUNTIME_DIR/containers/auth.json that exists,
-and CATALOG_TOKEN_FILE is ~/.ai-grid/catalog-token if it exists. A check whose input
-you haven't set prints "skipped". Every line is: status, name, detail. Statuses: ok, MISSING,
+QUAY_AUTH_FILE, CATALOG_TOKEN_FILE and LIBRARY. Unset, QUAY_AUTH_FILE and
+CATALOG_TOKEN_FILE come from the deployment's install.env, as make install reads
+them (a relative path is relative to the deployment). Unset there too,
+QUAY_AUTH_FILE is the first of ~/.config/containers/auth.json and
+$XDG_RUNTIME_DIR/containers/auth.json that exists, and CATALOG_TOKEN_FILE is
+~/.ai-grid/catalog-token if it exists. A check whose input you haven't set prints
+"skipped". Every line is: status, name, detail. Statuses: ok, MISSING,
 OLD, FAIL, skipped. Cluster checks are read-only (get, whoami, auth can-i).
 The registry check runs "oc image info" with your auth file; it never prints a
 credential. The exit code is always 0.
@@ -362,20 +365,47 @@ def default_auth_file():
                           run_dir and os.path.join(run_dir, "containers", "auth.json"))
 
 
+def install_env_paths(deployment):
+    """{KEY: absolute path} for QUAY_AUTH_FILE and CATALOG_TOKEN_FILE in DIR/install.env,
+    parsed as scripts/install.sh reads it (NAME=VALUE lines, quotes, trailing comments);
+    never evaluated by a shell."""
+    found = {}
+    try:
+        lines = open(os.path.join(deployment, "install.env")).read().splitlines()
+    except OSError:
+        return found
+    for line in lines:
+        m = re.match(r"^\s*(QUAY_AUTH_FILE|CATALOG_TOKEN_FILE)=(.*)$", line)
+        if not m:
+            continue
+        value = m.group(2).lstrip()
+        q = re.match(r"""^"([^"]*)"\s*(#.*)?$|^'([^']*)'\s*(#.*)?$""", value)
+        if q:
+            value = q.group(1) if q.group(1) is not None else q.group(3)
+        else:
+            value = re.sub(r"\s#.*$", "", value).rstrip()
+        if value:
+            path = os.path.expanduser(value)
+            found[m.group(1)] = path if os.path.isabs(path) else os.path.join(deployment, path)
+    return found
+
+
 def main():
     global LIB
     p = argparse.ArgumentParser(
         description="Report which AI Grid install prerequisites you have. Never blocks; always exits 0.")
     p.add_argument("--deployment", default=REPO, help="your deployment repository (default: this one)")
     p.add_argument("--library", default=LIB, help="your library checkout (default: .library) [LIBRARY]")
-    p.add_argument("--quay-auth-file", default=os.environ.get("QUAY_AUTH_FILE") or default_auth_file(),
+    p.add_argument("--quay-auth-file", default=os.environ.get("QUAY_AUTH_FILE"),
                    help="container auth file with your quay.io login [QUAY_AUTH_FILE]")
-    p.add_argument("--catalog-token-file",
-                   default=(os.environ.get("CATALOG_TOKEN_FILE")
-                            or first_existing(os.path.expanduser("~/.ai-grid/catalog-token"))),
+    p.add_argument("--catalog-token-file", default=os.environ.get("CATALOG_TOKEN_FILE"),
                    help="file holding the catalog repository token [CATALOG_TOKEN_FILE]")
     a = p.parse_args()
     LIB = a.library
+    from_env = install_env_paths(a.deployment)
+    a.quay_auth_file = a.quay_auth_file or from_env.get("QUAY_AUTH_FILE") or default_auth_file()
+    a.catalog_token_file = (a.catalog_token_file or from_env.get("CATALOG_TOKEN_FILE")
+                            or first_existing(os.path.expanduser("~/.ai-grid/catalog-token")))
 
     check_tools()
     check_library(a.deployment)
