@@ -5,7 +5,8 @@
 
 # Optional. make prereqs checks the files make install uses: QUAY_AUTH_FILE
 # and CATALOG_TOKEN_FILE under options: in clusters.yaml, then these variables,
-# then .config/quay-auth.json and .config/catalog-token. ALLOW_GENERIC_LOGIN=1
+# then .config/quay-auth.json and .config/catalog-token (when clusters.yaml
+# names a catalog; otherwise page 2's defaults). ALLOW_GENERIC_LOGIN=1
 # lets bootstrap use a general quay.io login; KEYCLOAK_NAMESPACE and
 # KEYCLOAK_REALM default to the template's tenant-idp and tenants (console-secrets).
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM

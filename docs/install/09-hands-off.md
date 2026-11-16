@@ -25,7 +25,7 @@ worker nodes or the network.
 - [ ] **A `quay.io/rhoai` login** in a container auth file. This template installs a pre-release OpenShift AI 3.6
   build from `quay.io/rhoai`; Red Hat gives `quay.io/rhoai` robot tokens to early-access partners, so ask your Red Hat
   contact.
-- [ ] **Tools:** `oc`, `kubectl`, `git`, `jq`, `curl`, `openssl`, `base64`, `python3`, `clusteradm` and `make`.
+- [ ] **Tools:** `oc`, `kubectl`, `git`, `jq`, `curl`, `openssl`, `base64`, `python3`, `clusteradm`, `make` and `podman`.
 
 ## Install
 
@@ -48,13 +48,13 @@ The install writes to two GitHub repositories and needs a token for each.
    `ai-grid-catalog`. If an organization owns the repository, set **Resource owner** to that organization. Under
    **Repository access**, select **Only select repositories** and your catalog repository. Under **Permissions**,
    click **Add permissions** > **Contents**, and set it to **Read and write**. Leave every other
-   permission off. Click **Generate token**, and keep the token for step 5.
+   permission off. Click **Generate token**, and keep the token for step 6.
 
    When this token expires, the console can't save models or subscriptions until you replace it.
 
 3. Create the deployment token. Create a second fine-grained token the same way, named such as
    `ai-grid-deployment`, with **Contents** set to **Read and write** on your deployment repository only. Keep it for
-   step 5. `make install` pushes your settings and the sites' files with it.
+   step 6. `make install` pushes your settings and the sites' files with it.
 
 ### Set up your deployment repository
 
@@ -119,7 +119,9 @@ Tell the install which clusters and repositories to use, then give it the creden
 
    Each file is readable only by you. An empty answer skips that file. It keeps a file that already exists; to
    replace them all, run `make secrets FORCE=1`. A cluster token usually expires in about 24 hours; for a rerun the
-   next day, run `make secrets FORCE=1` again or use a kubeconfig instead (see [Other options](#other-options)).
+   next day, replace it with `rm -f .config/NAME/token && make secrets`, or use a kubeconfig instead (see
+   [Other options](#other-options)). The `quay.io` login needs a terminal; a CI job supplies
+   `.config/quay-auth.json` instead.
 
    If you have a general `quay.io` login instead, log in with
    `podman login --authfile .config/quay-auth.json quay.io` and set `ALLOW_GENERIC_LOGIN: 1` under `options:` in
@@ -139,7 +141,7 @@ Confirm that every cluster and credential is ready before anything is installed.
    `make login` writes `.config/NAME/kubeconfig` for each cluster from its token in `.config/NAME/token` and the API
    URL in `clusters.yaml`, and keeps a kubeconfig that already works. For each cluster it prints
    `Logged in to NAME as USER.` or `NAME: already logged in.` If it names a token file instead, run
-   `make secrets FORCE=1` with a fresh token for that cluster, then run it again.
+   `rm -f .config/NAME/token && make secrets` with a fresh token for that cluster, then run it again.
 
    `make prereqs` prints one line per check, starting with `ok`, `MISSING`, `OLD`, `FAIL` or `skipped`. It checks the tools, the
    `quay.io/rhoai` login in `QUAY_AUTH_FILE`, the catalog token in `CATALOG_TOKEN_FILE`, and, for each cluster in
