@@ -105,7 +105,7 @@ mkbin "$T/nojq"; rm "$T/nojq/jq"
 t "missing tool" '^MISSING +jq ' "$T/nojq" "$w"
 t "missing tool: summary and note" 'Nothing was changed' "$T/nojq" "$w"
 
-t "nothing set: registry skipped" '^skipped +registry logins +no auth file at ~/.config/containers/auth.json or \$XDG_RUNTIME_DIR/containers/auth.json; set QUAY_AUTH_FILE in install.env$' "$T/bin" "$w"
+t "nothing set: registry skipped" '^skipped +registry logins +no auth file at ~/.config/containers/auth.json or \$XDG_RUNTIME_DIR/containers/auth.json; set QUAY_AUTH_FILE$' "$T/bin" "$w"
 t "no clusters.yaml: skipped, no guide page" '^skipped +cluster checks +no clusters.yaml: run cp clusters-example.yaml clusters.yaml and fill it in$' "$T/bin" "$w" --deployment "$T/other"
 P=$(mkdep placeholder 'hub: {name: hub, api: REQUIRED-hubAPIURL}')
 t "clusters placeholder: skipped" '^skipped +cluster checks +.*REQUIRED-hubAPIURL' "$T/bin" "$w" --deployment "$P"
@@ -120,6 +120,8 @@ t "no stage login: ok, optional" '^ok +registry.stage.redhat.io login +none; opt
 O=$(authfile other docker.io)
 t "no quay login" '^MISSING +quay.io/rhoai login' "$T/bin" "$w" --quay-auth-file "$O"
 t "auth file not found" '^MISSING +auth file' "$T/bin" "$w" --quay-auth-file "$T/nope.json"
+t "auth file not found, no install.env: no install.env in the hint" "^MISSING +auth file +$T/nope.json: not found; set QUAY_AUTH_FILE to your auth file, or put it there$" "$T/bin" "$w" --quay-auth-file "$T/nope.json"
+t "token file not found, no install.env: no install.env in the hint" "^MISSING +catalog token file +$T/nope-token not found; set CATALOG_TOKEN_FILE to your token file, or put it there$" "$T/bin" "$w" --catalog-token-file "$T/nope-token"
 touch "$w/fail-image"
 t "registry refuses: FAIL, token scrubbed" '^FAIL +pull the pinned catalog +.*unauthorized' "$T/bin" "$w" --quay-auth-file "$A"
 rm "$w/fail-image"
@@ -161,7 +163,7 @@ dflt "an empty variable uses the default" "^ok +auth file +$H1/.config/container
 dflt "QUAY_AUTH_FILE beats the default" "^ok +auth file +$N" "$H1" QUAY_AUTH_FILE="$N"
 H2="$T/home2"; mkdir -p "$H2"
 dflt "fallback auth file: \$XDG_RUNTIME_DIR/containers/auth.json" "^ok +auth file +$T/run1/containers/auth.json" "$H2" XDG_RUNTIME_DIR="$T/run1"
-dflt "no default token file: skipped" '^skipped +catalog token file +no ~/.ai-grid/catalog-token; set CATALOG_TOKEN_FILE in install.env$' "$H2"
+dflt "no default token file: skipped" '^skipped +catalog token file +no ~/.ai-grid/catalog-token; set CATALOG_TOKEN_FILE$' "$H2"
 
 # install.env: make install's QUAY_AUTH_FILE and CATALOG_TOKEN_FILE, relative to the deployment,
 # read as scripts/install.sh reads them: a value in install.env beats the environment, and a
@@ -189,5 +191,10 @@ ED=$E2 envt "install.env without the key: the environment still counts" "^ok +au
 E3="$T/env-missing"; mkdir -p "$E3"; printf 'CATALOG_REPO_URL=https://example.com/c.git\n' > "$E3/install.env"
 ED=$E3 envt "install.env: missing token file names CATALOG_TOKEN_FILE" "^MISSING +catalog token file +$E3/.config/catalog-token not found; set CATALOG_TOKEN_FILE in install.env"
 ED=$E3 envt "install.env: missing auth file names QUAY_AUTH_FILE" "^MISSING +auth file +$E3/.config/quay-auth.json: not found; set QUAY_AUTH_FILE in install.env"
+
+# An empty value in install.env is unset there, so install.sh's default applies, not the environment.
+E4="$T/env-empty"; mkdir -p "$E4/.config"; cp "$A" "$E4/.config/quay-auth.json"
+printf 'CATALOG_REPO_URL=https://example.com/c.git\nQUAY_AUTH_FILE=\n' > "$E4/install.env"
+ED=$E4 envt "install.env with an empty value: .config/quay-auth.json, not the environment" "^ok +auth file +$E4/.config/quay-auth.json" QUAY_AUTH_FILE="$N"
 
 echo "prereqs tests: $((total-fails)) ok, $fails failed"; exit "$fails"

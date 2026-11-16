@@ -7,7 +7,8 @@ You came here from the README and already created your deployment repository fro
 
 ## Before you start
 
-You need the following. In step 9, `make prereqs` checks the clusters and logins for you.
+You need the following. In step 9, `make prereqs` checks the clusters and logins for you; it doesn't check the
+worker nodes or the network.
 
 - [ ] **A hub and one or more sites on OpenShift 4.21 or later,** with nothing of AI Grid on them, and a
   `cluster-admin` login and the API URL for each.
@@ -15,7 +16,7 @@ You need the following. In step 9, `make prereqs` checks the clusters and logins
   `inference` (models only). At least one site is `ingress` or `combined`.
 - [ ] **A default StorageClass on each cluster.**
 - [ ] **Two worker nodes on each cluster** for Submariner's gateways. On a compact cluster or single-node OpenShift,
-  you label the gateway nodes by hand.
+  you label the gateway nodes by hand, as [site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/networking.md) describes.
 - [ ] **Network:** each cluster has a load-balancer provider for Submariner's LoadBalancer Service, each cluster
   reaches the other clusters' load balancers on UDP 4500 and 4490, and every router name answers `AAAA` queries
   without `NXDOMAIN`.
@@ -44,8 +45,9 @@ The install writes to two GitHub repositories and needs a token for each.
 
 2. Create the catalog token.
    [Create a fine-grained token](https://github.com/settings/personal-access-tokens/new), named such as
-   `ai-grid-catalog`. Under **Repository access**, select **Only select repositories** and your catalog repository.
-   Under **Permissions**, click **Add permissions** > **Contents**, and set it to **Read and write**. Leave every other
+   `ai-grid-catalog`. If an organization owns the repository, set **Resource owner** to that organization. Under
+   **Repository access**, select **Only select repositories** and your catalog repository. Under **Permissions**,
+   click **Add permissions** > **Contents**, and set it to **Read and write**. Leave every other
    permission off. Click **Generate token**, and keep the token for step 6.
 
    When this token expires, the console can't save models or subscriptions until you replace it.
@@ -103,10 +105,10 @@ Tell the install which clusters to use and where its credentials are.
 
    | File | What it holds |
    |---|---|
-   | `.config/NAME/token` | A `cluster-admin` token for the cluster, such as the output of `oc whoami -t`. One per cluster. |
+   | `.config/NAME/token` | A `cluster-admin` token for the cluster, such as the output of `oc whoami -t`. One per cluster. Such a token usually expires in about 24 hours; for a rerun the next day, use a kubeconfig instead (see **Other options**). |
    | `.config/deployment-token` | The deployment token from step 3. |
    | `.config/catalog-token` | The catalog token from step 2. |
-   | `.config/quay-auth.json` | Your container auth file with the `quay.io/rhoai` login. |
+   | `.config/quay-auth.json` | A container auth file with your `quay.io/rhoai` login. |
 
    To write a token file without showing the token, run the following, paste the token when it asks, and press
    Enter:
@@ -118,11 +120,15 @@ Tell the install which clusters to use and where its credentials are.
    Replace `NAME` with the cluster's name, and run it once for each cluster. For the repository tokens, replace
    `.config/NAME/token` with `.config/deployment-token`, then with `.config/catalog-token`.
 
-   To copy your container auth file:
+   To write the auth file with your `quay.io/rhoai` robot token, run the following and enter the robot account's
+   name and token when it asks:
 
    ```sh
-   (umask 077 && cp ~/.config/containers/auth.json .config/quay-auth.json)
+   podman login --authfile .config/quay-auth.json quay.io/rhoai
    ```
+
+   If you have a general `quay.io` login instead, log in to `quay.io` the same way and set `ALLOW_GENERIC_LOGIN=1` in
+   `install.env`.
 
 7. Set `install.env`. Copy the example file:
 
@@ -228,7 +234,7 @@ When a step fails, `make install` prints why, then stops with a line like the fo
 make install stopped at hub-apps. Fix the cause, then run make install again.
 ```
 
-- If the line names a readiness check, such as `hub-apps` or `site-site-b-import`, the evidence is above it and in
+- If the line names a readiness check, such as `hub-apps` or `site-site-east-1-import`, the evidence is above it and in
   `.install/report.txt`: `make status`, `make site-status` for a site, and the conditions of whatever isn't ready.
 - If the line names a step, the step's own error is above it.
 - If it stopped at `ready`, the ready check's last output is in `.install/ready-check.txt`.
