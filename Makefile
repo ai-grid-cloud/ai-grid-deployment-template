@@ -11,7 +11,7 @@
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
 .PHONY: help secrets login prereqs bootstrap status console-secrets test update \
-  site-check site-wipe site-import site-add site-join site-status tenant-user tenant-call \
+  site-check site-wipe site-import site-join site-status tenant-user tenant-call \
   empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
 
 # The site targets work on the only site in clusters.yaml; with several, set
@@ -56,9 +56,6 @@ site-wipe: ## Preview removing a site's old install; CONFIRM=1 removes it (page 
 
 site-import: ## Preview importing a site into the hub's ACM; CONFIRM=1 imports it (page 5)
 	@scripts/import-site.sh $(SITE) $(if $(CONFIRM),--yes)
-
-site-add: ## Write an ingress or combined site's files; ISSUER=... if it has several; PUSH=1 pushes (page 6)
-	@n=$$(scripts/clusters.sh --site $(SITE)) && PUSH=$(PUSH) scripts/add-site.sh "$$n" $(ISSUER)
 
 site-join: ## Label a site on the hub so the hub installs it (page 6)
 	@scripts/join-site.sh $(SITE)

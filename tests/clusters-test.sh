@@ -166,16 +166,18 @@ touch "$T/no-token"
 t "console-call without a token says how to get one" 1 "make login NAME=hub" env PATH="$T/cbin:$PATH" "$d/scripts/console-call.sh" ai_grid.v1.Clusters/List
 rm "$T/no-token"
 
-# Install settings in clusters.yaml (repositories:, options:, a site's issuer).
+# Install settings in clusters.yaml (repositories:, options:).
 d=$(repo settings "hub: {api: 'https://h:6443'}
 sites:
-  - {name: site-b, role: combined, location: us, api: 'https://s:6443', issuer: acme-dns}
+  - {name: site-b, role: combined, location: us, api: 'https://s:6443'}
 repositories: {catalog: 'https://github.com/acme/catalog.git', library: deployment-template}
 options: {GATE_ROOT_SECONDS: 900, ALLOW_GENERIC_LOGIN: true, KEYCLOAK: install, PROVIDER_ADMIN_TOKEN_DURATION: ''}")
 t "the hub's name defaults to hub" 0 "^hub$" bash "$d/scripts/clusters.sh" --hub
 t "settings: the catalog" 0 "^CATALOG_REPO_URL=https://github.com/acme/catalog.git$" bash "$d/scripts/clusters.sh" --settings "$d"
 t "settings: the library" 0 "^LIBRARY_REVISION=deployment-template$" bash "$d/scripts/clusters.sh" --settings "$d"
-t "settings: a site's issuer" 0 "^SITE_ISSUER_SITE_B=acme-dns$" bash "$d/scripts/clusters.sh" --settings "$d"
+t "an issuer: on a site is an unknown key" 1 "sites\[0\].issuer" bash "$(repo siteissuer "hub: {name: hub, api: 'https://h:6443'}
+sites:
+  - {name: s1, role: combined, location: us, api: 'https://s:6443', issuer: x}")/scripts/clusters.sh" --hub
 t "settings: a number" 0 "^GATE_ROOT_SECONDS=900$" bash "$d/scripts/clusters.sh" --settings "$d"
 t "settings: true is 1" 0 "^ALLOW_GENERIC_LOGIN=1$" bash "$d/scripts/clusters.sh" --settings "$d"
 t "settings: an empty value is kept" 0 "^PROVIDER_ADMIN_TOKEN_DURATION=$" bash "$d/scripts/clusters.sh" --settings "$d"

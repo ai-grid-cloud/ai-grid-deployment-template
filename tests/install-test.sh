@@ -39,7 +39,6 @@ case "$a" in
   *" get secret rhoai-quay-pull-secret -n rhoai-prerequisites "*) ans hub-pull-secret ;;
   *" get managedclusters.cluster.open-cluster-management.io "*) set -- $*; ans "mc-$3.json" ;;
   *" get placements."*) echo '{"items":[]}' ;;
-  *" get clusterissuers.cert-manager.io "*) ans "issuers-$(basename "$(dirname "$KUBECONFIG")").json" ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
 STUB
@@ -67,7 +66,7 @@ setup() { # NAME: a deployment repository $D and a stub directory $W, for one ca
   D="$T/$1/repo" W="$T/$1/stub"; mkdir -p "$W" "$D/.config"
   cp -R "$SRC/scripts" "$D/"
   for s in login.sh set-library.sh set-inputs.sh check-deployment.sh empty-catalog.sh \
-      install-report.sh add-site.sh provider-admin.sh; do fake "$s"; done
+      install-report.sh provider-admin.sh; do fake "$s"; done
   fake ready-check.sh '[ ! -f "$STUB_DIR/ready-check.sh.rc" ] || { echo "OK   hub Applications"; echo "FAIL site site-a: not available"; echo "Not ready: see FAIL above."; }'
   fake create-console-secrets.sh '[ -z "${CATALOG_TOKEN_FILE:-}" ] || cat "$CATALOG_TOKEN_FILE" > "$STUB_DIR/catalog-token-seen"'
   fake git-push.sh 'cat "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-seen"; echo "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-path"
@@ -96,17 +95,11 @@ YAML
   g -C "$D" init -q && g -C "$D" add clusters.yaml root && g -C "$D" commit -qm seed
   echo '{"items":[{"status":{"phase":"Running"}}]}' > "$W/mch.json"
   echo '{"items":[{"metadata":{"name":"acm"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"}}}]}' > "$W/apps.json"
-  issuers site-a dns01:letsencrypt-dns
   : > "$W/calls.log"; : > "$W/argv.log"
 }
 opt() { # KEY VALUE: adds an options: entry to clusters.yaml
   sed -i.bak "s#^options:\$#options:\\
   $1: $2#" "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
-}
-issuers() { # SITE [SOLVER:NAME...]: the site's ClusterIssuers, as its oc answers them
-  local site=$1 items="" i; shift
-  for i in "$@"; do items+="${items:+,}{\"metadata\":{\"name\":\"${i#*:}\"},\"spec\":{\"acme\":{\"solvers\":[{\"${i%%:*}\":{}}]}}}"; done
-  printf '{"items":[%s]}\n' "$items" > "$W/issuers-$site.json"
 }
 run() { # [ARG...]: runs install.sh in $D; sets rc and out, and keeps all output for the leak check
   out=$(cd "$D" && env PATH="$T/bin:$PATH" STUB_DIR="$W" REPO="$D" scripts/install.sh "$@" 2>"$W/stderr") && rc=0 || rc=$?
@@ -119,7 +112,7 @@ all_out=""
 
 setup fresh; run
 t "fresh: runs every hub step in order" eval '[ "$rc" = 0 ] &&
-  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;add-site.sh site-a;git-push.sh install: site files apps/ sites/ values/clusters/;site-check.sh site-a;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
+  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;site-check.sh site-a;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
 
 t "end: provider-admin then ready-check, then the outputs line" eval '[ "$rc" = 0 ] &&
   [ "$(grep -E "^(== (provider-admin|ready)|gate (hub-apps-final|ready))" <<<"$out" | sed -E "s/ after .*//" | tr "\n" ";")" = "gate hub-apps-final: passed;== provider-admin;== ready;gate ready: passed;" ] &&
@@ -136,7 +129,7 @@ t "ready check fails: its FAIL lines, the report, exit 1" eval '[ "$rc" = 1 ] &&
 
 setup hubonly; run --hub-only
 t "--hub-only: no sites, no provider-admin, no ready check" eval '[ "$rc" = 0 ] &&
-  ! grep -qE "^(add-site|site-check|import-site|provider-admin|ready-check)" "$W/calls.log" &&
+  ! grep -qE "^(site-check|import-site|provider-admin|ready-check)" "$W/calls.log" &&
   ! grep -q "^Installed" <<<"$out" && grep -q "hub only" <<<"$out"'
 
 setup rerun
@@ -314,54 +307,17 @@ set_role() { # SITE ROLE: changes the site's role in clusters.yaml
   g -C "$D" commit -qam "role $1 $2"
 }
 
-setup noissuer; set_role site-a ingress
-issuers site-a http01:letsencrypt-http
+setup ingress; set_role site-a ingress
 run
-t "ingress site without DNS-01 issuer: stops and names it" eval '[ "$rc" = 1 ] &&
-  grep -qF "site-a (ingress) has no DNS-01 ClusterIssuer for its MaaS certificate; add one, or give it role inference." <<<"$out" &&
-  grep -qx "make install stopped at site-files. Fix the cause, then run make install again." <<<"$out" &&
-  ! grep -qE "^(add-site|import-site)" "$W/calls.log" && ! grep -q "install: site files" "$W/calls.log"'
-
-setup inference; set_role site-a inference
-rm "$W/issuers-site-a.json"
-run
-t "inference site needs none" eval '[ "$rc" = 0 ] && ! grep -q "^add-site" "$W/calls.log" &&
+t "an ingress site: no certificate step, no ClusterIssuer read, imported" eval '[ "$rc" = 0 ] &&
   ! grep -q "install: site files" "$W/calls.log" && ! grep -q "clusterissuers" "$W/argv.log" &&
-  grep -q "^import-site.sh site-a --yes" "$W/calls.log"'
+  ! grep -q "^== site-files" <<<"$out" && grep -q "^import-site.sh site-a --yes" "$W/calls.log"'
 
-setup issuerset
-issuers site-a dns01:acme-staging dns01:acme-prod
+setup issuerkey
 sed -i.bak 's/name: site-a, role: combined,/name: site-a, issuer: acme-prod, role: combined,/' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 g -C "$D" commit -qam issuer
 run
-t "two DNS-01 issuers and SITE_ISSUER_ set: passes it" eval '[ "$rc" = 0 ] &&
-  grep -qx "add-site.sh site-a acme-prod" "$W/calls.log"'
-
-setup issuerunset
-issuers site-a dns01:acme-staging dns01:acme-prod
-run
-t "two issuers and none chosen: stops and lists them" eval '[ "$rc" = 1 ] &&
-  grep -q "acme-staging" <<<"$out" && grep -q "acme-prod" <<<"$out" && grep -q "Set issuer: on site site-a in clusters.yaml" <<<"$out" &&
-  grep -q "stopped at site-files" <<<"$out" && ! grep -qE "^(add-site|import-site)" "$W/calls.log"'
-
-setup filesthere
-issuers site-a dns01:acme-staging dns01:acme-prod
-mkdir -p "$D/apps" "$D/sites/site-a/maas-tls" "$D/values/clusters/site-a"
-: > "$D/apps/site-a-maas-tls.yaml"; : > "$D/sites/site-a/maas-tls/certificate.yaml"; : > "$D/values/clusters/site-a/rhoai.yaml"
-g -C "$D" add apps sites values && g -C "$D" commit -qm "site-a files"
-run
-t "rerun, site files already there: no issuer check, even with several" eval '[ "$rc" = 0 ] &&
-  grep -qx "add-site.sh site-a" "$W/calls.log" && ! grep -q "clusterissuers" "$W/argv.log" &&
-  grep -q "^import-site.sh site-a --yes" "$W/calls.log"'
-
-setup sitefiles; two_sites
-printf '%s\n' '- {name: site-c, role: ingress, location: eu, api: "https://api.site-c.example.com:6443"}' >> "$D/clusters.yaml"
-g -C "$D" commit -qam site-c
-issuers site-c dns01:other
-run
-t "site files pushed once, then the root gate" eval '[ "$rc" = 0 ] &&
-  [ "$(grep -E "^(add-site|git-push.sh install: site|site-check)" "$W/calls.log" | sed "s/ *\$//" | tr "\n" ";")" = "add-site.sh site-a;add-site.sh site-c;git-push.sh install: site files apps/ sites/ values/clusters/;site-check.sh site-a;site-check.sh site-b;site-check.sh site-c;" ] &&
-  [ "$(sed -n "/^== site-files/,/^== site site-a/p" <<<"$out" | grep -c "gate hub-root-sites: passed")" = 1 ]'
+t "an issuer: site key is an unknown key now" eval '[ "$rc" = 1 ] && grep -q "unknown keys (typos?): sites\[0\].issuer" <<<"$out" && [ ! -s "$W/calls.log" ]'
 
 t "no token value in any output" eval '[ -n "$all_out" ] && ! grep -qF "$SENTINEL" <<<"$all_out" &&
   ! grep -rqF "$SENTINEL" "$T"/*/repo/.install "$T"/*/stub/calls.log "$T"/*/stub/argv.log 2>/dev/null'

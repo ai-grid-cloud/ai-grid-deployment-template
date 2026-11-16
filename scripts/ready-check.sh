@@ -24,10 +24,7 @@
 #   - each site is an available ManagedCluster with no ai-grid/ or location
 #     label, and has no DataScienceCluster: imported, not added to the grid (a
 #     missing resource type counts as none; any other API error is a FAIL);
-#   - each ingress or combined site has its files here and on origin's
-#     deploymentRevision (make site-add), deployment-root is Synced at that
-#     branch's head, and the certificate's issuer is
-#     a DNS-01 ClusterIssuer on the site;
+#   - deployment-root is Synced at the head of origin's deploymentRevision;
 #   - the console lists no organizations, models or subscriptions (WARN, not
 #     checked, without the provider-admin token).
 # With no FAIL it writes .install/outputs.json (git-ignored): the hub's name, API
@@ -155,31 +152,11 @@ for name in $(site_names); do
     fail "site $name: ${login#error: }"; sk=""
   fi
 
-  case "$role" in
-    combined|ingress)
-      read_main
-      missing=""
-      for f in "apps/$name-maas-tls.yaml" "sites/$name/maas-tls/certificate.yaml" "values/clusters/$name/rhoai.yaml"; do
-        [ -e "$dir/$f" ] && [ -z "$main_err" ] && git -C "$dir" cat-file -e "$main_sha:$f" 2>/dev/null || missing+="${missing:+, }$f"
-      done
-      if [ -n "$main_err" ]; then fail "site $name ($role): its files on origin's $branch: $main_err"
-      elif [ -z "$missing" ]; then ok "site $name ($role): its files are here and on origin's $branch"
-      else fail "site $name ($role): missing here or on origin's $branch: $missing (make site-add SITE=$name, then commit and push)"; fi
-      if [ -z "$root_checked" ]; then
-        root_checked=1
-        if [ -z "$main_err" ]; then check "deployment-root Synced at origin's $branch ($main_sha)" root_synced_to "$main_sha"
-        else fail "deployment-root Synced at origin's $branch: $main_err"; fi
-      fi
-      issuer=$(sed -n -E '/issuerRef:/,$ s/^[[:space:]]+name:[[:space:]]*([^[:space:]#]+).*/\1/p' \
-        "$dir/sites/$name/maas-tls/certificate.yaml" 2>/dev/null | head -n1)
-      if [ -z "$issuer" ]; then fail "site $name: no issuer in sites/$name/maas-tls/certificate.yaml"
-      elif [ -n "$sk" ]; then
-        issuers=$(KUBECONFIG=$sk oc get clusterissuers.cert-manager.io -o json 2>/dev/null |
-          jq -r '.items[] | select(any(.spec.acme.solvers[]?; .dns01 != null)) | .metadata.name' 2>/dev/null || true)
-        if grep -qx -- "$issuer" <<<"$issuers"; then ok "site $name: ClusterIssuer $issuer is DNS-01"
-        else fail "site $name: ClusterIssuer $issuer isn't a DNS-01 ClusterIssuer on it; those are: $(echo ${issuers:-none})"; fi
-      fi ;;
-  esac
+  if [ -z "$root_checked" ]; then
+    root_checked=1; read_main
+    if [ -z "$main_err" ]; then check "deployment-root Synced at origin's $branch ($main_sha)" root_synced_to "$main_sha"
+    else fail "deployment-root Synced at origin's $branch: $main_err"; fi
+  fi
   sites_json=$(jq -c --arg n "$name" --arg r "$role" --arg l "$(cluster_field "$name" location)" \
     --arg a "$(cluster_field "$name" api)" --arg d "$domain" \
     '. + [{name: $n, role: $r, location: $l, api: $a, appsDomain: $d, acmName: $n}]' <<<"$sites_json")

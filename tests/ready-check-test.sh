@@ -48,7 +48,6 @@ case "$a" in
   *" get managedclusters.cluster.open-cluster-management.io "*) ans "mc-$3.json" ;;
   *" get datascienceclusters "*) ans dsc ;;
   *" get ingresses.config.openshift.io cluster "*) ans domain ;;
-  *" get clusterissuers.cert-manager.io "*) ans issuers.json ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
 STUB
@@ -79,7 +78,7 @@ STUB
 chmod +x "$T/bin/oc" "$T/bin/curl" "$T/bin/git"
 
 # A deployment repository: the template's scripts and root, two sites (combined
-# site-b with its files committed, inference site-c), every login, and the
+# site-b, inference site-c), every login, and the
 # provider-admin token. origin, a local bare repository, has its one commit as main.
 newrepo() { # DIR [SITES_YAML]
   local d=$1 sites=${2:-$'  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n  - {name: site-c, role: inference, location: us-west, api: "https://api.site-c.example.com:6443"}'}
@@ -87,11 +86,6 @@ newrepo() { # DIR [SITES_YAML]
   cp -R "$SRC/scripts" "$SRC/root" "$d/"
   : > "$d/.config/hub/kubeconfig"; : > "$d/.config/site-b/kubeconfig"; : > "$d/.config/site-c/kubeconfig"
   printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n%s\n' "$sites" > "$d/clusters.yaml"
-  mkdir -p "$d/apps" "$d/sites/site-b/maas-tls" "$d/values/clusters/site-b"
-  echo "kind: Application" > "$d/apps/site-b-maas-tls.yaml"
-  sed -e 's/APPS_DOMAIN/apps.site-b.example.com/' -e 's/DNS01_ISSUER/letsencrypt-dns/' \
-    "$SRC/site-template/sites/SITE/maas-tls/certificate.yaml" > "$d/sites/site-b/maas-tls/certificate.yaml"
-  echo "maas: {}" > "$d/values/clusters/site-b/rhoai.yaml"
   (umask 077; printf '%s\n' "$SECRET" > "$d/.config/provider-admin-token")
   git -C "$d" init -q && git -C "$d" add -A . ':!.config' &&
     git -C "$d" -c core.hooksPath=/dev/null -c user.name=test -c user.email=test@example.com commit -qm init &&
@@ -120,7 +114,6 @@ ready() { # W
   mc site-b > "$h/mc-site-b.json"; mc site-c > "$h/mc-site-c.json"
   printf '{"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"Healthy"}}}' "$sha" > "$h/deployment-root.json"
   for s in site-b site-c; do : > "$w/$s/dsc"; printf 'apps.%s.example.com' "$s" > "$w/$s/domain"; done
-  echo '{"items":[{"metadata":{"name":"letsencrypt-dns"},"spec":{"acme":{"solvers":[{"dns01":{"route53":{}}}]}}},{"metadata":{"name":"letsencrypt-http"},"spec":{"acme":{"solvers":[{"http01":{}}]}}}]}' > "$w/site-b/issuers.json"
 }
 OUT() { echo "$D/.install/outputs.json"; }
 jqt() { jq -e "$1" "$(OUT)" >/dev/null; }
@@ -163,14 +156,10 @@ t "a site labelled ai-grid/enabled: FAIL" 1 "^FAIL .*site-b.*ai-grid/enabled" '[
 W="$T/dsc"; ready "$W"; echo "datasciencecluster.datasciencecluster.opendatahub.io/default-dsc" > "$W/site-c/dsc"; run
 t "a DataScienceCluster on a site: FAIL" 1 "^FAIL .*site-c.*DataScienceCluster" '[ ! -f "$(OUT)" ]'
 
-W="$T/nofiles"; ready "$W"; git -C "$D" rm -q values/clusters/site-b/rhoai.yaml; run
-git -C "$D" checkout -q HEAD -- values/clusters/site-b/rhoai.yaml
-t "missing site files for an ingress site: FAIL" 1 "^FAIL .*site-b.*values/clusters/site-b/rhoai.yaml" '[ ! -f "$(OUT)" ]'
 
 D="$T/inference"; newrepo "$D" '  - {name: site-c, role: inference, location: us-west, api: "https://api.site-c.example.com:6443"}'
-rm -rf "$D/apps" "$D/sites" "$D/values"
-W="$T/inference-w"; ready "$W"; rm -f "$W/hub/deployment-root.json"; run
-t "an inference site needs no files" 0 "^OK .*site-c" '! grep -q "^FAIL" <<<"$out"' \
+W="$T/inference-w"; ready "$W"; run
+t "an inference site" 0 "^OK .*site-c" '! grep -q "^FAIL" <<<"$out"' \
   '! grep -q clusterissuers "$W/argv.log"' 'jqt ".sites == [{name: \"site-c\", role: \"inference\", location: \"us-west\", api: \"https://api.site-c.example.com:6443\", appsDomain: \"apps.site-c.example.com\", acmName: \"site-c\"}]"'
 D="$T/repo"
 
