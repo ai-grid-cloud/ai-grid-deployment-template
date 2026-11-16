@@ -6,8 +6,9 @@
 #   - !! for each of its add-ons on the hub whose ManifestApplied is False
 #   - !! for each install namespace on the site stuck in Terminating
 #   - for a combined or ingress site, the HTTP status of its MaaS hostname
-#     (401 without a token, over trusted TLS), or "not installed yet" while it
-#     has no DataScienceCluster
+#     (401 without a token), that it answers with the cluster's internal
+#     certificate (not publicly trusted; curl never skips the check), or "not
+#     installed yet" while it has no DataScienceCluster
 #   - the models, subscriptions and auth policies on the site
 #
 #   scripts/site-status.sh [NAME]    NAME defaults to the only site in clusters.yaml
@@ -49,8 +50,16 @@ case "$(cluster_field "$name" role)" in
       echo "MaaS: not installed yet (page 6)"
     else
       url="https://maas.$(s get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')/v1/models"
-      code=$(curl -sS -o /dev/null -w '%{http_code}' "$url" 2>&1) || true
-      echo "MaaS $url: $code (expect 401 with no token)"
+      cf=$(mktemp); rc=0
+      err=$(curl -sS -o /dev/null -w '%{http_code}' "$url" 2>&1 >"$cf") || rc=$?
+      code=$(cat "$cf"); rm -f "$cf"
+      # 60: the certificate isn't trusted. The gateway keeps the cluster's internal one
+      # unless you add your own, so that answer means it's up.
+      if [ "$rc" = 60 ] || [[ "$err" =~ "SSL certificate problem" ]]; then
+        echo "MaaS $url: answers with the cluster's internal certificate, which isn't publicly trusted"
+      else
+        echo "MaaS $url: ${code:-000}${err:+ ($err)} (expect 401 with no token)"
+      fi
     fi ;;
 esac
 out=$(s get llminferenceservices,maassubscriptions,maasauthpolicies -A 2>&1 || true)

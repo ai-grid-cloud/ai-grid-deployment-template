@@ -41,7 +41,9 @@ case " $* " in
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
 STUB
-printf '#!/bin/bash\necho 000\nexit 6\n' > "$T/bin/curl"
+# The stub curl can't reach the host (exit 6), or with STUB_CURL_CERT=1 fails as
+# on a certificate it doesn't trust (exit 60, as curl does).
+printf '#!/bin/bash\nif [ -n "${STUB_CURL_CERT:-}" ]; then echo 000; echo "curl: (60) SSL certificate problem: self-signed certificate in certificate chain" >&2; exit 60; fi\necho 000\nexit 6\n' > "$T/bin/curl"
 chmod +x "$T/bin/oc" "$T/bin/curl"
 export STUB_LOG="$T/oc.log"
 m() { env PATH="$T/bin:$PATH" make -s -C "$@"; }
@@ -56,6 +58,9 @@ t "make help lists every guide target" 0 "console-secrets.*site-check.*site-wipe
 t "site-status with one site uses it" 0 "ManagedCluster: JOINED=True AVAILABLE=True" m "$one" site-status
 t "  ... lists its hub Applications only" 0 "^ok$" bash -c 'out=$(PATH="$1:$PATH" make -s -C "$0" site-status 2>&1); grep -q rhoai-site-b-x <<<"$out" && ! grep -q rhoai-site-c-x <<<"$out" && echo ok' "$one" "$T/bin"
 t "  ... reads the MaaS host and the site's models" 0 "smollm2-chat" m "$one" site-status
+t "  ... a MaaS gateway with the internal certificate: says so, not an error code" 0 \
+  "^MaaS https://maas\.[^ ]+/v1/models: answers with the cluster's internal certificate, which isn't publicly trusted$" \
+  env STUB_CURL_CERT=1 PATH="$T/bin:$PATH" make -s -C "$one" site-status
 t "  ... and only reads" 0 "^ok$" bash -c '! grep -E " oc (apply|label|patch|delete|create)" "$0" && echo ok' "$STUB_LOG"
 echo '{"items":[{"metadata":{"name":"submariner"},"status":{"conditions":[{"type":"ManifestApplied","status":"False","message":"namespace submariner-operator is being terminated"}]}},{"metadata":{"name":"work-manager"},"status":{"conditions":[{"type":"ManifestApplied","status":"True","message":"ok"}]}}]}' > "$STUB_LOG.addons"
 printf 'some-app\nsubmariner-operator\n' > "$STUB_LOG.terminating"
