@@ -18,7 +18,8 @@
 # is optional, to scripts/git-push.sh, CATALOG_TOKEN_FILE to scripts/create-console-secrets.sh,
 # QUAY_AUTH_FILE to scripts/bootstrap-hub.sh), never on a command line or in
 # the output. It only checks, before anything is pushed, that QUAY_AUTH_FILE holds
-# a quay.io/rhoai login, or that ALLOW_GENERIC_LOGIN=1 lets the general one stand in.
+# a quay.io/rhoai login, or that ALLOW_GENERIC_LOGIN=1 lets the general one stand in,
+# and a registry.stage.redhat.io login.
 #
 # The hub phase, each step printing "== STEP":
 #   login            scripts/login.sh --non-interactive
@@ -147,10 +148,14 @@ check_settings() { # the values the hub phase needs, and the files they name
   # bootstrap-hub.sh's own login check, made here so a missing login stops the
   # install before the inputs step pushes anything. It reads which logins the
   # file holds, never a token.
-  jq -e '.auths["quay.io/rhoai"].auth' "$QUAY_AUTH_FILE" >/dev/null 2>&1 && return 0
-  [ "${ALLOW_GENERIC_LOGIN:-${RHOAI_QUAY_ALLOW_GENERIC_LOGIN:-}}" = 1 ] ||
-    die "no quay.io/rhoai login in $QUAY_AUTH_FILE; add a robot token for quay.io/rhoai, or set ALLOW_GENERIC_LOGIN=1 to use the general quay.io login"
-  jq -e '.auths["quay.io"].auth' "$QUAY_AUTH_FILE" >/dev/null 2>&1 || die "no quay.io login in $QUAY_AUTH_FILE"
+  if ! jq -e '.auths["quay.io/rhoai"].auth' "$QUAY_AUTH_FILE" >/dev/null 2>&1; then
+    [ "${ALLOW_GENERIC_LOGIN:-${RHOAI_QUAY_ALLOW_GENERIC_LOGIN:-}}" = 1 ] ||
+      die "no quay.io/rhoai login in $QUAY_AUTH_FILE; add a robot token for quay.io/rhoai, or set ALLOW_GENERIC_LOGIN=1 to use the general quay.io login"
+    jq -e '.auths["quay.io"].auth' "$QUAY_AUTH_FILE" >/dev/null 2>&1 || die "no quay.io login in $QUAY_AUTH_FILE"
+  fi
+  # Sites pull model runtimes only from registry.stage.redhat.io (docs/upstream-main-limits.md, L20).
+  jq -e '.auths["registry.stage.redhat.io"].auth' "$QUAY_AUTH_FILE" >/dev/null 2>&1 ||
+    die "no registry.stage.redhat.io login in $QUAY_AUTH_FILE; set stage.username and stage.password in .config/clusters.yaml, or add it to that auth file (docs/upstream-main-limits.md, L20)"
 }
 
 # --- hub phase ---------------------------------------------------------------

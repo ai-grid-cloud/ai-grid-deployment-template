@@ -319,6 +319,29 @@ options: {WIPE_PROTECT_NAMESPACES: 'a,b'}")/scripts/clusters.sh" --hub
 d=$(priv halfquay "hub: {api: 'https://h:6443'}
 quay: {username: u}")
 t "quay username without password: stops" 1 "needs both a username and a password" load "$d" -- 'true'
+d=$(priv withstage "hub: {api: 'https://h:6443'}
+quay: {username: 'rhoai+robot', password: '$SECRET-q'}
+stage: {username: 'stage-user', password: '$SECRET-s'}")
+t "stage: joins the generated auth file" 0 "^stage-user:$SECRET-s$" load "$d" -- 'jq -r ".auths[\"registry.stage.redhat.io\"].auth" "$QUAY_AUTH_FILE" | base64 -d'
+t "  ... beside quay.io/rhoai" 0 "^rhoai\+robot:$SECRET-q$" load "$d" -- 'jq -r ".auths[\"quay.io/rhoai\"].auth" "$QUAY_AUTH_FILE" | base64 -d'
+t "  ... --resolve prints no stage secret" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --resolve "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+d=$(priv halfstage "hub: {api: 'https://h:6443'}
+quay: {username: u, password: p}
+stage: {password: '$SECRET-s'}")
+t "stage password without username: stops" 1 "registry.stage.redhat.io login needs both a username and a password" load "$d" -- 'true'
+d=$(priv stagefile "hub: {api: 'https://h:6443'}
+stage: {username: s, password: '$SECRET-s'}")
+printf '{"auths":{}}' > "$d/auth.json"
+t "stage: with an auth file: stops, names the file" 1 "stage: in .config/clusters.yaml goes with quay:; QUAY_AUTH_FILE is an auth file" load "$d" QUAY_AUTH_FILE="$d/auth.json" -- 'true'
+d=$(priv stagenotstring "hub: {api: 'https://h:6443'}
+stage: {username: 123, password: 456}")
+printf '{"auths":{}}' > "$d/auth.json"
+t "stage: not a string, with an auth file: stops" 1 "stage.username isn't a string" load "$d" QUAY_AUTH_FILE="$d/auth.json" -- 'true'
+d=$(repo stagepub "hub: {api: 'https://h:6443'}
+stage: {username: x}")
+t "stage: in the committed clusters.yaml stops" 1 "can't hold secrets: stage" bash "$d/scripts/clusters.sh" --rows "$d"
+t "an unknown key under stage: is named by count" 1 "stage \(1 unknown key\)" load "$(priv stagetypo "hub: {api: 'https://h:6443'}
+stage: {username: s, password: p, token: x}")" -- 'true'
 
 # The old format (role:, location:, credentials:, kubeconfig:, hub.name) stops
 # first, with what to change, and never prints a value.

@@ -41,6 +41,7 @@ template's earlier library branch didn't have.
 | L17 | The hub's cert-manager has one owner: the library, the platform or the hub's own site | `hubCertManager`: `library` by default, `platform` or `site`; `make install` stops on a conflict |
 | L18 | A hub that is also a site has no usage logs | Documents it |
 | L19 | A hub that is also a site keeps Limitador's counters in memory | Documents it |
+| L20 | Model runtimes pull only from `registry.stage.redhat.io` (pre-release nightlies) | Requires a stage login: `make prereqs` reports `FAIL`, `make bootstrap` stops |
 
 ## Losses compared with the earlier library branch
 
@@ -55,6 +56,8 @@ adds it back:
 - A bring-your-own tenant IdP, through the `idp*` inputs (L3).
 - Bring-your-own or S4 object storage (L9).
 - Per-deployment cluster admins (L10).
+- A model runtime pull with no stage login, which fell back to
+  `registry.redhat.io` (L20).
 
 ## L1: the library's own ApplicationSets read `HEAD`
 
@@ -372,3 +375,28 @@ hub's.
 
 **Fix: upstream PR** that gives a hub that is a site the shared Limitador
 storage.
+
+## L20: model runtimes pull only from `registry.stage.redhat.io`
+
+`apps/rhoai-prerequisites/hub/03-policy.yaml:314-331` gives every site an
+`ImageDigestMirrorSet` that mirrors `registry.redhat.io/rhaii`,
+`rhaii-early-access` and `rhaii-fast` to `registry.stage.redhat.io`. On a site
+that isn't HCP, each mirror has `mirrorSourcePolicy: NeverContactSource`, so
+the node never falls back to `registry.redhat.io`. Without a
+`registry.stage.redhat.io` login in the pull secret, no model runtime image
+pulls there. On an HCP site the policy only informs, so the mirrors aren't
+written.
+
+The login is required while you install pre-release (nightly) builds. It goes
+away with the released catalog at OpenShift AI 3.6 GA, when the pre-release
+mirrors do.
+
+**Template:** requires the stage login. `make prereqs` reports
+`FAIL registry.stage.redhat.io login` without it, and `make bootstrap` stops
+before any write. The login goes in the same auth file as the `quay.io/rhoai`
+one (`podman login registry.stage.redhat.io`), or under `stage:` in
+`.config/clusters.yaml`. The hub copies it to every site's pull secret.
+
+**Fix: upstream PR** that lets the mirrors fall back to `registry.redhat.io`
+(no `NeverContactSource` on the `rhaii*` sources), or makes the stage mirrors
+an input, so a deployment without a stage login pulls released runtimes.

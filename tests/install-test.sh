@@ -90,7 +90,7 @@ sites:
 - {name: site-a, api: "https://api.site-a.example.com:6443"}
 YAML
   for f in deployment-token catalog-token; do printf '%s\n' "$SENTINEL" > "$D/.config/$f"; done
-  printf '{"auths":{"quay.io/rhoai":{"auth":"%s"}}}\n' "$SENTINEL" > "$D/.config/quay-auth.json"
+  printf '{"auths":{"quay.io/rhoai":{"auth":"%s"},"registry.stage.redhat.io":{"auth":"%s"}}}\n' "$SENTINEL" "$SENTINEL" > "$D/.config/quay-auth.json"
   mkdir -p "$D/.config/hub"; printf "users:\n- user: {token: '%s'}\n" "$SENTINEL" > "$D/.config/hub/kubeconfig"
   mkdir -p "$D/root"; printf '%s\n' deploymentRevision=main 'catalogRepoURL=git@github.com:acme/catalog' > "$D/root/inputs.env"
   g -C "$D" init -q && g -C "$D" add clusters.yaml root && g -C "$D" commit -qm seed
@@ -198,6 +198,7 @@ private() { # moves $D's clusters.yaml to .config/ with a secrets block, mode 60
   cat >> "$D/.config/clusters.yaml" <<YAML
 deployment: {token: "$SENTINEL-deploy"}
 quay: {username: "rhoai+robot", password: "$SENTINEL-quay"}
+stage: {username: "stage-user", password: "$SENTINEL-stage"}
 YAML
   chmod 600 "$D/.config/clusters.yaml"; rm -f "$D/.config/deployment-token" "$D/.config/catalog-token" "$D/.config/quay-auth.json"
 }
@@ -211,6 +212,8 @@ t "  ... the token file is .config/generated/deployment-token, mode 600" bash -c
 t "  ... .config/generated/quay-auth.json built for quay.io/rhoai, mode 600" bash -c '
   [ "$(jq -r ".auths[\"quay.io/rhoai\"].auth" "$0/.config/generated/quay-auth.json" | base64 -d)" = "rhoai+robot:$1-quay" ] &&
   [ "$(stat -f %Lp "$0/.config/generated/quay-auth.json" 2>/dev/null || stat -c %a "$0/.config/generated/quay-auth.json")" = 600 ]' "$D" "$SENTINEL"
+t "  ... with the registry.stage.redhat.io login from stage:" bash -c '
+  [ "$(jq -r ".auths[\"registry.stage.redhat.io\"].auth" "$0/.config/generated/quay-auth.json" | base64 -d)" = "stage-user:$1-stage" ]' "$D" "$SENTINEL"
 
 setup privateenv; private
 AI_GRID_DEPLOYMENT_TOKEN="$SENTINEL-env" run
@@ -259,8 +262,15 @@ t "general quay.io login without ALLOW_GENERIC_LOGIN: stops before the inputs pu
   grep -qF "no quay.io/rhoai login in $D/.config/quay-auth.json; add a robot token for quay.io/rhoai, or set ALLOW_GENERIC_LOGIN=1 to use the general quay.io login" <<<"$out" &&
   ! grep -q "^git-push.sh" "$W/calls.log" && [ ! -s "$W/argv.log" ]'
 
+setup nostage
+printf '{"auths":{"quay.io/rhoai":{"auth":"%s"}}}\n' "$SENTINEL" > "$D/.config/quay-auth.json"
+run
+t "no registry.stage.redhat.io login: stops before the inputs push" eval '[ "$rc" = 1 ] &&
+  grep -qF "no registry.stage.redhat.io login in $D/.config/quay-auth.json" <<<"$out" &&
+  ! grep -q "^git-push.sh" "$W/calls.log" && [ ! -s "$W/argv.log" ]'
+
 setup quaygeneric
-printf '{"auths":{"quay.io":{"auth":"%s"}}}\n' "$SENTINEL" > "$D/.config/quay-auth.json"
+printf '{"auths":{"quay.io":{"auth":"%s"},"registry.stage.redhat.io":{"auth":"%s"}}}\n' "$SENTINEL" "$SENTINEL" > "$D/.config/quay-auth.json"
 opt ALLOW_GENERIC_LOGIN 1; g -C "$D" commit -qam generic
 run
 t "general quay.io login with ALLOW_GENERIC_LOGIN=1: installs" eval '[ "$rc" = 0 ] && grep -q "^bootstrap-hub.sh" "$W/calls.log"'

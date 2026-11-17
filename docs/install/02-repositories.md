@@ -140,6 +140,7 @@ MISSING  clusteradm                       imports the site into ACM
 Registry logins (pre-release builds)
 ok       auth file                        /home/user/.config/containers/auth.json
 ok       quay.io/rhoai login              quay.io/rhoai entry
+ok       registry.stage.redhat.io login   entry present (model runtime images)
 ...
 Hub hub
 ok       reachable                        https://api.hub.example.com:6443

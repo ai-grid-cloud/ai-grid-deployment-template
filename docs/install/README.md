@@ -65,6 +65,10 @@ library's `main` branch, which reads less from your deployment repository
 
    The organizations, users and subscriptions you made in the old Keycloak don't move: create them again in the
    provider console.
+4. **The `registry.stage.redhat.io` login.** Sites now pull model runtimes only from `registry.stage.redhat.io`
+   ([limits of `main`, L20](../upstream-main-limits.md#l20-model-runtimes-pull-only-from-registrystageredhatio)).
+   Add the login (`stage:` in `.config/clusters.yaml`, or in your auth file), then rerun `make bootstrap` once:
+   `make install` skips the bootstrap on a hub that already has its pull secret, so it doesn't add the login there.
 
 ## Reference
 

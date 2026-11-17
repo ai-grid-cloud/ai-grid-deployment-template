@@ -7,13 +7,13 @@
 # - .config/clusters.yaml, for the one-command install (install guide, page 9;
 #   make config copies it). Git ignores .config/, the file must be readable
 #   only by you (chmod 600), and it's where your secrets go: uncomment the
-#   token or username and password lines, catalog.token, and the deployment:
-#   and quay: sections.
+#   token or username and password lines, catalog.token, and the deployment:,
+#   quay: and stage: sections.
 #
 # - clusters.yaml at the root, for the page-by-page guide (pages 1 to 8):
 #   cp clusters-example.yaml clusters.yaml. You commit it, so it holds no
 #   secrets: the scripts refuse a cluster's token:, username: and password:,
-#   catalog.token, deployment: and quay: in it. Leave those lines commented out.
+#   catalog.token, deployment:, quay: and stage: in it. Leave those lines commented out.
 #
 # When .config/clusters.yaml exists, the scripts read it and ignore clusters.yaml.
 apiVersion: ai-grid.dev/v1alpha1   # required header: the scripts parse this file with kubectl
@@ -56,6 +56,10 @@ catalog:
 # Your quay.io/rhoai robot account.
 # quay:
 #   username: rhoai+robot
+#   password: PASSWORD
+# Your registry.stage.redhat.io login: sites pull model runtimes only from there.
+# stage:
+#   username: STAGE_USERNAME
 #   password: PASSWORD
 
 # Optional: make install's settings, shown with their defaults. Uncomment a
