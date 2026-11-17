@@ -8,13 +8,14 @@
 #
 # deploymentRepoURL is this repository's origin, catalogRepoURL the argument,
 # idpIssuerURL https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants, and
-# portalRedirectURI https://maas.SITE_APPS_DOMAIN/*, with the apps domains read
-# from the hub and the first combined or ingress site in clusters.yaml through
-# their logins; both revisions are main. root/inputs.env is yours: the
+# portalRedirectURI https://maas.SITE_APPS_DOMAIN/* for every site in
+# clusters.yaml, space-separated, whatever role the provider console later gives
+# it, with the apps domains read from the hub and each site through their
+# logins; both revisions are main. root/inputs.env is yours: the
 # template has none, and root/kustomization.yaml copies its values into the
 # root. A value that's already set, in either file, is left alone.
 #
-# CATALOG_REPO_URL defaults to clusters.yaml's repositories.catalog (make inputs).
+# CATALOG_REPO_URL defaults to clusters.yaml's catalog.url (make inputs).
 #
 # Usage: scripts/set-inputs.sh [CATALOG_REPO_URL]
 set -euo pipefail
@@ -41,7 +42,7 @@ clusters_load "$dir"
 want=${1:-${CATALOG_REPO_URL:-}}
 if [ -z "$want" ]; then
   if clusters_private; then
-    echo "error: set repositories.catalog in ${CLUSTERS_FILE#"$dir/"} to your catalog repository's URL, then run make inputs again" >&2
+    echo "error: set catalog.url in ${CLUSTERS_FILE#"$dir/"} to your catalog repository's URL, then run make inputs again" >&2
   else
     echo "error: name your catalog repository: run make inputs CATALOG=CATALOG_REPO_URL (page 2)" >&2
   fi
@@ -50,19 +51,20 @@ fi
 catalog=$(https_url "$want")
 origin=$(git -C "$dir" remote get-url origin 2>/dev/null) || { echo "error: this repository has no origin remote" >&2; exit 1; }
 deployment=$(https_url "$origin")
-site=""
-for s in $(site_names); do
-  case "$(cluster_field "$s" role)" in combined|ingress) site=$s; break ;; esac
-done
-[ -n "$site" ] || { echo "error: clusters.yaml has no combined or ingress site" >&2; exit 1; }
 apps_domain() {
   "$here/with-cluster.sh" "$1" oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}'
 }
 hub_domain=$(apps_domain "$(hub_name)") && [ -n "$hub_domain" ] || { echo "error: no apps domain for the hub" >&2; exit 1; }
-site_domain=$(apps_domain "$site") && [ -n "$site_domain" ] || { echo "error: no apps domain for $site" >&2; exit 1; }
+# Every site may become ingress or combined in the console's Add, so each gets a redirect.
+redirects=""
+for s in $(site_names); do
+  site_domain=$(apps_domain "$s") && [ -n "$site_domain" ] || { echo "error: no apps domain for $s" >&2; exit 1; }
+  redirects+="${redirects:+ }https://maas.$site_domain/*"
+done
+[ -n "$redirects" ] || { echo "error: clusters.yaml has no site" >&2; exit 1; }
 
 DIR=$dir python3 - "$deployment" "$catalog" "https://keycloak-tenant-idp.$hub_domain/realms/tenants" \
-  "https://maas.$site_domain/*" <<'PY'
+  "$redirects" <<'PY'
 import os, sys
 deployment, catalog, issuer, redirect = sys.argv[1:]
 d = os.environ["DIR"]

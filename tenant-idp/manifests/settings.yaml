@@ -1,8 +1,9 @@
 # Deployment settings for the tenant IdP.
 #
-# portalRedirectURI: the tenant portal's redirect URI pattern for client
-# ai-grid-tenants: https://maas.APPS_DOMAIN/*, with APPS_DOMAIN your ingress or
-# combined site's apps domain, for example https://maas.apps.east.example.com/*.
+# portalRedirectURI: the tenant portal's redirect URI patterns for client
+# ai-grid-tenants, separated by spaces or commas: https://maas.APPS_DOMAIN/* for
+# each site, with APPS_DOMAIN that site's apps domain, for example
+# https://maas.apps.east.example.com/* https://maas.apps.west.example.com/*.
 # The realm is imported only when it doesn't exist, so a change after the
 # first start must also be made in Keycloak (see README.md).
 apiVersion: v1

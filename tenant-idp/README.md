@@ -43,15 +43,18 @@ For the provider console, run `apps/console/create-secrets.sh` with
 ## Settings
 
 ConfigMap `tenant-idp-settings` (`manifests/settings.yaml`), key
-`portalRedirectURI`, is the tenant portal's redirect URI pattern for client
-`ai-grid-tenants`: each site's MaaS gateway host, `https://maas.APPS_DOMAIN/*`,
-for every site in your clusters file, whatever its role. The template leaves it as `REQUIRED-portalRedirectURI`,
+`portalRedirectURI`, lists the tenant portal's redirect URI patterns for client
+`ai-grid-tenants`, separated by spaces or commas: each site's MaaS gateway host,
+`https://maas.APPS_DOMAIN/*`. `make inputs` writes one for every site in
+`clusters.yaml`, because any site can become ingress or combined when the
+provider console adds it. The template leaves it as `REQUIRED-portalRedirectURI`,
 which `check-deployment.sh` reports until you set it.
 
 The realm is imported only when it doesn't exist (`kc.sh import --override
 false`), so editing the ConfigMap after Keycloak's first start doesn't change the
 client. Change the redirect URI in the Keycloak admin console as well, or set the
-ConfigMap before the first sync.
+ConfigMap before the first sync. The same holds for a site you add to
+`clusters.yaml` later: add its redirect URI in the Keycloak admin console.
 
 ## How it fits together
 
