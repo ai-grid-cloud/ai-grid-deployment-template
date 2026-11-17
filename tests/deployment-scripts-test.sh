@@ -101,6 +101,10 @@ d=$(fixture file-placeholder)
 mkdir -p "$d/tenant-idp"; printf 'data:\n  portalRedirectURI: REQUIRED-portalRedirectURI\n' > "$d/tenant-idp/settings.yaml"
 t "a placeholder left in a deployment file fails" 1 "^tenant-idp/settings.yaml:2:REQUIRED-portalRedirectURI$" bash scripts/check-deployment.sh "$d"
 
+d=$(fixture template-tests)
+cp -R tests "$d/tests"
+t "the template's own tests/ (fixtures with placeholders) are ignored" 0 "every repository is an input" bash scripts/check-deployment.sh "$d"
+
 d=$(fixture fetched-library)
 mkdir -p "$d/.library/apps"; printf 'x: REQUIRED-libraryRepoURL\n' > "$d/.library/apps/inputs.yaml"
 t "placeholders in the fetched .library/ are ignored" 0 "every repository is an input" bash scripts/check-deployment.sh "$d"
