@@ -45,8 +45,17 @@ make site-check
 ```
 
 You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass`, `previous AI Grid install` and
-`apps domain DNS`. The hub delivers the registry logins and image mirror once the site is imported. For GPU sites, see
-[GPU operator and NFD](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/openshift-ai.md#nvidia-gpu-operator-and-node-feature-discovery).
+`apps domain DNS`. The hub delivers the registry logins and image mirror once the site is imported. For what a site
+must provide, such as GPU nodes and the NVIDIA GPU Operator for GPU models, see the library's
+[site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide).
+
+If the check prints `FOUND` for a `cert-manager OperatorGroup`, the site already runs the platform's cert-manager
+Operator, and it can't join the grid yet. On the library's `main` branch, a site's OpenShift AI values come only from
+the library, so the OpenShift AI chart installs cert-manager with its own OperatorGroup next to yours. OLM then fails
+the cert-manager Operator with `TooManyOperatorGroups`. Use another cluster until the library fixes this
+([limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values)).
+For the same reason, you can't set a site's GPU settings, such as its NFD and `ClusterPolicy` values, from your
+deployment repository.
 
 ## 2. Import the site into ACM
 

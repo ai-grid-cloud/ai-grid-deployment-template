@@ -1,15 +1,16 @@
-> **Prototype:** this template pins one fixed commit of
-> [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) from branch
-> `deployment-template`, until its changes merge into `main`. The commit is `libraryRevision` in
-> `root/kustomization.yaml`. `make install` pins that branch's current commit instead (`LIBRARY` under `options:` in
-> `.config/clusters.yaml`).
+> **Prototype:** this template installs one fixed commit of
+> [`ai-grid-cloud/ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops) from its `main`
+> branch, with no changes to the library. The commit is `libraryRevision` in `root/applicationset.yaml`; to move it,
+> run `scripts/set-library.sh REVISION`. For what the library's `main` branch can't do yet, see
+> [the limits of `main`](docs/upstream-main-limits.md).
 
 # AI Grid deployment template
 
 A GitHub template for an AI Grid **deployment repository**. You create your own repository from it, and your hub's
 Argo CD installs AI Grid from that repository:
 
-- **On the hub:** ACM, the grid, the MaaS database and Redis, a Keycloak for tenants, and the provider console.
+- **On the hub:** ACM, the grid, the MaaS database and Redis, the library's Keycloak for tenants, and the provider
+  console.
 - **On each site:** OpenShift AI with MaaS and the grid, in the role you choose when you add it in the provider console.
 
 The template carries choices tested end to end on 2026-11-10, so you change only your names.
@@ -22,10 +23,10 @@ The template carries choices tested end to end on 2026-11-10, so you change only
 | Your deployment repository, from this template | The library pin, which components run, your inputs, the install guide and its scripts | You |
 | Your catalog repository, created in the install guide | Models and subscriptions | The provider console |
 
-The hub's Argo CD reads all three. Your deployment repository pins the library in `root/kustomization.yaml`, which
+The hub's Argo CD reads all three. Your deployment repository pins the library in `root/applicationset.yaml`, which
 comes from the template, and names your repositories, the catalog among them, in `root/inputs.env`, which is yours
-and which the template doesn't have; to upgrade, you move the library pin. For more, see
-[How AI Grid works](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/README.md#how-ai-grid-works).
+and which the template doesn't have; to upgrade, you move the library pin. For more, see the library's
+[getting started](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/README.md).
 
 ## Start here
 
