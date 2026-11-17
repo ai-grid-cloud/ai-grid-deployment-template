@@ -184,7 +184,11 @@ def check_deployment_push(deployment, resolved):
     if path and os.path.isfile(path) and os.path.getsize(path):
         report("ok", "deployment push", "with the token from " + (from_value(source) or path))
         return
+    if path:
+        report("FAIL", "deployment push", f"{source or 'the token file'} names {path}, which is missing or empty")
+        return
     os.environ["GIT_TERMINAL_PROMPT"] = "0"
+    os.environ["GIT_SSH_COMMAND"] = os.environ.get("GIT_SSH_COMMAND", "ssh") + " -o BatchMode=yes"
     rc, _, err = run(["git", "-C", deployment, "ls-remote", "origin", "HEAD"])
     if rc == 0:
         report("ok", "deployment push", "no token: your git login can read origin; whether it can push isn't checked")

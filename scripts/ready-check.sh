@@ -82,24 +82,30 @@ service_ready() { # NAMESPACE NAME: the Service has at least one ready endpoint
 # origin's deploymentRevision, read from the remote, never from a local ref that
 # may be old.
 export GIT_TERMINAL_PROMPT=0
-token_file=${DEPLOYMENT_TOKEN_FILE:-.config/deployment-token}
-case "$token_file" in /*) ;; *) token_file="$dir/$token_file" ;; esac
-# With a token, only the token; without one, your own git login for origin.
-if [ -s "$token_file" ]; then gitc() { git -C "$dir" -c credential.helper= "$@"; }
-else gitc() { git -C "$dir" "$@"; }; fi
+# deployment_load resolved the token, including the legacy .config/deployment-token.
+token_file=${DEPLOYMENT_TOKEN_FILE:-} login_hint=""
+case "$token_file" in ""|/*) ;; *) token_file="$dir/$token_file" ;; esac
+# With a token, only the token; without one, your own git login for origin, with
+# no prompt from ssh either.
+if [ -n "$token_file" ]; then gitc() { git -C "$dir" -c credential.helper= "$@"; }
+else
+  export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes"
+  gitc() { git -C "$dir" "$@"; }
+  login_hint="; log in to GitHub so git can read origin without a prompt (such as gh auth login), or set github.deploymentToken with make secrets NAME=github"
+fi
 branch=$( { [ -f "$dir/root/inputs.env" ] && sed -n 's/^deploymentRevision=//p' "$dir/root/inputs.env" | tail -n1; } || true)
 branch=${branch:-main}
 main_sha="" main_err="" main_read=""
 read_main() { # sets main_sha, or main_err; reads origin once
   [ -z "$main_read" ] || return 0; main_read=1
   local out askpass=""
-  if [ -s "$token_file" ]; then
+  if [ -n "$token_file" ]; then
     askpass=$(mktemp "${TMPDIR:-/tmp}/git-askpass.XXXXXX"); chmod 700 "$askpass"
     # The helper holds the file's path, never its contents.
     printf '#!/bin/bash\ncase "$1" in Username*) echo x-access-token ;; *) head -n1 %q ;; esac\n' "$token_file" > "$askpass"
   fi
   if ! out=$(GIT_ASKPASS=${askpass:-${GIT_ASKPASS:-}} gitc ls-remote origin "refs/heads/$branch" 2>&1); then
-    main_err="can't read origin: $(grep . <<<"$out" | tail -n 1)"
+    main_err="can't read origin: $(grep . <<<"$out" | tail -n 1)$login_hint"
   elif [ -z "$out" ]; then main_err="origin has no $branch branch"
   else
     main_sha=${out%%[[:space:]]*}

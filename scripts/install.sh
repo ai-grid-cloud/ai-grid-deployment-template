@@ -138,7 +138,7 @@ check_settings() { # the values the hub phase needs, and the files they name
   done
   # The deployment token is optional: without one, git-push.sh uses your git login.
   [ -z "$DEPLOYMENT_TOKEN_FILE" ] || [ -s "$DEPLOYMENT_TOKEN_FILE" ] ||
-    die "the deployment token file $DEPLOYMENT_TOKEN_FILE is empty: $(secret_missing DEPLOYMENT_TOKEN_FILE)"
+    die "the deployment token file $DEPLOYMENT_TOKEN_FILE is missing or empty: $(secret_missing DEPLOYMENT_TOKEN_FILE)"
   # bootstrap-hub.sh's own login check, made here so a missing login stops the
   # install before the inputs step pushes anything. It reads which logins the
   # file holds, never a token.
