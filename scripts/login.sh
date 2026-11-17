@@ -11,23 +11,22 @@
 # cluster with none of them gets oc login --web, which opens your browser;
 # --non-interactive stops there instead, with exit 1. To use a kubeconfig you
 # already have, such as the installer's auth/kubeconfig, copy it to
-# .config/NAME/kubeconfig or name it in credentials.NAME.kubeconfig.
+# .config/NAME/kubeconfig.
 #
 # For each cluster it uses the first of these that logs in:
 #   1. a working .config/NAME/kubeconfig, kept as it is;
-#   2. credentials.NAME.kubeconfig in .config/clusters.yaml: a kubeconfig's
-#      path (relative to this repository), copied to .config/NAME/kubeconfig;
-#   3. a token: the environment variable AI_GRID_TOKEN_<NAME> (NAME upper-cased,
-#      - turned into _), else credentials.NAME.token, else the older file
+#   2. a token: the environment variable AI_GRID_TOKEN_<NAME> (NAME upper-cased,
+#      - turned into _), else the cluster's own token: in .config/clusters.yaml
+#      (hub.token, or the token in its sites: entry), else the older file
 #      .config/NAME/token;
-#   4. a username and password: AI_GRID_USERNAME_<NAME> and
-#      AI_GRID_PASSWORD_<NAME>, else credentials.NAME.username and .password.
-#      It gets a fresh token from the cluster's OAuth server as oc login does
-#      (the openshift-challenging-client, with X-CSRF-Token: 1), so a saved
-#      password logs in again after a token expires.
+#   3. a username and password: AI_GRID_USERNAME_<NAME> and
+#      AI_GRID_PASSWORD_<NAME>, else the cluster's own username and password in
+#      .config/clusters.yaml. It gets a fresh token from the cluster's OAuth
+#      server as oc login does (the openshift-challenging-client, with
+#      X-CSRF-Token: 1), so a saved password logs in again after a token expires.
 # The environment wins over the file. A token that doesn't log in (expired)
 # falls through to the password; a certificate problem stops, since a password
-# wouldn't help. A token, from 3 or 4, is written into .config/NAME/kubeconfig
+# wouldn't help. A token, from 2 or 3, is written into .config/NAME/kubeconfig
 # (mode 600) with the API URL from clusters.yaml. The cluster's certificate,
 # and the OAuth server's, are checked against the system's CA trust, or against
 # .config/NAME/ca.crt when that file exists. Tokens and passwords are read and
@@ -35,7 +34,8 @@
 # input (curl -K -), so neither appears in a command line or in the output.
 # When stored credentials fail, it stops for that cluster with exit 1 (no
 # browser). With none stored, --non-interactive stops with exit 1 and says where
-# to put one: credentials.NAME in .config/clusters.yaml (make secrets).
+# to put one: the cluster's entry in .config/clusters.yaml (make config creates
+# that file).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/clusters.sh"
@@ -43,7 +43,7 @@ clusters_load "$here/.."
 
 login() { # NAME [oc login flags]
   local name=$1 api k; shift
-  api=$(cluster_field "$name" api) || return 1
+  api=$(cluster_api "$name") || return 1
   k=$(cluster_kubeconfig "$name")
   mkdir -p "$(dirname "$k")"; chmod 700 "$(dirname "$k")"
   [ $# -gt 0 ] || set -- --web
@@ -59,23 +59,8 @@ trim() { # VAR: drops the value's leading and trailing whitespace, such as a Win
 
 upper() { tr 'a-z-' 'A-Z_' <<<"$1"; } # NAME: as it appears in a variable's name
 
-kubeconfig_login() { # NAME: copies credentials.NAME.kubeconfig when it logs in; 1 when it's unset or doesn't, 2 to stop
-  local name=$1 p k err
-  p=$(cluster_secret "$name" kubeconfig) || return 2
-  [ -n "$p" ] || return 1
-  tried=1
-  # shellcheck disable=SC2088 # a literal ~/ at the path's start means the home directory
-  case "$p" in /*) ;; "~/"*) p="$HOME/${p#"~/"}" ;; *) p="$CLUSTERS_DIR/$p" ;; esac
-  [ -f "$p" ] || { echo "$name: credentials.$name.kubeconfig names no file ($p); trying the next credential." >&2; return 1; }
-  if ! err=$(KUBECONFIG=$p oc whoami 2>&1 >/dev/null); then
-    echo "$name: the kubeconfig $p doesn't log in (${err%%$'\n'*}); trying the next credential." >&2
-    return 1
-  fi
-  k=$(cluster_kubeconfig "$name"); mkdir -p "$(dirname "$k")"; chmod 700 "$(dirname "$k")"
-  # Flattened, so certificate paths relative to the original keep working.
-  rm -f "$k.new"; ( umask 077; KUBECONFIG=$p oc config view --raw --flatten > "$k.new" ) || { rm -f "$k.new"; return 2; }
-  chmod 600 "$k.new"; mv -f "$k.new" "$k"
-  echo "Logged in to $name as $(KUBECONFIG=$k oc whoami), with the kubeconfig $p."
+key_path() { # NAME KEY: where .config/clusters.yaml holds NAME's KEY, such as hub.token or sites[site-1].password
+  if [ "$1" = hub ]; then echo "hub.$2"; else echo "sites[$1].$2"; fi
 }
 
 token_source() { # NAME: sets token and src; 1 when there's no token, 2 to stop
@@ -84,7 +69,7 @@ token_source() { # NAME: sets token and src; 1 when there's no token, 2 to stop
   token="" src=""
   v=$(cluster_secret "$name" token) || return 2
   if [ -n "${!var:-}" ]; then token=${!var}; src=$var
-  elif [ -n "$v" ]; then token=$v; src="credentials.$name.token in .config/clusters.yaml"
+  elif [ -n "$v" ]; then token=$v; src="$(key_path "$name" token) in .config/clusters.yaml"
   elif [ -f "$tf" ]; then IFS= read -r token < "$tf" || true; src=${tf#"$CLUSTERS_DIR/"}
   else return 1; fi
   trim token
@@ -101,9 +86,9 @@ password_source() { # NAME: sets user, pass and src; 1 when there's no password,
     user=$(cluster_secret "$name" username) || return 2
     pass=$(cluster_secret "$name" password) || return 2
     [ -n "$user$pass" ] || return 1
-    src="credentials.$name.password in .config/clusters.yaml"
-    [ -n "$user" ] || { echo "error: $name: credentials.$name.password needs credentials.$name.username in .config/clusters.yaml" >&2; return 2; }
-    [ -n "$pass" ] || { echo "error: $name: credentials.$name.username needs credentials.$name.password in .config/clusters.yaml" >&2; return 2; }
+    src="$(key_path "$name" password) in .config/clusters.yaml"
+    [ -n "$user" ] || { echo "error: $name: $(key_path "$name" password) needs $(key_path "$name" username) in .config/clusters.yaml" >&2; return 2; }
+    [ -n "$pass" ] || { echo "error: $name: $(key_path "$name" username) needs $(key_path "$name" password) in .config/clusters.yaml" >&2; return 2; }
   fi
   trim user; pass=${pass%$'\r'}
   [[ "$user$pass" != *[$'\n\r']* ]] || { echo "error: $name: the username or password in $src has a line break" >&2; return 2; }
@@ -117,7 +102,7 @@ certificate_or() { # NAME ERR WHAT: says certificate problem when ERR is one, el
 
 oauth_token() { # NAME: sets token from the cluster's OAuth server for $user and $pass (oc login's challenge flow)
   local name=$1 api dir cacert=() endpoint hdrs status cred
-  api=$(cluster_field "$name" api); dir=$(dirname "$(cluster_kubeconfig "$name")")
+  api=$(cluster_api "$name"); dir=$(dirname "$(cluster_kubeconfig "$name")")
   [ ! -f "$dir/ca.crt" ] || cacert=(--cacert "$dir/ca.crt")
   if ! endpoint=$(curl -sS --max-time 20 ${cacert[@]+"${cacert[@]}"} "$api/.well-known/oauth-authorization-server" 2>&1); then
     certificate_or "$name" "$endpoint" "can't reach $api's OAuth discovery"; return 1
@@ -143,7 +128,7 @@ oauth_token() { # NAME: sets token from the cluster's OAuth server for $user and
 write_kubeconfig() { # NAME: writes NAME's kubeconfig from $token, then checks it; names $src on failure.
   # 1 when the token doesn't log in, 2 on a certificate problem.
   local name=$1 api k dir tmp ca="" err
-  api=$(cluster_field "$name" api) || return 2
+  api=$(cluster_api "$name") || return 2
   k=$(cluster_kubeconfig "$name"); dir=$(dirname "$k")
   [ -n "$token" ] || { echo "error: $name: $src is empty: put the cluster's token in it" >&2; return 1; }
   # A token is one word of these characters (OpenShift sha256~ tokens and JWTs
@@ -172,13 +157,7 @@ write_kubeconfig() { # NAME: writes NAME's kubeconfig from $token, then checks i
 }
 
 token_login() { # NAME: the first credential that logs in (see the header); writes NAME's kubeconfig
-  local name=$1 token src user pass rc tried="" tv uv
-  tv=AI_GRID_TOKEN_$(upper "$name") uv=AI_GRID_USERNAME_$(upper "$name")
-  # The environment wins over the file: with AI_GRID_ credentials set, skip the file's kubeconfig.
-  if [ -z "${!tv:-}${!uv:-}" ]; then
-    kubeconfig_login "$name" && return 0 || rc=$?
-    [ "$rc" = 1 ] || return 1
-  fi
+  local name=$1 token src user pass rc tried=""
   token_source "$name" && rc=0 || rc=$?
   [ "$rc" != 2 ] || return 1
   if [ "$rc" = 0 ]; then
@@ -200,7 +179,8 @@ token_login() { # NAME: the first credential that logs in (see the header); writ
 }
 
 none_stored() { # NAME
-  echo "error: $1: no working login and nothing to log in with: set credentials.$1 in .config/clusters.yaml (make secrets), or AI_GRID_TOKEN_$(upper "$1"); credentials.$1 takes a token, a username and password, or a kubeconfig path" >&2
+  local entry; if [ "$1" = hub ]; then entry=hub; else entry="sites[$1]"; fi
+  echo "error: $1: no working login and nothing to log in with: set a token, or a username and password, in $entry in .config/clusters.yaml (make config creates it), or AI_GRID_TOKEN_$(upper "$1")" >&2
 }
 
 # NAME with oc login flags: oc login with them, as you asked.
