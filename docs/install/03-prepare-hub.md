@@ -16,7 +16,8 @@ make bootstrap
 It checks your deployment, your registry logins and the hub, then installs OpenShift GitOps, applies `root/` once,
 and seeds the registry logins that a Policy copies to every site. It reads the logins from the same auth file as
 `make prereqs`, or from `QUAY_AUTH_FILE=AUTH_FILE` if you add it, and never prints them. If your auth file is refused,
-nothing on the hub has changed yet.
+nothing on the hub has changed yet. It stops if the auth file has no `registry.stage.redhat.io` login, because sites
+pull model runtimes only from there ([limits of `main`, L20](../upstream-main-limits.md#l20-model-runtimes-pull-only-from-registrystageredhatio)).
 
 If your auth file has a general `quay.io` login instead of a `quay.io/rhoai` one, allow it:
 

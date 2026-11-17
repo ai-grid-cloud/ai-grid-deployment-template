@@ -21,6 +21,9 @@ Submariner gateway nodes: check those yourself.
   `quay.io/rhoai`, so you need a container auth file with a login for it. Red Hat gives `quay.io/rhoai` robot tokens
   to early-access partners; ask your Red Hat contact. A general `quay.io` login also works
   ([general `quay.io` login](troubleshooting.md#make-bootstrap-refuses-a-general-quayio-login)).
+- **A `registry.stage.redhat.io` login:** the library mirrors the model runtime images
+  (`registry.redhat.io/rhaii*`) to `registry.stage.redhat.io`, with no fallback, so sites pull them only with this
+  login. Put it in the same auth file ([limits of `main`, L20](../upstream-main-limits.md#l20-model-runtimes-pull-only-from-registrystageredhatio)).
 - **Tools:** `oc`, `kubectl` (it comes with `oc`), `git`, `jq`, `curl`, `openssl`, `python3`, `clusteradm` and `make`.
 
 ## Checkpoint

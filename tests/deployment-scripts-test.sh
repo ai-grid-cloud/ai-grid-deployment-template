@@ -126,9 +126,16 @@ printf 'not json' > "$T/bad.json"
 t "bootstrap-hub refuses an unreadable auth file" 1 "can't read .*bad.json" \
   env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/bad.json" bash scripts/bootstrap-hub.sh --deployment "$d"
 
+# Without a registry.stage.redhat.io login no model runtime pulls on a site
+# (the library mirrors rhaii* there with no fallback): stops before any write.
+printf '{"auths":{"quay.io/rhoai":{"auth":"dTpw"}}}' > "$T/nostage.json"; : > "$T/oc.log"
+t "bootstrap-hub refuses an auth file with no stage login" 1 "no registry.stage.redhat.io login in .*nostage.json.*L20" \
+  env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/nostage.json" bash scripts/bootstrap-hub.sh --deployment "$d"
+t "  ... and made no oc apply" 0 "^ok$" bash -c '! grep -q " apply" "$0" && echo ok' "$T/oc.log"
+
 # On a fresh hub the controller needs the library's memory before the root fans
 # out (gitops-config can't apply it until ACM exists): the patch comes first.
-printf '{"auths":{"quay.io/rhoai":{"auth":"dTpw"}}}' > "$T/rhoai.json"; : > "$T/oc.log"
+printf '{"auths":{"quay.io/rhoai":{"auth":"dTpw"},"registry.stage.redhat.io":{"auth":"czpw"}}}' > "$T/rhoai.json"; : > "$T/oc.log"
 env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/rhoai.json" bash scripts/bootstrap-hub.sh --deployment "$d" >/dev/null 2>&1 || true
 t "bootstrap-hub sets the controller's memory from the library" 0 '"limits":\{"memory":"8Gi"\}' grep "patch argocd openshift-gitops" "$T/oc.log"
 t "  ... before it applies the root" 0 "^ok$" bash -c 'p=$(grep -n "patch argocd" "$0" | head -1 | cut -d: -f1); r=$(grep -n "apply -f -" "$0" | head -1 | cut -d: -f1); [ -n "$p" ] && [ -n "$r" ] && [ "$p" -lt "$r" ] && echo ok' "$T/oc.log"

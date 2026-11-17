@@ -243,11 +243,15 @@ def check_registry(auth_file, from_settings=False, label=None):
                "or add a robot token for quay.io/rhoai")
     else:
         report("MISSING", "quay.io/rhoai login", "no quay.io/rhoai or quay.io entry with an auth value")
+    # The library mirrors registry.redhat.io/rhaii* to stage with NeverContactSource on sites that
+    # aren't HCP, so no model runtime pulls there without this login (docs/upstream-main-limits.md, L20).
     if has("registry.stage.redhat.io"):
-        report("ok", "registry.stage.redhat.io login", "entry present (optional: nightly-only runtime images)")
+        report("ok", "registry.stage.redhat.io login", "entry present (model runtime images)")
     else:
-        report("ok", "registry.stage.redhat.io login",
-               "none; optional: only nightly-only runtime images need it")
+        report("FAIL", "registry.stage.redhat.io login",
+               "none; required: sites pull model runtimes from registry.stage.redhat.io "
+               "(registry.redhat.io/rhaii* is mirrored there with no fallback); "
+               "add it to the auth file that has your quay.io/rhoai login, or stage: beside quay: in .config/clusters.yaml (limit L20)")
 
     image = pinned_catalog_image()
     if not image:

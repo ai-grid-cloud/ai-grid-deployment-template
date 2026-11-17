@@ -8,8 +8,8 @@
 # 3. Applies the deployment's root/ (the root ApplicationSet and
 #    deployment-root). From then on Argo CD follows git; this script is not run
 #    again.
-# 4. Seeds the quay.io/rhoai pull secret (and the optional
-#    registry.stage.redhat.io login, when present) that the prerequisites
+# 4. Seeds the quay.io/rhoai pull secret and the registry.stage.redhat.io
+#    login (both required) that the prerequisites
 #    Policy copies to every site. The credentials are read from a container
 #    auth file and never printed.
 #
@@ -64,14 +64,12 @@ if ! RHOAI_QUAY_PULL_SECRET="$(jq -er '.auths["quay.io/rhoai"].auth' "$auth_file
 fi
 export RHOAI_QUAY_PULL_SECRET
 # The library mirrors registry.redhat.io/rhaii* (model runtimes) to
-# registry.stage.redhat.io and falls back to registry.redhat.io, so a stage
-# login is optional: pass it on when the auth file has one.
-if RHOAI_STAGE_PULL_SECRET="$(jq -er '.auths["registry.stage.redhat.io"].auth' "$auth_file" 2>/dev/null)"; then
-  export RHOAI_STAGE_PULL_SECRET
-else
-  unset RHOAI_STAGE_PULL_SECRET
-  echo "note: no registry.stage.redhat.io login in $auth_file; sites pull model runtimes from registry.redhat.io" >&2
-fi
+# registry.stage.redhat.io with mirrorSourcePolicy NeverContactSource on every
+# site that isn't HCP, so without a stage login no model runtime pulls there
+# (docs/upstream-main-limits.md, L20). Stop before any write.
+RHOAI_STAGE_PULL_SECRET="$(jq -er '.auths["registry.stage.redhat.io"].auth' "$auth_file" 2>/dev/null)" ||
+  die "no registry.stage.redhat.io login in $auth_file; sites pull model runtimes only from registry.redhat.io/rhaii* mirrored to stage, so add one (podman login registry.stage.redhat.io into that auth file, or stage: beside quay: in .config/clusters.yaml); see docs/upstream-main-limits.md, L20"
+export RHOAI_STAGE_PULL_SECRET
 
 # hubCertManager (root/inputs.env): library installs cert-manager from the root,
 # which a hub already running the platform's can't take; that stops here.

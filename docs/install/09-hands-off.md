@@ -29,6 +29,8 @@ worker nodes or the network.
 - [ ] **A `quay.io/rhoai` robot account:** its username and password. This template installs a pre-release
   OpenShift AI 3.6 build from `quay.io/rhoai`; Red Hat gives `quay.io/rhoai` robot accounts to early-access partners,
   so ask your Red Hat contact.
+- [ ] **A `registry.stage.redhat.io` login:** its username and password. Sites pull model runtime images only from
+  there ([limits of `main`, L20](../upstream-main-limits.md#l20-model-runtimes-pull-only-from-registrystageredhatio)).
 - [ ] **Tools:** `oc`, `kubectl`, `git`, `jq`, `curl`, `openssl`, `base64`, `python3`, `clusteradm` and `make`. Get
   `clusteradm` from its [releases page](https://github.com/open-cluster-management-io/clusteradm/releases).
 
@@ -75,7 +77,7 @@ Tell the install which clusters and repositories to use, and give it the credent
      `https://github.com/my-org/ai-grid-catalog.git`. Pick its owner and name now.
    - **The secrets:** in `hub:` and in each site's entry, uncomment and fill in a `cluster-admin` `token`, or a `username` and
      `password`. A cluster token usually expires in about 24 hours; with a username and password, the scripts get a
-     fresh token on every run, so a rerun the next day works. Uncomment and fill in `quay:` too. You set `catalog.token` in
+     fresh token on every run, so a rerun the next day works. Uncomment and fill in `quay:` and `stage:` too. You set `catalog.token` in
      step 5, and leave `deployment:` commented.
 
    For example:
@@ -100,6 +102,9 @@ Tell the install which clusters and repositories to use, and give it the credent
      token: REQUIRED-catalogToken   # set in step 5
    quay:
      username: rhoai+robot
+     password: PASSWORD
+   stage:
+     username: STAGE_USERNAME
      password: PASSWORD
    ```
 
@@ -401,6 +406,9 @@ the grid in the console, as in [Add a site to the grid](#add-a-site-to-the-grid)
   `api-ca.crt`. If the router serves a custom certificate, use the CA that issued it instead of `router-ca`.
 - **A general `quay.io` account:** put its name and password under `quay:`. The install uses it for `quay.io/rhoai`
   as it would a robot account, so it works only when that account can pull from `quay.io/rhoai`.
+- **An auth file instead of `quay:`:** set `QUAY_AUTH_FILE`, or save it as `.config/quay-auth.json`. It must hold the
+  `quay.io/rhoai` and `registry.stage.redhat.io` logins, and `stage:` must be left out: the install stops when both
+  are set.
 - **Another library revision:** set `LIBRARY` under `options:` to a branch, tag or commit. Left out or empty, the
   template's own pin in `root/applicationset.yaml` stands.
 - **Another token lifetime:** set `PROVIDER_ADMIN_TOKEN_DURATION` under `options:` for `make install`, or in the

@@ -6,7 +6,7 @@
 # in the private file only, its token or username and password;
 # the catalog repository (catalog.url; its token, catalog.token, in the private
 # file only); make install's settings (options:); and, in the private file
-# only, deployment.token and quay:. Roles and locations aren't in it: the
+# only, deployment.token, quay: and stage:. Roles and locations aren't in it: the
 # provider console's Add to AI Grid sets them. The hub's name is always "hub".
 # Each cluster's login is .config/NAME/kubeconfig (git-ignored; make login).
 # kubectl parses the YAML offline (--local), and jq reads the result. No error
@@ -79,7 +79,7 @@ clusters_load() {
         ((.sites // []) | arrays | to_entries[] | .key as $i | .value | objects
           | secrets("sites[\(.name | if type == "string" and test("\\A[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\z") then . else $i end)]")),
         (.catalog | objects | select(has("token")) | "catalog.token"),
-        (["credentials", "github", "deployment", "quay"][] as $k | select(has($k)) | $k)' <<<"$cjson" 2>/dev/null); then
+        (["credentials", "github", "deployment", "quay", "stage"][] as $k | select(has($k)) | $k)' <<<"$cjson" 2>/dev/null); then
       echo "error: clusters.yaml isn't valid YAML" >&2; return 1
     fi
     left=$(tr '\n' ' ' <<<"$left"); left=${left% }
@@ -90,7 +90,7 @@ clusters_load() {
   fi
   # Each of these is a map; a value in its place is named by path only, never printed.
   left=$(jq -r '
-      ([["options"], ["catalog"], ["deployment"], ["hub"], ["quay"]][] as $p
+      ([["options"], ["catalog"], ["deployment"], ["hub"], ["quay"], ["stage"]][] as $p
         | select(getpath($p) | . != null and type != "object") | $p | join(".")),
       ((.sites // []) | if type == "array" then to_entries[] | select((.value | type) != "object") | "sites[\(.key)]" else "sites must be a list" end)
       ' <<<"$json" 2>/dev/null | head -n 1) ||
@@ -114,10 +114,11 @@ clusters_load() {
       # Beside a secret, a key may itself be a pasted secret: name only a short word, else count.
       def word: test("\\A[A-Za-z][A-Za-z0-9_-]{0,31}\\z");
       def beside($p): (map(select(word)) | map("\($p).\(.)")) + (map(select(word | not)) | count($p));
-      (keys - ["apiVersion", "kind", "metadata", "hub", "sites", "catalog", "deployment", "options", "quay"] | map(.)),
+      (keys - ["apiVersion", "kind", "metadata", "hub", "sites", "catalog", "deployment", "options", "quay", "stage"] | map(.)),
       ((.catalog // {}) | keys - ["url", "token"] | beside("catalog")),
       ((.deployment // {}) | keys - ["token"] | count("deployment")),
       ((.quay // {}) | keys - ["username", "password"] | count("quay")),
+      ((.stage // {}) | keys - ["username", "password"] | count("stage")),
       ((.hub // {}) | keys - ["api", "token", "username", "password"] | beside("hub")),
       ((.sites // []) | to_entries[] | .key as $i | (.value // {})
         | (.name | if type == "string" and test("\\A[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\z") then . else $i end) as $ref
@@ -134,7 +135,7 @@ clusters_load() {
         | if ($n | type) == "string" and ($n | test("\\A[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\z")) then $n else $i end;
       def path_text($root): (if .[0] == "sites" and (.[1] | type) == "number" then ["sites[\(site_ref($root; .[1]))]"] + .[2:] else . end)
         | map(if type == "number" then "[\(.)]" else ".\(.)" end) | join("") | ltrimstr(".") | gsub("\\.\\["; "[");
-      def secret_paths: paths(strings) | select(.[0] == "deployment" or .[0] == "quay" or . == ["catalog", "token"]
+      def secret_paths: paths(strings) | select(.[0] == "deployment" or .[0] == "quay" or .[0] == "stage" or . == ["catalog", "token"]
         or ((.[0] == "hub" or .[0] == "sites") and (.[-1] | IN("token", "username", "password"))));
       ([secret_paths] as $s | (if $private then . else del(.catalog.url) end) | reduce $s[] as $p (.; delpaths([$p]))
         | .. | strings | select(test("REQUIRED-")) | match("REQUIRED-[A-Za-z]+").string),
@@ -258,7 +259,8 @@ merge_kubeconfigs() { # HUB SITE OUT: renames each cluster, user and context, so
 #   QUAY_AUTH_FILE          AI_GRID_QUAY_USERNAME and AI_GRID_QUAY_PASSWORD, else
 #                           QUAY_AUTH_FILE, else quay:, else .config/quay-auth.json,
 #                           else (page by page) ~/.config/containers/auth.json or
-#                           $XDG_RUNTIME_DIR/containers/auth.json
+#                           $XDG_RUNTIME_DIR/containers/auth.json. A generated file
+#                           also carries stage: (registry.stage.redhat.io).
 # A value (from AI_GRID_* or the private file) is written to .config/generated/
 # (mode 600, rewritten on every load, removed when the value goes). "Page by
 # page" means no .config/clusters.yaml and no catalog setting. VAR_SOURCE says
@@ -318,8 +320,16 @@ _secret_file() { # VAR ENV JQ_PATH NAME [HOME_DEFAULT]
   printf -v "$var" '%s' "$f"; printf -v "${var}_SOURCE" '%s' "$src"; export "${var?}" "${var}_SOURCE"
 }
 
+_stage_auth() { # base64 of stage.username:stage.password, empty when stage: is unset
+  local u p
+  u=$(secret_get .stage.username) && p=$(secret_get .stage.password) || return 1
+  if [ -n "$u" ] && [ -n "$p" ]; then printf '%s' "$u:$p" | base64 | tr -d '\n'
+  elif [ -n "$u$p" ]; then echo "error: the registry.stage.redhat.io login needs both a username and a password (stage: in .config/clusters.yaml)" >&2; return 1
+  fi
+}
+
 _quay_auth() {
-  local u p f="" src="" b64 h
+  local u p f="" src="" b64 h stage
   u=${AI_GRID_QUAY_USERNAME:-} p=${AI_GRID_QUAY_PASSWORD:-}
   [ -z "$u$p" ] || src="AI_GRID_QUAY_USERNAME and AI_GRID_QUAY_PASSWORD"
   if [ -z "$u$p" ] && [ -n "${QUAY_AUTH_FILE:-${RHOAI_QUAY_AUTH_FILE:-}}" ]; then
@@ -332,7 +342,14 @@ _quay_auth() {
     fi
     if [ -n "$u" ] && [ -n "$p" ]; then
       b64=$(printf '%s' "$u:$p" | base64 | tr -d '\n')
-      f=$(printf '{"auths":{"quay.io/rhoai":{"auth":"%s"}}}\n' "$b64" | _generated quay-auth.json) || return 1
+      stage=$(_stage_auth) || return 1
+      # printf is a builtin, so the logins never reach a command line; base64 needs no JSON escaping.
+      if [ -n "$stage" ]; then
+        f=$(printf '{"auths":{"quay.io/rhoai":{"auth":"%s"},"registry.stage.redhat.io":{"auth":"%s"}}}\n' "$b64" "$stage" |
+            _generated quay-auth.json) || return 1
+      else
+        f=$(printf '{"auths":{"quay.io/rhoai":{"auth":"%s"}}}\n' "$b64" | _generated quay-auth.json) || return 1
+      fi
     elif [ -n "$u$p" ]; then
       echo "error: the quay.io/rhoai login needs both a username and a password ($src)" >&2; return 1
     else
@@ -344,6 +361,11 @@ _quay_auth() {
         done
       fi
     fi
+  fi
+  if [ -n "$f" ] && [ "$f" != "$CLUSTERS_DIR/.config/generated/quay-auth.json" ]; then
+    u=$(secret_get .stage.username) && p=$(secret_get .stage.password) || return 1
+    [ -z "$u$p" ] ||
+      { echo "error: stage: in .config/clusters.yaml goes with quay:; $src is an auth file, so put the registry.stage.redhat.io login in it instead" >&2; return 1; }
   fi
   QUAY_AUTH_FILE=$f QUAY_AUTH_FILE_SOURCE=$src; export QUAY_AUTH_FILE QUAY_AUTH_FILE_SOURCE
 }
