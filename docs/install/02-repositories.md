@@ -46,7 +46,8 @@ again.
    The site's name is a DNS label. It becomes the site's ACM cluster name, and you can't change it once the site is
    imported. Commit `clusters.yaml` with your other changes in part 5; it records which clusters make up your grid,
    and holds no secrets: the scripts refuse a `token`, `username` or `password` on the hub or a site,
-   `catalog.token`, and the `deployment:` and `quay:` sections. It may carry `catalog.url`. A file in the old format,
+   `catalog.token`, and the `deployment:` and `quay:` sections. Leave `catalog.url` as `REQUIRED-catalogRepoURL` on
+   these pages: a real URL there turns off the page-by-page defaults for the catalog token and the quay.io login. A file in the old format,
    with `credentials:`, `repositories:`, `github:`, a `kubeconfig` key, `hub.name`, or a `role` or `location` on a
    site, stops with a message that says what to change. The tenant portal gets a sign-in redirect for every site's
    apps domain in the file, `https://maas.APPS_DOMAIN/*`, whatever role you choose later.
@@ -144,7 +145,7 @@ Hub hub
 ok       reachable                        https://api.hub.example.com:6443
 ok       OpenShift 4.21 or later          4.22.18
 ...
-Site site-east-1 (combined)
+Site site-east-1
 ok       reachable                        https://api.site-east-1.example.com:6443
 ...
 Catalog token
@@ -174,7 +175,7 @@ value it sets, and then runs `make check`:
 | `root/inputs.env` | `deploymentRevision`, `catalogRevision` | `main` |
 | `root/inputs.env` | `catalogRepoURL` | `CATALOG_REPO_URL` |
 | `root/inputs.env` | `idpIssuerURL` | `https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants`, with the hub's apps domain |
-| `tenant-idp/manifests/settings.yaml` | `portalRedirectURI` | `https://maas.SITE_APPS_DOMAIN/*`, with the apps domain of the first `combined` or `ingress` site |
+| `tenant-idp/manifests/settings.yaml` | `portalRedirectURI` | `https://maas.SITE_APPS_DOMAIN/*` for every site in `clusters.yaml`, separated by spaces |
 
 `root/inputs.env` is yours: the template doesn't have it, so `make update` never changes it.
 `root/kustomization.yaml` copies its values over the root's `REQUIRED-` placeholders; leave those. A value that's

@@ -41,7 +41,7 @@ _old_format() {
   jq -r '
       def entries: [(.hub | objects), ((.sites // []) | arrays | .[] | objects)];
       (if has("repositories") or has("github") then "replace repositories.catalog with catalog.url, repositories.library with options.LIBRARY, github.catalogToken with catalog.token and github.deploymentToken with deployment.token" else empty end),
-      (if has("credentials") then "move each credentials.NAME token, or username and password, into that cluster'"'"'s own hub: or sites: entry" else empty end),
+      (if has("credentials") then "move each credentials.NAME token, or username and password, into that cluster'"'"'s own hub: or sites: entry, and copy a credentials.NAME.kubeconfig to .config/NAME/kubeconfig" else empty end),
       (if (.hub | objects | has("name")) then "remove hub.name (the hub is always hub)" else empty end),
       (if any(entries[]; has("role") or has("location")) then "remove role: and location: (choose them in the provider console'"'"'s Add to AI Grid)" else empty end),
       (if any(entries[]; has("kubeconfig")) then "remove kubeconfig: (copy that kubeconfig to .config/NAME/kubeconfig instead)" else empty end)
@@ -165,7 +165,8 @@ cluster_secret() { # NAME KEY: the hub's, or the site entry's, own token, userna
 # The install settings clusters.yaml holds, as KEY=VALUE lines, one for each
 # key the file sets (an empty value too, so it wins over the environment):
 # catalog.url is CATALOG_REPO_URL, options.LIBRARY is LIBRARY_REVISION (not
-# LIBRARY, which names the library checkout), and each other options key is
+# LIBRARY, which names the library checkout; deployment-template when the
+# private file leaves it out), and each other options key is
 # itself. true is 1, false and null
 # are empty.
 settings_lines() {
@@ -176,8 +177,11 @@ settings_lines() {
     # REQUIRED-catalogRepoURL (the example) means no catalog yet, as "" does.
     (if (.catalog // {}) | has("url") then
       "CATALOG_REPO_URL=\(.catalog.url | v | if startswith("REQUIRED-") then "" else . end)" else empty end),
-    (if (.options // {}) | has("LIBRARY") then "LIBRARY_REVISION=\(.options.LIBRARY | v)" else empty end),
-    ((.options // {}) | to_entries[] | select(.key != "LIBRARY") | "\(.key)=\(.value | v)")' <<<"$CLUSTERS_JSON" 2>/dev/null ||
+    # make install reads the private file, which pins the deployment-template branch unless it says otherwise.
+    (if (.options // {}) | has("LIBRARY") then "LIBRARY_REVISION=\(.options.LIBRARY | v)"
+     elif $private then "LIBRARY_REVISION=deployment-template" else empty end),
+    ((.options // {}) | to_entries[] | select(.key != "LIBRARY") | "\(.key)=\(.value | v)")' \
+    --argjson private "$(clusters_private && echo true || echo false)" <<<"$CLUSTERS_JSON" 2>/dev/null ||
     { echo "error: clusters.yaml: a setting's value spans lines" >&2; return 1; }
 }
 
