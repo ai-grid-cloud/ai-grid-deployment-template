@@ -1,7 +1,7 @@
 # Prepare the site and join it to ACM
 
-On this page you check the site and import it into ACM. The spoke's `name` in `clusters.yaml` becomes its ACM
-cluster name. The `make` targets on this page work on the only site in your `clusters.yaml`. With several sites, add the
+On this page you check the site and import it into ACM. The site's name in `clusters.yaml` becomes its ACM cluster
+name. The `make` targets on this page work on the only site in your `clusters.yaml`. With several sites, add the
 site's name, such as `make site-import SITE=SITE_NAME`.
 
 If the cluster was a site of another hub, first [reuse it](#reuse-a-cluster-from-another-hub).

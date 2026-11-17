@@ -13,16 +13,25 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 ## A script stops because `clusters.yaml` uses the old format
 
 **Cause:** your `clusters.yaml` or `.config/clusters.yaml` was written for an earlier version of the template. It has
-`sites:`, `credentials:`, a `kubeconfig:` key, or a `role:` or `location:` on a cluster.
+`credentials:`, a `kubeconfig` key, a `name` on the hub, or a `role` or `location` on a site.
 
 **Fix:** change the file as the message says, then run the command again:
 
-- Rename `sites:` to `spokes:`.
-- Remove each `role:` and `location:`. You choose them in the provider console when you click **Add to AI Grid**
+- Remove each site's `role` and `location`. You choose them in the provider console when you click **Add to AI Grid**
   ([join the site to the grid](06-join-grid.md)).
+- Remove the hub's `name`: the hub is always `hub`.
 - In `.config/clusters.yaml`, move each cluster's `token`, or `username` and `password`, from `credentials:` into
-  `hub:` or into that spoke's entry, then remove `credentials:`. For a kubeconfig, copy it to
+  `hub:` or into that site's entry under `sites:`, then remove `credentials:`. For a kubeconfig, copy it to
   `.config/NAME/kubeconfig` instead.
+
+## A tenant can't sign in to the portal on a site added after the install
+
+**Cause:** the install registers the tenant portal's sign-in redirect, `https://maas.APPS_DOMAIN/*`, for every site in
+your clusters file. The tenant Keycloak imports its realm only once, on its first start (`--override false`), so a
+site you add to the file after the first install doesn't get its redirect automatically. This is a known gap.
+
+**Fix:** no script does this yet. Add the redirect for the new site's apps domain to client `ai-grid-tenants` in
+the Keycloak admin console, as the [tenant identity provider settings](../../tenant-idp/README.md#settings) describe.
 
 ## The hub check prints `MISSING`
 
@@ -46,14 +55,15 @@ To add your `quay.io/rhoai` robot account, do one of the following:
   ```
 
   To use an auth file other than the one `podman login` writes, add `QUAY_AUTH_FILE=AUTH_FILE` to the `make`
-  command. Don't run `make secrets` here: it moves your settings to `.config/clusters.yaml`, and the scripts then
-  ignore your committed `clusters.yaml`.
+  command.
 
 - If you follow [Install with one command](09-hands-off.md), with `.config/clusters.yaml`, add the robot account's
-  username and password to it:
+  username and password to it, under `quay:`:
 
-  ```sh
-  make secrets NAME=quay
+  ```yaml
+  quay:
+    username: rhoai+robot
+    password: PASSWORD
   ```
 
 ## `make bootstrap` refuses a general `quay.io` login

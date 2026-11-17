@@ -44,8 +44,8 @@ For the provider console, run `apps/console/create-secrets.sh` with
 
 ConfigMap `tenant-idp-settings` (`manifests/settings.yaml`), key
 `portalRedirectURI`, is the tenant portal's redirect URI pattern for client
-`ai-grid-tenants`: your ingress or combined site's MaaS gateway host,
-`https://maas.APPS_DOMAIN/*`. The template leaves it as `REQUIRED-portalRedirectURI`,
+`ai-grid-tenants`: each site's MaaS gateway host, `https://maas.APPS_DOMAIN/*`,
+for every site in your clusters file, whatever its role. The template leaves it as `REQUIRED-portalRedirectURI`,
 which `check-deployment.sh` reports until you set it.
 
 The realm is imported only when it doesn't exist (`kc.sh import --override

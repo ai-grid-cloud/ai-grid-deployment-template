@@ -3,7 +3,7 @@
 You add the site to the grid in the provider console. **Add to AI Grid** labels the site's ManagedCluster on the
 hub with the role and location you choose, and the hub then installs OpenShift AI, MaaS, the grid and the tenant
 settings in that role. Your `clusters.yaml` names no role or location: you choose them here. The `make` targets on
-this page work on the only spoke in your `clusters.yaml`. With several spokes, add the site's name, such as
+this page work on the only site in your `clusters.yaml`. With several sites, add the site's name, such as
 `make site-status SITE=SITE_NAME`.
 
 ## 1. Add the site in the console
