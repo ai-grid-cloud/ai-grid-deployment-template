@@ -8,7 +8,7 @@
 # FILE holds the API key and nothing else: create the key in the Org UI at
 # https://maas.SITE_APPS_DOMAIN/maas-portal and save it there. The MaaS host,
 # maas.SITE_APPS_DOMAIN, comes from the site (the only site unless --site names
-# one). --subscription sends X-MaaS-Subscription, for a user in several. The key
+# one; with no site in clusters.yaml, the hub, an all-in-one). --subscription sends X-MaaS-Subscription, for a user in several. The key
 # stays in files; nothing prints it. It prints the reply's text, the HTTP status
 # and the x-grid-site header, and exits 1 unless the status is 200.
 #
@@ -36,7 +36,7 @@ done
 [ "$(tr -d '\r\n' < "$keyfile" | grep -c '[[:space:]]')" = 0 ] || die "$keyfile must hold only the API key"
 
 clusters_load "$dir"
-site=$(site_name "$site")
+site=$(grid_site "$site")
 cluster_login_ok "$site"
 domain=$(KUBECONFIG=$(cluster_kubeconfig "$site") oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
 [ -n "$domain" ] || die "can't read $site's apps domain"
