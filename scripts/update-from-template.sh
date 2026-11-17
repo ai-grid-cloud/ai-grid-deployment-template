@@ -9,7 +9,8 @@
 # template's instead, so a fix to the updater applies on the update that
 # brings it. It changes nothing until your working tree is clean, and never
 # pushes. After the merge it runs check-deployment.sh, and if the check fails
-# it says not to push.
+# it says not to push. A repository that isn't installed yet (no
+# root/inputs.env, which make install or make inputs writes) skips the check.
 set -euo pipefail
 url=${TEMPLATE_URL:-https://github.com/ai-grid-cloud/ai-grid-deployment-template.git}
 self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
@@ -61,7 +62,13 @@ if ! git merge -q --no-edit -m "Merge the template's main" template/main; then
 fi
 echo "Merged the template's main ($(git rev-parse --short template/main))."
 
-if [ -d root ]; then
+if [ -d root ] && [ ! -f root/inputs.env ] && grep -q 'inputs.env' root/kustomization.yaml 2>/dev/null \
+  && [ -z "$(git log -1 --format=%h -- root/inputs.env)" ]; then
+  # Not installed yet: make install (page 9) or make inputs (page 2) writes it,
+  # and check-deployment.sh can't render the root without it. A file that was
+  # committed and then removed is still checked.
+  echo "Not checked: root/inputs.env isn't written yet. make install, or make inputs CATALOG=CATALOG_REPO_URL (install guide, page 2), writes it and runs the check."
+elif [ -d root ]; then
   if ! scripts/check-deployment.sh; then
     echo >&2
     echo "!! The merged repository doesn't pass scripts/check-deployment.sh. DON'T PUSH: fix what it names first." >&2
