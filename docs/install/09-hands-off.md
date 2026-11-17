@@ -36,21 +36,74 @@ worker nodes or the network.
 
 ## Install
 
-### Set up your deployment repository
+### Set up your repositories
 
-Tell the install which clusters and repositories to use, and give it the credentials, in one private file.
+Clone your deployment repository, and create the catalog repository and its token. The provider console writes
+your models and subscriptions to the catalog repository, with a token that can write that repository and no other.
 
 1. Clone your deployment repository, by its HTTPS or SSH URL:
 
    ```sh
-   git clone https://github.com/OWNER/DEPLOYMENT_REPO.git deployment && cd deployment
+   git clone https://github.com/OWNER/DEPLOYMENT_REPO.git && cd DEPLOYMENT_REPO
    ```
 
-   Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every later command from the `deployment`
-   directory, on branch `main`. `make install` pushes to this repository with your own git login, the one this
-   clone uses; `make prereqs` checks that it can push without a prompt.
+   Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every later command from the
+   `DEPLOYMENT_REPO` directory, on branch `main`. `make install` pushes to this repository with your own git login,
+   the one this clone uses; `make prereqs` checks that it can push without a prompt.
 
-2. Create `.config/clusters.yaml`, the one file you edit:
+2. Create your catalog repository:
+
+   1. Open [Create a new repository](https://github.com/new).
+   2. Fill in the form:
+      - **Owner:** your account, or the organization that will own the repository
+      - **Repository name:** such as `ai-grid-catalog`
+      - **Choose visibility:** **Public**
+      - **Add README:** **On**
+      - **Everything else:** leave it as it is: no template, no `.gitignore` and no license
+   3. Click **Create repository**.
+
+   <img src="images/new-catalog-repository.png" width="420" alt="The new repository form with Add README on">
+
+   With the GitHub CLI instead:
+
+   ```sh
+   gh repo create OWNER/CATALOG_REPO --add-readme --public
+   ```
+
+   Leave it holding nothing but its README: `make install` stops if it holds anything else.
+
+3. Create the catalog token:
+
+   1. Open [New fine-grained personal access token](https://github.com/settings/personal-access-tokens/new). You can
+      also reach it from your profile picture: **Settings** > **Developer settings** > **Personal access tokens** >
+      **Fine-grained tokens** > **Generate new token**.
+   2. Fill in the form:
+      - **Token name:** `ai-grid-catalog`
+      - **Expiration:** **90 days**, or a later **Custom** date if your organization allows one. When it expires,
+        the console can't save models or subscriptions until you replace it, so note the date.
+      - **Description:** optional, such as `AI Grid console writes the catalog`
+      - **Resource owner:** your account, or the organization that owns your catalog repository. If that
+        organization requires approval for fine-grained tokens, the token can only read until an organization owner
+        approves it.
+      - **Repository access:** **Only select repositories**, then open **Select repositories** and choose your
+        catalog repository, and only that one.
+      - **Permissions:** on the **Repositories** tab, click **Add permissions**, select **Contents**, and set it to
+        **Access: Read and write**. GitHub adds **Metadata: Read-only** itself.
+      - **Everything else:** no access. Add no other repository permission and no **Account** permission.
+
+      <img src="images/token-repository-access.png" width="480" alt="Repository access set to Only select repositories">
+
+      <img src="images/token-permissions.png" width="480" alt="Contents set to Read and write, and Metadata Read-only">
+
+   3. Click **Generate token** at the bottom of the form.
+   4. Copy the token from the page that follows. GitHub shows it only once, so keep it until you put it in
+      `.config/clusters.yaml` in step 5.
+
+### Fill in your settings
+
+Tell the install which clusters and repositories to use, and give it the credentials, in one private file.
+
+4. Create `.config/clusters.yaml`, the one file you edit:
 
    ```sh
    make config
@@ -61,7 +114,7 @@ Tell the install which clusters and repositories to use, and give it the credent
    ignores `.config/`, so the file stays on your machine and can hold your secrets. It never overwrites a file that's
    already there.
 
-3. Open `.config/clusters.yaml` in an editor and fill it in. Each field has a comment that says what it is. The
+5. Open `.config/clusters.yaml` in an editor and fill it in. Each field has a comment that says what it is. The
    secret lines are commented out in the example: uncomment each one you use and fill it in.
 
    - **`hub` and `sites`:** replace each `REQUIRED-` value, and add an entry under `sites:` for each site, with
@@ -69,12 +122,13 @@ Tell the install which clusters and repositories to use, and give it the credent
      change it once the site is imported. The hub's name is always `hub`. The file says only how to reach each
      cluster: no role and no location. If a cluster's API or apps certificate isn't publicly trusted, such as a
      self-signed one, see [An untrusted cluster certificate](#other-options).
-   - **`catalog.url`:** the URL of the catalog repository you create in step 4, such as
-     `https://github.com/my-org/ai-grid-catalog.git`. Pick its owner and name now.
-   - **The secrets:** in `hub:` and in each site's entry, uncomment and fill in a `cluster-admin` `token`, or a `username` and
-     `password`. A cluster token usually expires in about 24 hours; with a username and password, the scripts get a
-     fresh token on every run, so a rerun the next day works. Uncomment and fill in `quay:` and `stage:` too. You set `catalog.token` in
-     step 5, and leave `deployment:` commented.
+   - **`catalog`:** `url` is the URL of the catalog repository you created in step 2, such as
+     `https://github.com/my-org/ai-grid-catalog.git`, and `token` is the token from step 3. The token is in
+     `catalog.token` in `.config/clusters.yaml`, and nowhere else.
+   - **The secrets:** in `hub:` and in each site's entry, uncomment and fill in a `cluster-admin` `token`, or a
+     `username` and `password`. A cluster token usually expires in about 24 hours; with a username and password, the
+     scripts get a fresh token on every run, so a rerun the next day works. Uncomment and fill in `quay:` and `stage:`
+     too. Leave `deployment:` commented: without it, `make install` pushes with your own git login.
 
    For example:
 
@@ -95,7 +149,7 @@ Tell the install which clusters and repositories to use, and give it the credent
        password: PASSWORD
    catalog:
      url: https://github.com/my-org/ai-grid-catalog.git
-     token: REQUIRED-catalogToken   # set in step 5
+     token: github_pat_TOKEN
    quay:
      username: rhoai+robot
      password: PASSWORD
@@ -123,68 +177,6 @@ Tell the install which clusters and repositories to use, and give it the credent
 
    Never paste a secret into a chat, a command line or a file you commit.
 
-### Create the catalog repository and its token
-
-The provider console writes your models and subscriptions to the catalog repository, with a token that can write
-that repository and no other.
-
-4. Create your catalog repository, with the owner and name you put in `catalog.url`:
-
-   1. Open [Create a new repository](https://github.com/new).
-   2. Fill in the form:
-      - **Owner:** your account, or the organization that will own the repository
-      - **Repository name:** such as `ai-grid-catalog`
-      - **Choose visibility:** **Public**
-      - **Add README:** **On**
-      - **Everything else:** leave it as it is: no template, no `.gitignore` and no license
-   3. Click **Create repository**.
-
-   <img src="images/new-catalog-repository.png" width="420" alt="The new repository form with Add README on">
-
-   With the GitHub CLI instead:
-
-   ```sh
-   gh repo create OWNER/CATALOG_REPO --add-readme --public
-   ```
-
-   Leave it holding nothing but its README: `make install` stops if it holds anything else.
-
-5. Create the catalog token, and put it in `.config/clusters.yaml`:
-
-   1. Open [New fine-grained personal access token](https://github.com/settings/personal-access-tokens/new). You can
-      also reach it from your profile picture: **Settings** > **Developer settings** > **Personal access tokens** >
-      **Fine-grained tokens** > **Generate new token**.
-   2. Fill in the form:
-      - **Token name:** `ai-grid-catalog`
-      - **Expiration:** **90 days**, or a later **Custom** date if your organization allows one. When it expires,
-        the console can't save models or subscriptions until you replace it, so note the date.
-      - **Description:** optional, such as `AI Grid console writes the catalog`
-      - **Resource owner:** your account, or the organization that owns your catalog repository. If that
-        organization requires approval for fine-grained tokens, the token can only read until an organization owner
-        approves it.
-      - **Repository access:** **Only select repositories**, then open **Select repositories** and choose your
-        catalog repository, and only that one.
-      - **Permissions:** on the **Repositories** tab, click **Add permissions**, select **Contents**, and set it to
-        **Access: Read and write**. GitHub adds **Metadata: Read-only** itself.
-      - **Everything else:** no access. Add no other repository permission and no **Account** permission.
-
-      <img src="images/token-repository-access.png" width="480" alt="Repository access set to Only select repositories">
-
-      <img src="images/token-permissions.png" width="480" alt="Contents set to Read and write, and Metadata Read-only">
-
-   3. Click **Generate token** at the bottom of the form.
-   4. Copy the token from the page that follows. GitHub shows it only once.
-   5. In `.config/clusters.yaml`, set `catalog.token` to the token, and save the file. Leave `deployment:`
-      commented: without it, `make install` pushes with your own git login.
-
-      ```yaml
-      catalog:
-        url: https://github.com/my-org/ai-grid-catalog.git
-        token: github_pat_TOKEN
-      ```
-
-      The token is in `catalog.token` in `.config/clusters.yaml`, and nowhere else.
-
 ### Check the prerequisites
 
 Confirm that every cluster and credential is ready before anything is installed.
@@ -205,7 +197,7 @@ Confirm that every cluster and credential is ready before anything is installed.
 
    Only for a cluster with none of these does it open your browser to log in, with `oc login --web`. For each cluster
    it prints `Logged in to NAME as USER.` or `NAME: already logged in.` If a cluster's login fails, replace its
-   credentials as in step 3, then run `make login` again.
+   credentials as in step 5, then run `make login` again.
 
    `make prereqs` prints one line per check, starting with `ok`, `MISSING`, `OLD`, `FAIL` or `skipped`. It checks
    the tools, the `quay.io/rhoai` login, the catalog token, how `make install` pushes this repository (with your
@@ -378,7 +370,7 @@ the grid in the console, as in [Add a site to the grid](#add-a-site-to-the-grid)
 - **A deployment token, for CI or an unattended run:** by default `make install` pushes your deployment repository
   with your own git login. Where there's none, such as a CI job, uncomment `deployment:` in `.config/clusters.yaml`
   and set its `token`, or set `AI_GRID_DEPLOYMENT_TOKEN`, to a fine-grained token with the same fields as the
-  catalog token in step 5, except **Token name** `ai-grid-deployment` and **Repository access** your deployment
+  catalog token in step 3, except **Token name** `ai-grid-deployment` and **Repository access** your deployment
   repository only. With a token, `make install` uses only the token and skips your git credential helpers.
 - **A login you already have:** copy a working kubeconfig, such as the installer's `auth/kubeconfig`, to
   `.config/NAME/kubeconfig`. `make install` keeps a login that works.
