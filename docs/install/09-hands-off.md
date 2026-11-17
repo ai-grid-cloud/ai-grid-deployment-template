@@ -40,7 +40,11 @@ Tell the install which clusters and repositories to use, and give it the credent
 
    Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every later command from the `deployment`
    directory, on branch `main`. `make install` pushes to this repository with your own git login, the one this
-   clone uses, so check that `git push` works here without a prompt.
+   clone uses, so check that it can push without a prompt; this sends nothing:
+
+   ```sh
+   GIT_TERMINAL_PROMPT=0 git push --dry-run origin main
+   ```
 
 2. Create `.config/clusters.yaml`, the one file you edit:
 
@@ -175,9 +179,9 @@ Confirm that every cluster and credential is ready before anything is installed.
    credentials as in step 3, then run `make login` again.
 
    `make prereqs` prints one line per check, starting with `ok`, `MISSING`, `OLD`, `FAIL` or `skipped`. It checks
-   the tools, the `quay.io/rhoai` login, the catalog token, and, for each cluster in `.config/clusters.yaml`, that
-   it's reachable, runs OpenShift 4.21 or later, has a default StorageClass and gives you `cluster-admin`. It changes
-   nothing.
+   the tools, the `quay.io/rhoai` login, the catalog token, how `make install` pushes this repository (with your
+   git login, it reads origin), and, for each cluster in `.config/clusters.yaml`, that it's reachable, runs
+   OpenShift 4.21 or later, has a default StorageClass and gives you `cluster-admin`. It changes nothing.
 
    Fix each `MISSING`, `OLD` or `FAIL` line, then run it again. Everything is ready when it prints no `MISSING`,
    `OLD` or `FAIL` lines.
