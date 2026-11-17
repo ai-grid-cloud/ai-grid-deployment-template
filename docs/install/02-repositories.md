@@ -179,7 +179,8 @@ value it sets, and then runs `make check`:
 
 `root/inputs.env` is yours: the template doesn't have it, so `make update` never changes it.
 `root/kustomization.yaml` copies its values over the root's `REQUIRED-` placeholders; leave those. A value that's
-already set is kept, so you can run `make inputs` again.
+already set is kept, so you can run `make inputs` again. The exception is `portalRedirectURI`: a site you add to
+`clusters.yaml` later gets its redirect added there, and the redirects already there stay.
 
 You should see `root renders; every input is set; every repository is an input.` at the end. If you see
 `unset inputs:` or `placeholders left in your files:`, set the values it names and run `make check`.

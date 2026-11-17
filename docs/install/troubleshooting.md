@@ -33,10 +33,12 @@ site.
 
 **Cause:** the install registers the tenant portal's sign-in redirect, `https://maas.APPS_DOMAIN/*`, for every site in
 your clusters file. The tenant Keycloak imports its realm only once, on its first start (`--override false`), so a
-site you add to the file after the first install doesn't get its redirect automatically. This is a known gap.
+site you add to the file after the first install isn't in the realm until something adds it.
 
-**Fix:** no script does this yet. Add the redirect for the new site's apps domain to client `ai-grid-tenants` in
-the Keycloak admin console, as the [tenant identity provider settings](../../tenant-idp/README.md#settings) describe.
+**Fix:** with the site in your clusters file, run `make install` again: it adds the redirect to the file and to the
+live realm. Or do it in two steps: `make inputs` adds it to `tenant-idp/manifests/settings.yaml`, which you push, and
+`make tenant-redirects` adds it to the live realm
+([tenant identity provider settings](../../tenant-idp/README.md#settings)).
 
 ## The hub check prints `MISSING`
 
