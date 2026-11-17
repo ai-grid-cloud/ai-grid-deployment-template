@@ -109,7 +109,7 @@ t "nothing set: registry skipped" '^skipped +registry logins +no auth file at ~/
 t "no clusters.yaml: skipped, no guide page" '^skipped +cluster checks +no clusters.yaml: run cp clusters-example.yaml clusters.yaml and fill it in$' "$T/bin" "$w" --deployment "$T/other"
 P=$(mkdep placeholder 'hub: {api: REQUIRED-hubAPIURL}')
 t "clusters placeholder: skipped" '^skipped +cluster checks +.*REQUIRED-hubAPIURL' "$T/bin" "$w" --deployment "$P"
-t "site section named" '^Site site-b \(combined\)' "$T/bin" "$w" "${ALL[@]}"
+t "site section named" '^Site site-b$' "$T/bin" "$w" "${ALL[@]}"
 t "nothing set: token skipped" '^skipped +catalog token file' "$T/bin" "$w"
 
 t "quay.io/rhoai and stage" '^ok +registry.stage.redhat.io login' "$T/bin" "$w" --quay-auth-file "$A"
@@ -180,8 +180,8 @@ chmod 600 "$EP/.config/clusters.yaml"
 ED=$EP envt "private file: the quay.io/rhoai login from quay:" "^ok +auth file +quay: in .config/clusters.yaml"
 ED=$EP envt "  ... has the quay.io/rhoai entry" "^ok +quay.io/rhoai login +quay.io/rhoai entry"
 ED=$EP envt "  ... pulls the catalog with it" "^ok +pull the pinned catalog"
-ED=$EP envt "  ... the catalog token from github.catalogToken" "^ok +catalog token +github.catalogToken in .config/clusters.yaml"
-ED=$EP envt "  ... pushes with github.deploymentToken" "^ok +deployment push +with the token from github.deploymentToken in .config/clusters.yaml"
+ED=$EP envt "  ... the catalog token from catalog.token" "^ok +catalog token +catalog.token in .config/clusters.yaml"
+ED=$EP envt "  ... pushes with deployment.token" "^ok +deployment push +with the token from deployment.token in .config/clusters.yaml"
 ED=$EP envt "  ... AI_GRID_CATALOG_TOKEN wins" "^ok +catalog token +AI_GRID_CATALOG_TOKEN" AI_GRID_CATALOG_TOKEN=x
 ED=$EP envt "  ... no temporary auth file left" "." && { total=$((total+1)); if ls "${TMPDIR:-/tmp}" 2>/dev/null | grep -q '^prereqs-quay-'; then echo "   FAIL temp auth file left"; fails=$((fails+1)); else echo "   ok     ... (none in TMPDIR)"; fi; }
 EM="$T/private-missing"; mkdir -p "$EM/.config"
@@ -201,7 +201,7 @@ ED=$E2 envt "legacy: .config/catalog-token" "^ok +catalog token file +$E2/.confi
 ED=$E2 envt "legacy: the environment still counts" "^ok +auth file +$N" QUAY_AUTH_FILE="$N"
 # The hints name the file looked for and the clusters.yaml setting, never a page.
 E3="$T/env-missing"; settings_dep "$E3" ""
-ED=$E3 envt "missing token file names github.catalogToken" "^MISSING +catalog token file +$E3/.config/catalog-token not found; set github.catalogToken in .config/clusters.yaml"
+ED=$E3 envt "missing token file names catalog.token" "^MISSING +catalog token file +$E3/.config/catalog-token not found; set catalog.token in .config/clusters.yaml"
 ED=$E3 envt "missing auth file names quay:" "^MISSING +auth file +$E3/.config/quay-auth.json: not found; set quay.username and quay.password in .config/clusters.yaml"
 E4="$T/env-old"; settings_dep "$E4" ""
 # A clusters.yaml with no catalog (the page-by-page guide): the home directory's files, as before.
