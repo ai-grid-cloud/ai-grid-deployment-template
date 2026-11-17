@@ -396,6 +396,8 @@ mirrors do.
 before any write. The login goes in the same auth file as the `quay.io/rhoai`
 one (`podman login registry.stage.redhat.io`), or under `stage:` in
 `.config/clusters.yaml`. The hub copies it to every site's pull secret.
+A stage account from Ethel (`ethel.rhsm.redhat.com`, on the VPN) works as the
+registry login directly: its username and password.
 
 **Fix: upstream PR** that lets the mirrors fall back to `registry.redhat.io`
 (no `NeverContactSource` on the `rhaii*` sources), or makes the stage mirrors

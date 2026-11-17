@@ -92,7 +92,8 @@ make bootstrap ALLOW_GENERIC_LOGIN=1
 **Cause:** the library mirrors the model runtime images to `registry.stage.redhat.io` with no fallback, so a site
 without that login can't pull them ([limits of `main`, L20](../upstream-main-limits.md#l20-model-runtimes-pull-only-from-registrystageredhatio)).
 
-**Fix:** add the login in the way that matches your guide:
+**Fix:** a stage account from Ethel (`ethel.rhsm.redhat.com`, on the VPN) works as the login directly, with its
+username and password. Add it in the way that matches your guide:
 
 - Page by page: `podman login registry.stage.redhat.io`, into the same auth file as your `quay.io/rhoai` login.
 - [Install with one command](09-hands-off.md): add its username and password to `.config/clusters.yaml`:
