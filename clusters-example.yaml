@@ -7,12 +7,13 @@
 # - .config/clusters.yaml, for the one-command install (install guide, page 9;
 #   make config copies it). Git ignores .config/, the file must be readable
 #   only by you (chmod 600), and it's where your secrets go: uncomment the
-#   token or username and password lines, and the github: and quay: sections.
+#   token or username and password lines, catalog.token, and the deployment:
+#   and quay: sections.
 #
 # - clusters.yaml at the root, for the page-by-page guide (pages 1 to 8):
 #   cp clusters-example.yaml clusters.yaml. You commit it, so it holds no
-#   secrets: the scripts refuse token:, username:, password:, github: and quay:
-#   in it. Leave those lines commented out.
+#   secrets: the scripts refuse a cluster's token:, username: and password:,
+#   catalog.token, deployment: and quay: in it. Leave those lines commented out.
 #
 # When .config/clusters.yaml exists, the scripts read it and ignore clusters.yaml.
 apiVersion: ai-grid.dev/v1alpha1   # required header: the scripts parse this file with kubectl
@@ -40,25 +41,20 @@ sites:
     # token: sha256~TOKEN
   # Another site: copy the lines above, from "- name:".
 
-repositories:
-  # The catalog repository the provider console writes models and
-  # subscriptions to, e.g. https://github.com/OWNER/ai-grid-catalog.git.
-  # Page by page, leave it as it is: REQUIRED- here means no catalog yet.
-  catalog: REQUIRED-catalogRepoURL
-  # The library revision make install pins: a branch, a tag or a full commit
-  # SHA, resolved to its current commit on each run. Empty keeps the
-  # template's own pin in root/kustomization.yaml.
-  library: deployment-template
+# The catalog repository the provider console writes models and subscriptions to.
+catalog:
+  url: REQUIRED-catalogRepoURL     # e.g. https://github.com/OWNER/ai-grid-catalog.git; page by page, leave it: REQUIRED- means no catalog yet
+  # Private file only: a fine-grained token, Contents: Read and write, on this
+  # repository only.
+  # token: github_pat_TOKEN
 
 # Private file only. Environment variables override these (install guide, page 9).
-# github:
-#   # Fine-grained token: Contents, Read and write, on the catalog repository only.
-#   catalogToken: github_pat_TOKEN
-#   # Optional: a token that can push to this repository. Without it, make
-#   # install pushes with your own git login (gh or a credential helper).
-#   deploymentToken: github_pat_TOKEN
+# Optional: a token that can push to this deployment repository, for CI.
+# Without it, make install pushes with your own git login (gh or a credential helper).
+# deployment:
+#   token: github_pat_TOKEN
+# Your quay.io/rhoai robot account.
 # quay:
-#   # Your quay.io/rhoai robot account.
 #   username: rhoai+robot
 #   password: PASSWORD
 
@@ -66,6 +62,7 @@ repositories:
 # line to change it. A setting left out comes from the environment variable of
 # the same name, else the default.
 options:
+  # LIBRARY: deployment-template         # the library revision make install pins: a branch, a tag or a full SHA; empty keeps root/kustomization.yaml's
   # KEYCLOAK: install                    # only "install" is supported
   # ALLOW_GENERIC_LOGIN: 1               # let bootstrap use a general quay.io login from QUAY_AUTH_FILE
   # PROVIDER_ADMIN_TOKEN_DURATION: 168h  # lifetime of .config/provider-admin-token

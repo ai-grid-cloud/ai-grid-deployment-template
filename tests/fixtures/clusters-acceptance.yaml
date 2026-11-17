@@ -25,18 +25,15 @@ sites:
     username: REQUIRED-username
     password: REQUIRED-password
 
-repositories:
-  # The catalog repository the console writes models and subscriptions to.
-  catalog: REQUIRED-catalogRepoURL # e.g. https://github.com/OWNER/ai-grid-catalog.git
-  # The library revision make install pins: a branch, a tag or a full commit SHA.
-  library: deployment-template
+# The catalog repository the provider console writes models and subscriptions to.
+catalog:
+  url: REQUIRED-catalogRepoURL     # e.g. https://github.com/OWNER/ai-grid-catalog.git
+  token: REQUIRED-catalogToken     # fine-grained token, Contents: Read and write, this repository only; e.g. github_pat_...
 
-github:
-  # Fine-grained token: Contents, Read and write, on the catalog repository only.
-  catalogToken: REQUIRED-catalogToken   # e.g. github_pat_...
-  # Optional: a token that can push to this repository. Without it, make install
-  # pushes with your own git login (gh or a credential helper).
-  # deploymentToken: github_pat_TOKEN
+# Optional: a token that can push to this deployment repository, for CI. Without
+# it, make install pushes with your own git login (gh or a credential helper).
+# deployment:
+#   token: github_pat_TOKEN
 
 quay:
   # Your quay.io/rhoai robot account.
@@ -45,7 +42,8 @@ quay:
 
 # Optional: make install's settings, shown with their defaults. Uncomment to change.
 options:
-  # KEYCLOAK: install                    # only "install" is supported
+  # LIBRARY: deployment-template         # the library revision make install pins: branch, tag or full SHA
+  # KEYCLOAK: install                   # only "install" is supported
   # ALLOW_GENERIC_LOGIN: 1               # let bootstrap use a general quay.io login from QUAY_AUTH_FILE
   # PROVIDER_ADMIN_TOKEN_DURATION: 168h  # lifetime of .config/provider-admin-token
   # GATE_ROOT_SECONDS: 600               # deployment-root Synced at the pushed commit
