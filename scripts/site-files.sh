@@ -42,6 +42,9 @@ chart_og=openshift-cert-manager-operator
 site_oc() { KUBECONFIG=$(cluster_kubeconfig "$name") oc "$@"; }
 domain=$(site_oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}') && [ -n "$domain" ] ||
   { echo "error: can't read site $name's apps domain" >&2; exit 1; }
+# It goes into sed replacements and YAML: a DNS name only.
+[[ "$domain" =~ ^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$ ]] ||
+  { echo "error: site $name's apps domain isn't a DNS name" >&2; exit 1; }
 ogs=$(site_oc get operatorgroups.operators.coreos.com -n cert-manager-operator -o jsonpath='{.items[*].metadata.name}') ||
   { echo "error: can't read site $name's OperatorGroups in cert-manager-operator" >&2; exit 1; }
 platform=""
