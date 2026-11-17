@@ -11,9 +11,11 @@ You need the following. In step 6, `make prereqs` checks the clusters and logins
 worker nodes or the network.
 
 - [ ] **A hub and one or more sites on OpenShift 4.21 or later,** with nothing of AI Grid on them, and the API URL
-  and a `cluster-admin` login for each: a token, a username and password, or a kubeconfig.
-- [ ] **A role for each site:** `combined` (tenants enter and models run), `ingress` (tenants enter, no models) or
-  `inference` (models only). At least one site is `ingress` or `combined`.
+  and a `cluster-admin` login for each: a token, or a username and password.
+- [ ] **A role in mind for each site:** `combined` (tenants enter and models run), `ingress` (tenants enter, no
+  models) or `inference` (models only). At least one site is `ingress` or `combined`. You choose each site's role
+  and location after the install, when you add it to the grid in the provider console; `.config/clusters.yaml` has neither.
+  <!-- TODO(D11): how the tenant portal's redirect (portalRedirectURI) picks its spoke; open decision. -->
 - [ ] **A default StorageClass on each cluster.**
 - [ ] **Two worker nodes on each cluster** for Submariner's gateways. On a compact cluster or single-node OpenShift,
   you label the gateway nodes by hand, as [site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/networking.md) describes.
@@ -58,39 +60,50 @@ Tell the install which clusters and repositories to use, and give it the credent
 
 3. Open `.config/clusters.yaml` in an editor and fill it in. Each field has a comment that says what it is.
 
-   - **`hub` and `sites`:** replace each `REQUIRED-` value, and add a block for each site. A site's name is a DNS
-     label; it becomes the site's ACM cluster name, and you can't change it once the site is imported.
+   - **`hub` and `spokes`:** replace each `REQUIRED-` value, and add an entry under `spokes:` for each site, with
+     its `name` and `api`. A spoke's name is a DNS label; it becomes the site's ACM cluster name, and you can't
+     change it once the site is imported. The hub's name is always `hub`. The file says only how to reach each
+     cluster: no role and no location.
    - **`repositories.catalog`:** the URL of the catalog repository you create in step 4, such as
      `https://github.com/my-org/ai-grid-catalog.git`. Pick its owner and name now.
-   - **The secrets:** uncomment `credentials:` and `quay:`, and fill them in. For each cluster, give a `cluster-admin`
-     token, a username and password, or a kubeconfig path. A cluster token usually expires in about 24 hours; with a
-     username and password, the scripts get a fresh token on every run, so a rerun the next day works. Leave
-     `github:` commented until step 5.
+   - **The secrets:** in `hub:` and in each spoke's entry, give a `cluster-admin` `token`, or a `username` and
+     `password`. A cluster token usually expires in about 24 hours; with a username and password, the scripts get a
+     fresh token on every run, so a rerun the next day works. Fill in `quay:` too. Leave `github:` commented until
+     step 5.
 
-   For example, before the secrets:
+   For example:
 
    ```yaml
    apiVersion: ai-grid.dev/v1alpha1
    kind: Clusters
    hub:
      api: https://api.hub.example.com:6443
-   sites:
+     username: kubeadmin
+     password: PASSWORD
+   spokes:
      - name: site-east-1
-       role: combined
-       location: us-east
        api: https://api.site-east-1.example.com:6443
+       token: sha256~TOKEN
      - name: site-east-2
-       role: inference
-       location: us-east
        api: https://api.site-east-2.example.com:6443
+       username: kubeadmin
+       password: PASSWORD
    repositories:
      catalog: https://github.com/my-org/ai-grid-catalog.git
      library: deployment-template
+   quay:
+     username: rhoai+robot
+     password: PASSWORD
    ```
+
+   A file in the old format, with `sites:`, `credentials:`, `role:` or `location:`, stops with a message that says
+   what to change.
 
    Never paste a secret into a chat, a command line or a file you commit. To enter the secrets at a prompt that
    doesn't show what you paste, instead of editing them, run `make secrets` (`make secrets NAME=github` for the
    GitHub tokens only).
+
+   <!-- TODO(D11): whether make secrets stays, and how it writes the hub's and each spoke's secrets; open decision. -->
 
 ### Create the catalog repository and its token
 
@@ -170,9 +183,8 @@ Confirm that every cluster and credential is ready before anything is installed.
    `.config/clusters.yaml`. It uses the first of these that it finds:
 
    1. A working `.config/NAME/kubeconfig`, which it keeps.
-   2. The kubeconfig that `credentials.NAME.kubeconfig` names.
-   3. The token in `credentials.NAME.token`.
-   4. The username and password in `credentials.NAME.username` and `credentials.NAME.password`.
+   2. The cluster's `token`, in `hub:` or in its entry under `spokes:`.
+   3. The cluster's `username` and `password`, in the same place.
 
    Only for a cluster with none of these does it open your browser to log in, with `oc login --web`. For each cluster
    it prints `Logged in to NAME as USER.` or `NAME: already logged in.` If a cluster's login fails, replace its
@@ -278,7 +290,7 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 
 | Key | Value |
 |---|---|
-| `hub.name`, `hub.api` | The hub's name in `.config/clusters.yaml` and its API URL |
+| `hub.name`, `hub.api` | The hub's name, `hub`, and its API URL |
 | `hub.consoleURL` | The provider console |
 | `hub.keycloakURL`, `hub.keycloakRealm` | The tenant Keycloak and its realm, `tenants` |
 | `hub.persesURL` | Perses's in-cluster URL; it isn't reachable from outside the hub |
@@ -286,7 +298,9 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 | `hub.lokiStack` | The usage-log LokiStack, `redhat-ods-monitoring/usage-logs` |
 | `providerAdminTokenFile` | The path of the provider-admin token file, never the token |
 | `library.url`, `library.revision` | The library and the commit you pin |
-| `sites[]` | For each site: `name`, `role`, `location`, `api`, `appsDomain`, and `acmName`, its ManagedCluster's name |
+| `sites[]` | For each site: `name`, `api`, `appsDomain`, and `acmName`, its ManagedCluster's name |
+
+<!-- TODO(D11): the name of the outputs.json key for the spokes (sites or spokes); open decision. -->
 
 The provider-admin token is in `.config/provider-admin-token`. It belongs to ServiceAccount
 `ai-grid-test/provider-admin`, which is bound to the console's ClusterRole `ai-grid-provider-admin`, so a test suite
@@ -295,16 +309,9 @@ command line. It lasts 168 hours. To get a new one, run `make provider-admin`.
 
 ## Add a site to the grid
 
-`make install` leaves each site imported but outside the grid. To add a site, do one of the following:
-
-- In the provider console, click **Clusters**, and add the site to AI Grid with its role.
-- From your deployment repository, label the site with the role and location from `.config/clusters.yaml`:
-
-  ```sh
-  make site-join SITE=SITE_NAME
-  ```
-
-The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it, run
+`make install` leaves each site imported but outside the grid. To add a site, open the provider console
+(`hub.consoleURL` in `.install/outputs.json`), click **Clusters**, and click **Add to AI Grid** for the site. Choose
+its role and location there. The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it, run
 `make site-status SITE=SITE_NAME`.
 
 ## Other options
@@ -314,8 +321,8 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
 
   | Environment variable | Replaces |
   |---|---|
-  | `AI_GRID_TOKEN_NAME` | `credentials.NAME.token` |
-  | `AI_GRID_USERNAME_NAME`, `AI_GRID_PASSWORD_NAME` | `credentials.NAME.username`, `credentials.NAME.password` |
+  | `AI_GRID_TOKEN_NAME` | The cluster's `token` |
+  | `AI_GRID_USERNAME_NAME`, `AI_GRID_PASSWORD_NAME` | The cluster's `username` and `password` |
   | `AI_GRID_DEPLOYMENT_TOKEN`, else the file that `DEPLOYMENT_TOKEN_FILE` names | `github.deploymentToken` |
   | `AI_GRID_CATALOG_TOKEN`, else the file that `CATALOG_TOKEN_FILE` names | `github.catalogToken` |
   | `AI_GRID_QUAY_USERNAME`, `AI_GRID_QUAY_PASSWORD`, else the auth file that `QUAY_AUTH_FILE` names | `quay.username`, `quay.password` |
@@ -323,7 +330,7 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
   For each GitHub token and the `quay.io` login, the scripts use the first that's set: the `AI_GRID_` variable, the
   file that the `*_FILE` variable names, the value in `.config/clusters.yaml`, then an older secret file,
   `.config/deployment-token`, `.config/catalog-token` or `.config/quay-auth.json`. For a cluster's login, they use a
-  working `.config/NAME/kubeconfig`, then `credentials.NAME.kubeconfig`, then a token (`AI_GRID_TOKEN_NAME`, then
+  working `.config/NAME/kubeconfig`, then a token (`AI_GRID_TOKEN_NAME`, then
   the file), then a username and password (the `AI_GRID_` variables, then the file).
 
   In a variable's name, `NAME` is the cluster's name upper-cased with `-` turned into `_`, such as
@@ -335,9 +342,8 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
   `.config/clusters.yaml`, or `AI_GRID_DEPLOYMENT_TOKEN`, to a fine-grained token with the same fields as the
   catalog token in step 5, except **Token name** `ai-grid-deployment` and **Repository access** your deployment
   repository only. With a token, `make install` uses only the token and skips your git credential helpers.
-- **A kubeconfig instead of a token:** set `credentials.NAME.kubeconfig` to the path of a working kubeconfig, such as
-  the installer's `auth/kubeconfig`, or put the kubeconfig in `.config/NAME/kubeconfig`. `make install` keeps a
-  kubeconfig that works.
+- **A login you already have:** copy a working kubeconfig, such as the installer's `auth/kubeconfig`, to
+  `.config/NAME/kubeconfig`. `make install` keeps a login that works.
 - **An untrusted cluster certificate:** put the CAs the cluster's certificates chain to in `.config/NAME/ca.crt`, as
   PEM. With a username and password, the login also reaches the cluster's OAuth server, which the ingress router
   serves, and checks it against the same file, so the file holds both the API's CA and the router's CA. To build it

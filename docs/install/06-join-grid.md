@@ -1,24 +1,21 @@
 # Join the site to the grid
 
-Labels on the site's ManagedCluster make it a grid site. The hub then installs OpenShift AI, MaaS, the grid and the
-tenant settings in the site's role. The `make` targets on this page work on the only site in your `clusters.yaml`.
-With several sites, add the site's name, such as `make site-join SITE=SITE_NAME`.
+You add the site to the grid in the provider console. **Add to AI Grid** labels the site's ManagedCluster on the
+hub with the role and location you choose, and the hub then installs OpenShift AI, MaaS, the grid and the tenant
+settings in that role. Your `clusters.yaml` names no role or location: you choose them here. The `make` targets on
+this page work on the only spoke in your `clusters.yaml`. With several spokes, add the site's name, such as
+`make site-status SITE=SITE_NAME`.
 
-## 1. Label the site
+## 1. Add the site in the console
 
-The site's labels on the hub make it a grid site, in the role and location from your `clusters.yaml`:
+1. Open `https://CONSOLE_HOST` (from [install the hub components](04-hub-components.md#2-verify)) and sign in as a
+   user with `cluster-admin` on the hub.
+2. Click **Clusters**. Your site shows **Not added**.
+3. Click **Add to AI Grid** for your site. Choose the role **combined**, so tenants enter and models run on the same
+   cluster, and the site's location, such as `us-east`. Confirm.
+   For `ingress` and `inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/README.md#what-you-choose-per-site).
 
-```sh
-make site-join
-```
-
-It first checks that your commits are pushed, and waits until the hub's `deployment-root` has synced your latest
-commit, up to 10 minutes. If the site already has those labels, it says `labels already set` and changes nothing.
-The console shows the location.
-For `ingress` and `inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/README.md#what-you-choose-per-site).
-
-You should see `managedcluster.cluster.open-cluster-management.io/SITE labeled`. The hub then creates the site's
-Applications. Show them:
+The hub then creates the site's Applications. Show them:
 
 ```sh
 make site-status
@@ -59,6 +56,7 @@ OpenShift AI takes up to an hour on a new cluster, and less on one that ran Open
 
 ## Checkpoint
 
+- The console shows the site with AI Grid status **Provisioned**.
 - The site's DataScienceCluster is `Ready` and its GridSite `Available`.
 - `make status` lists no hub Application as not `Synced` and `Healthy`.
 - `make site-status` says the MaaS gateway answers (with the internal certificate, or `401` with your own).

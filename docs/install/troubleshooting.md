@@ -10,6 +10,20 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 **Fix:** set each one it names ([set your names](02-repositories.md#4-set-your-names);
 [inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/appendix-a-inputs.md#inputs)), and run the check again.
 
+## A script stops because `clusters.yaml` uses the old format
+
+**Cause:** your `clusters.yaml` or `.config/clusters.yaml` was written for an earlier version of the template. It has
+`sites:`, `credentials:`, a `kubeconfig:` key, or a `role:` or `location:` on a cluster.
+
+**Fix:** change the file as the message says, then run the command again:
+
+- Rename `sites:` to `spokes:`.
+- Remove each `role:` and `location:`. You choose them in the provider console when you click **Add to AI Grid**
+  ([join the site to the grid](06-join-grid.md)).
+- In `.config/clusters.yaml`, move each cluster's `token`, or `username` and `password`, from `credentials:` into
+  `hub:` or into that spoke's entry, then remove `credentials:`. For a kubeconfig, copy it to
+  `.config/NAME/kubeconfig` instead.
+
 ## The hub check prints `MISSING`
 
 **Fix:** for each `MISSING` line that a selected component doesn't install:
