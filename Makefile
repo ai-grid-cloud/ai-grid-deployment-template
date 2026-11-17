@@ -40,7 +40,7 @@ prereqs: ## Report what is installed and what isn't found; never blocks
 	-@scripts/library.sh >/dev/null
 	@python3 scripts/prereqs.py
 
-inputs: ## Set root/inputs.env and the portal redirect, then check; CATALOG=URL (page 2); make install reads repositories.catalog
+inputs: ## Set root/inputs.env and the portal redirect, then check; CATALOG=URL (page 2); make install reads catalog.url
 	@scripts/set-inputs.sh $(if $(CATALOG),$(call shq,$(CATALOG)))
 
 check: ## Check this repository before you push it: renders, every input set; read-only (page 2)

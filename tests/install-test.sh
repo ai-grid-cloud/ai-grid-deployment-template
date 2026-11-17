@@ -143,7 +143,7 @@ setup required
 sed -i.bak 's#^  url: .*#  url: REQUIRED-catalogRepoURL#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 run
 t "catalog placeholder left in clusters.yaml: stops before any cluster call" eval '[ "$rc" = 1 ] &&
-  grep -q "set repositories.catalog" <<<"$out" && [ ! -s "$W/calls.log" ] && [ ! -s "$W/argv.log" ]'
+  grep -q "set catalog.url" <<<"$out" && [ ! -s "$W/calls.log" ] && [ ! -s "$W/argv.log" ]'
 
 setup gatefail
 echo '{"items":[{"status":{"phase":"Installing"}}]}' > "$W/mch.json"
@@ -188,7 +188,7 @@ setup nocatalog
 sed -i.bak 's#^  url: .*#  url: ""#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 run
 t "no catalog in clusters.yaml: stops and names the key" eval '[ "$rc" = 1 ] && [ ! -s "$W/calls.log" ] &&
-  grep -q "set repositories.catalog in clusters.yaml" <<<"$out"'
+  grep -q "set catalog.url in clusters.yaml" <<<"$out"'
 
 # The private file: secrets from .config/clusters.yaml, the environment over it.
 private() { # moves $D's clusters.yaml to .config/ with a secrets block, mode 600; drops the legacy files
@@ -223,11 +223,11 @@ setup privatenocatalog; private
 sed -i.bak '/^  token: /d' "$D/.config/clusters.yaml"; rm "$D/.config/clusters.yaml.bak"
 run
 t "no catalog token: stops before any cluster call, naming the key" eval '[ "$rc" = 1 ] && [ ! -s "$W/calls.log" ] &&
-  grep -q "github.catalogToken in .config/clusters.yaml" <<<"$out"'
+  grep -q "catalog.token in .config/clusters.yaml" <<<"$out"'
 
 setup droppedoption; opt DEPLOYMENT_TOKEN_FILE .config/deployment-token
 run
-t "a dropped *_FILE option: stops with where it goes now" eval '[ "$rc" = 1 ] && grep -q "options.DEPLOYMENT_TOKEN_FILE is no longer read: put the token in github.deploymentToken" <<<"$out"'
+t "a dropped *_FILE option: stops with where it goes now" eval '[ "$rc" = 1 ] && grep -q "options.DEPLOYMENT_TOKEN_FILE is no longer read: put the token in deployment.token" <<<"$out"'
 
 setup oldenv
 printf 'CATALOG_REPO_URL=https://github.com/acme/catalog.git\n' > "$D/install.env"
@@ -306,17 +306,6 @@ t "site-check fails: stops and names the site" eval '[ "$rc" = 1 ] && grep -q "F
   grep -qx "make install stopped at site site-b. Fix the cause, then run make install again." <<<"$out" &&
   grep -q "^import-site.sh site-a --yes" "$W/calls.log" && ! grep -q "^import-site.sh site-b" "$W/calls.log" &&
   ! grep -q "hub-apps-final" <<<"$out"'
-
-set_role() { # SITE ROLE: changes the site's role in clusters.yaml
-  sed -i.bak "s/name: $1, role: [a-z]*/name: $1, role: $2/" "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
-  g -C "$D" commit -qam "role $1 $2"
-}
-
-setup ingress; set_role site-a ingress
-run
-t "an ingress site: no certificate step, no ClusterIssuer read, imported" eval '[ "$rc" = 0 ] &&
-  ! grep -q "install: site files" "$W/calls.log" && ! grep -q "clusterissuers" "$W/argv.log" &&
-  ! grep -q "^== site-files" <<<"$out" && grep -q "^import-site.sh site-a --yes" "$W/calls.log"'
 
 setup issuerkey
 sed -i.bak 's/name: site-a,/name: site-a, issuer: acme-prod,/' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"

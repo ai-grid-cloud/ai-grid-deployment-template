@@ -10,7 +10,7 @@
 # or can't be read.
 #
 # The catalog token comes from scripts/clusters.sh's deployment_load
-# (github.catalogToken, the environment winning, else CATALOG_TOKEN_FILE).
+# (catalog.token, the environment winning, else CATALOG_TOKEN_FILE).
 # With one, git reads it through a temporary GIT_ASKPASS helper and never
 # prompts, so the token is never on a command line or in the output; without
 # one, --confirm uses your own git credentials.

@@ -6,7 +6,7 @@
 # you fix the cause and run it again.
 #
 # Reads its settings from clusters.yaml at the root of this repository
-# (repositories: and options:; scripts/clusters.sh
+# (catalog.url and options:; scripts/clusters.sh
 # settings_lines) and stops before any cluster call when a REQUIRED- value is
 # left in it, or a file it names doesn't exist. Relative paths in it are
 # relative to this repository. A setting the file holds, even an empty one,
@@ -92,7 +92,7 @@ run_step() { # STEP SCRIPT [ARG...]: runs a script; stops the install at STEP wh
 
 check_old_files() { # an install.env, which earlier versions read, stops the install
   [ ! -f "$dir/install.env" ] ||
-    die "install.env is no longer read: move its settings into clusters.yaml (CATALOG_REPO_URL and LIBRARY_REVISION under repositories: as catalog and library, the rest under options:; see clusters-example.yaml), then delete install.env"
+    die "install.env is no longer read: move its settings into clusters.yaml (CATALOG_REPO_URL as catalog.url, LIBRARY_REVISION as options.LIBRARY, the rest under options:; see clusters-example.yaml), then delete install.env"
 }
 
 inputs_value() { # NAME: its value in root/inputs.env, empty when unset
@@ -127,7 +127,7 @@ abs_path() { # PATH: absolute, relative to this repository; ~/ is your home
 }
 
 check_settings() { # the values the hub phase needs, and the files they name
-  [ -n "${CATALOG_REPO_URL:-}" ] || die "set repositories.catalog in ${CLUSTERS_FILE#"$dir/"}"
+  [ -n "${CATALOG_REPO_URL:-}" ] || die "set catalog.url in ${CLUSTERS_FILE#"$dir/"}"
   case "${KEYCLOAK:-install}" in
     install) ;;
     *) die "KEYCLOAK=${KEYCLOAK} is not supported yet: only KEYCLOAK=install is" ;;
@@ -178,7 +178,7 @@ step_inputs() {
   local have want
   have=$(https_url "$(inputs_value catalogRepoURL)") want=$(https_url "$CATALOG_REPO_URL")
   if [ "$have" != "$want" ]; then
-    echo "error: root/inputs.env names the catalog $have, but clusters.yaml's repositories.catalog is $want; set-inputs.sh keeps a value that's set. Edit catalogRepoURL in root/inputs.env, or delete that line so set-inputs.sh writes it again." >&2
+    echo "error: root/inputs.env names the catalog $have, but clusters.yaml's catalog.url is $want; set-inputs.sh keeps a value that's set. Edit catalogRepoURL in root/inputs.env, or delete that line so set-inputs.sh writes it again." >&2
     stopped inputs
   fi
   run_step inputs git-push.sh "install: inputs and library pin" root/ tenant-idp/manifests/settings.yaml
