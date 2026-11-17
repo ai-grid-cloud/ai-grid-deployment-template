@@ -4,11 +4,10 @@ In this section you create an organization, deploy a model to the site, subscrib
 and call it as a tenant. The provider console writes the model and subscription to your catalog repository, and Argo
 CD delivers them to the site.
 
-Steps 2 to 4 use the console. To script them instead, take the JSON bodies from
-[call the console's API](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/05-console-and-model-delivery.md#call-the-consoles-api)
-and send them with `make console-call METHOD=METHOD BODY='JSON'`, which signs in with your hub login. For a body on
-several lines, as the library's are, or one that contains a `$`, save it to a file and pass `BODY_FILE=FILE` instead
-of `BODY`.
+Steps 2 to 4 use the console. To script them instead, send each request with
+`make console-call METHOD=METHOD BODY='JSON'`, which signs in with your hub login, such as
+`make console-call METHOD=ai_grid.v1.Tenants/List BODY='{}'`. For a body on several lines, or one that contains a
+`$`, save it to a file and pass `BODY_FILE=FILE` instead of `BODY`.
 
 ## 1. Sign in to the console
 
@@ -25,11 +24,21 @@ The **Monitoring** page shows the hub's dashboards. If it can't load them, see
 
 ## 2. Create an organization
 
+What you do here depends on `keycloakOverlay` in `root/inputs.env`
+([set your names](02-repositories.md#4-set-your-names)):
+
+- **`core`:** create an organization and link its own identity provider. Its users sign in there.
+- **`default`, on a test deployment:** the library's example organizations `grid-tenant-1` and `grid-tenant-2`
+  already exist, with test users. Skip to [3. Deploy a model](#3-deploy-a-model) and use `grid-tenant-1`.
+
+To create an organization:
+
 1. Go to **Organizations** and click **Create organization**.
 2. In **Organization details**, enter the **Name**, and enter the organization's email domain in **Domain 1**. Click
    **Next**.
-3. In **Identity provider**, leave every field empty, and click **Next**. The organization's users then sign in with
-   accounts in your tenant Keycloak.
+3. In **Identity provider**, enter the organization's identity provider, as the library's
+   [organization identity providers](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/organization-identity-providers/README.md) page describes. Its users
+   sign in there, and Keycloak brokers the sign-in. Click **Next**.
 4. In **Review**, click **Create organization**.
 
 You should see the organization in the **Organizations** list.
@@ -78,40 +87,58 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
 
 ## 6. Call the model as a tenant
 
-1. Create a test user in the organization, in group `ai-grid-users`. The script generates the password into a file:
+1. Choose a tenant user in group `ai-grid-users`:
+
+   - **`core`:** a user of the organization's identity provider, in its group `ai-grid-users`.
+   - **`default`, on a test deployment:** `alice` of `grid-tenant-1`. Her password is the key
+     `GRID_TENANT_1_TEST_USER_PASSWORD` of Secret `maas-db/keycloak-secrets` on the hub. To save it to a file in a
+     directory only you can read, without printing it:
+
+     ```sh
+     (umask 077 && mkdir -p ~/.ai-grid/alice && scripts/with-cluster.sh hub oc extract secret/keycloak-secrets \
+       -n maas-db --keys=GRID_TENANT_1_TEST_USER_PASSWORD --to=$HOME/.ai-grid/alice)
+     ```
+
+     The library lists its test users in
+     [example tenant identity providers](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/apps/keycloak/README.md#example-tenant-identity-providers).
+
+2. As that user, open the Org UI at `https://maas.SITE_APPS_DOMAIN/maas-portal` and sign in. Keycloak sends you to
+   the organization's identity provider. Your browser warns about the site's certificate, which is the cluster's
+   internal one ([limits of `main`](../upstream-main-limits.md#l5-the-maas-gateway-presents-the-cluster-internal-certificate)).
+   If every Org UI page fails with an error, see
+   [troubleshooting](troubleshooting.md#the-org-ui-fails-on-every-page-on-a-new-site).
+
+3. In the Org UI, create an API key. Save it to a file outside any repository that only you can read, and that holds
+   the key and nothing else:
 
    ```sh
-   make tenant-user ORG=ORG_NAME TENANT_USER=TENANT_USER PASSWORD_FILE=TENANT_PASSWORD_FILE
+   (umask 077 && mkdir -p "$HOME/.ai-grid" && printf 'Paste the API key: ' && read -rs k && printf '%s' "$k" > "$HOME/.ai-grid/api-key" && echo)
    ```
 
-   Replace `ORG_NAME` with the organization's name, `TENANT_USER` with a user name, and `TENANT_PASSWORD_FILE` with
-   a path outside any repository.
-
-2. Call the model as that user, and see which site served it:
+4. Call the model with the key, and see which site served it:
 
    ```sh
-   make tenant-call TENANT_USER=TENANT_USER PASSWORD_FILE=TENANT_PASSWORD_FILE SUBSCRIPTION=SUBSCRIPTION_ID \
-     MODEL=MODEL_NAME
+   make tenant-call KEY_FILE="$HOME/.ai-grid/api-key" MODEL=MODEL_NAME SUBSCRIPTION=SUBSCRIPTION_ID
    ```
 
-   Replace `SUBSCRIPTION_ID` with the subscription you created, and `MODEL_NAME` with the model's resource name. It
-   gets the user's token from your tenant Keycloak (the `idpIssuerURL` in `root/inputs.env`), calls the site's MaaS
-   hostname, and prints no password or token. You should see a short reply, `HTTP 200` and `x-grid-site: SITE`.
+   Replace `MODEL_NAME` with the model's resource name. `SUBSCRIPTION` is optional: set it to the subscription you
+   created when the user is in several. With several sites, add `SITE=SITE_NAME` for the ingress or combined site to
+   call. It calls `https://maas.SITE_APPS_DOMAIN/v1/chat/completions` and prints no key. You should see a short
+   reply, `HTTP 200` and `x-grid-site: SITE`.
 
-   > **Note:** `make tenant-call` needs a publicly trusted certificate on the site's MaaS gateway. With the
-   > cluster's internal certificate, it stops with a certificate error. To add your own, see
-   > [Before you add the site](06-join-grid.md#before-you-add-the-site).
+   > **Note:** The site's MaaS gateway presents the cluster's internal certificate, which `curl` doesn't trust
+   > unless your system already trusts the cluster's service CA. Then `make tenant-call` stops with a message that
+   > the certificate isn't trusted, and names this limit
+   > ([limits of `main`](../upstream-main-limits.md#l5-the-maas-gateway-presents-the-cluster-internal-certificate)).
 
-Tenants normally call with an API key, and create keys in the Org UI at `https://maas.SITE_APPS_DOMAIN/maas-portal`.
-If every Org UI page fails with an error, see
-[troubleshooting](troubleshooting.md#the-org-ui-fails-on-every-page-on-a-new-site).
-For API keys, refusal checks and revoking a key, see [tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/tenant-access.md). To remove what you created,
-see [operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/operate.md#remove-a-subscription-model-or-organization).
+To remove what you created, delete the subscription, then the model, then the organization in the console. Deleting
+a subscription doesn't revoke its API keys: revoke them in the Org UI first.
 
 ## Checkpoint
 
 - The model is **Ready** and the subscription **Active** in the console.
-- A tenant's chat call returns a reply with an `x-grid-site` header.
+- A tenant's chat call with an Org UI API key returns a reply with an `x-grid-site` header, or `make tenant-call`
+  names the internal-certificate limit.
 
 To add more sites, repeat [5. Prepare the site](05-prepare-site.md) and
 [6. Join the site to the grid](06-join-grid.md) for each. Back to the [install guide](README.md).

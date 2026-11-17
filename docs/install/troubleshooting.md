@@ -1,14 +1,14 @@
 # Troubleshooting
 
-Problems you can hit while following this guide. Each entry gives the symptom, the cause and the fix. For problems
-after install, see the library's [troubleshooting](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/troubleshooting.md). The [hub](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/README.md) and [spokes](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/README.md) pages list more under **Known issues**.
+Problems you can hit while following this guide. Each entry gives the symptom, the cause and the fix. For what the
+library's `main` branch can't do yet, see [the limits of `main`](../upstream-main-limits.md). For the library's own
+reference, see its [getting started](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/README.md) page.
 
 ## The deployment check reports `unset inputs` or `placeholders left in your files`
 
 **Cause:** an input in `root/inputs.env` is empty, or a value in another file is still a `REQUIRED-NAME` placeholder.
 
-**Fix:** set each one it names ([set your names](02-repositories.md#4-set-your-names);
-[inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/appendix-a-inputs.md#inputs)), and run the check again.
+**Fix:** set each one it names ([set your names](02-repositories.md#4-set-your-names)), and run the check again.
 
 ## A script stops because `clusters.yaml` uses the old format
 
@@ -29,16 +29,20 @@ site.
   `hub:` or into that site's entry under `sites:`, then remove `credentials:`. For a kubeconfig, copy it to
   `.config/NAME/kubeconfig` instead.
 
-## A tenant can't sign in to the portal on a site added after the install
+## A tenant can't sign in to the portal on a newly added site
 
-**Cause:** the install registers the tenant portal's sign-in redirect, `https://maas.APPS_DOMAIN/*`, for every site in
-your clusters file. The tenant Keycloak imports its realm only once, on its first start (`--override false`), so a
-site you add to the file after the first install isn't in the realm until something adds it.
+**Symptom:** the Org UI's sign-in on an `ingress` or `combined` site fails with an invalid redirect URI.
 
-**Fix:** with the site in your clusters file, run `make install` again: it adds the redirect to the file and to the
-live realm. Or do it in two steps: `make inputs` adds it to `tenant-idp/manifests/settings.yaml`, which you push, and
-`make tenant-redirects` adds it to the live realm
-([tenant identity provider settings](../../tenant-idp/README.md#settings)).
+**Cause:** the library's Keycloak registers a site's portal redirect, `https://maas.SITE_APPS_DOMAIN/oauth2/callback`,
+with its CronJob `keycloak-redirect-uris`, which runs every five minutes. It registers only sites in the grid as
+`ingress` or `combined`.
+
+**Fix:** wait five minutes after you add the site to the grid, then sign in again. If it still fails, check the
+CronJob's last Job:
+
+```sh
+scripts/with-cluster.sh hub oc get jobs -n maas-db
+```
 
 ## The hub check prints `MISSING`
 
@@ -48,9 +52,9 @@ live realm. Or do it in two steps: `make inputs` adds it to `tenant-idp/manifest
 |---|---|
 | OpenShift version | Upgrade the cluster to 4.21 or later. |
 | default StorageClass | Annotate one StorageClass `storageclass.kubernetes.io/is-default-class=true`. |
-| cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift, or select `apps/cert-manager` ([cert-manager](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/00-platform-services.md#cert-manager)). |
-| quay.io/rhoai pull secret file | Add your `quay.io/rhoai` robot account in the way that matches your guide, as the steps after this table describe ([OpenShift AI prerequisites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/06-site-delivery.md#registry-access-and-openshift-ai-prerequisites)). |
-| object storage | Expected with `apps/object-storage/s4` or `odf` selected: it appears when you [install the hub components](04-hub-components.md). If you bring your own bucket, create the Secret now ([object storage](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/01-acm.md#object-storage)). |
+| cert-manager CRDs | Install the cert-manager Operator for Red Hat OpenShift on the hub. The root doesn't select the library's `apps/cert-manager`: the hub uses the platform's. |
+| quay.io/rhoai pull secret file | Add your `quay.io/rhoai` robot account in the way that matches your guide, as the steps after this table describe. |
+| object storage | Expected: `apps/odf` writes it when you [install the hub components](04-hub-components.md). ODF is the only object store on the library's `main` branch ([limits of `main`](../upstream-main-limits.md#l9-odf-is-the-only-observability-object-store)). |
 
 To add your `quay.io/rhoai` robot account, do one of the following:
 
@@ -87,7 +91,8 @@ make bootstrap ALLOW_GENERIC_LOGIN=1
 
 **Cause:** your root's `values` don't set input `NAME`, or set it empty or with `"`, `'`, `\` or `@`.
 
-**Fix:** set it in `root/inputs.env` if it's one of yours, or in `root/kustomization.yaml` ([inputs](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/appendix-a-inputs.md#inputs)), and push.
+**Fix:** set it in `root/inputs.env` ([set your names](02-repositories.md#4-set-your-names)), and push. The inputs are
+`deploymentRepoURL`, `deploymentRevision`, `catalogRepoURL`, `catalogRevision` and `keycloakOverlay`.
 
 To read the message on the hub, show the hub's status. The message is on the line that starts with
 `!! The root ApplicationSet apps`:
@@ -117,17 +122,16 @@ The restarts stop and the Applications progress within a few minutes.
 
 **Cause:** they wait for the first site to join.
 
-**Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#2-verify)). After a site joins, check the site's Submariner gateways ([Submariner](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/01-acm.md#submariner)).
+**Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#2-verify)). After a site joins, check the site's Submariner gateways: two of its nodes need the label
+`submariner.io/gateway=true` ([site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide)).
 
 ## Tenants get certificate errors on the MaaS hostname
 
-**Cause:** the MaaS gateway presents the cluster's internal certificate, `openshift-ai-inference-service-tls`, on
-the public hostname. Clients don't trust it.
+**Cause:** the MaaS gateway presents the cluster's internal certificate on the public hostname. Clients don't trust
+it.
 
-**Fix:** add your own certificate for the MaaS hostname: with `make install`, set `maasCertificate.issuer` on the
-site in `.config/clusters.yaml` and run it again ([page 9](09-hands-off.md)); page by page, copy `site-template/`
-([Before you add the site](06-join-grid.md#before-you-add-the-site)). For the details, see
-[MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md).
+**Fix:** none on the library's `main` branch: a deployment repository can't give a site's MaaS gateway another
+certificate ([limits of `main`](../upstream-main-limits.md#l5-the-maas-gateway-presents-the-cluster-internal-certificate)).
 
 ## The Org UI fails on every page on a new site
 
@@ -135,8 +139,8 @@ site in `.config/clusters.yaml` and run it again ([page 9](09-hands-off.md)); pa
 fails with `500` and `EOF`.
 
 **Cause:** the Org UI reads the MaaS URL once, when it starts. On a new site it can start before the library sets
-the MaaS gateway's hostname, and it then keeps the load balancer's name. A site whose `values/clusters/SITE/rhoai.yaml`
-gives the listeners their hostname, as `make install` writes it with `maasCertificate.issuer`, doesn't hit this.
+the MaaS gateway's hostname, and it then keeps the load balancer's name. This is a known OpenShift AI 3.6 issue,
+RHAI-48803.
 
 **Fix:** after the site is **Provisioned**, restart the Org UI on the site:
 
@@ -144,24 +148,11 @@ gives the listeners their hostname, as `make install` writes it with `maasCertif
 scripts/with-cluster.sh SITE_NAME oc rollout restart deployment/maas-ui -n redhat-ods-applications
 ```
 
-## A site's `SITE-maas-tls` Application never turns `Healthy`
-
-**Symptom:** `make install` stops at `hub-apps-final` or the ready check, naming `SITE-maas-tls`.
-
-**Cause:** the site's ClusterIssuer, `maasCertificate.issuer`, can't issue for `maas.APPS_DOMAIN`, such as when its
-DNS-01 zone doesn't cover the site's apps domain.
-
-**Fix:** read why the certificate isn't ready, fix the issuer or set another one, and run `make install` again:
-
-```sh
-scripts/with-cluster.sh SITE_NAME oc describe certificate maas-gateway-public -n openshift-ingress
-scripts/with-cluster.sh SITE_NAME oc get challenges.acme.cert-manager.io -n openshift-ingress
-```
-
 ## A site's cert-manager operator fails with `TooManyOperatorGroups`
 
 **Cause:** the site already ran the platform's cert-manager, and OpenShift AI added its own OperatorGroup beside the
-platform's.
+platform's. `make site-check` reports such a site as `FOUND` for its `cert-manager OperatorGroup`, before you import
+it.
 
 **Fix:** see [A site that already runs cert-manager](06-join-grid.md#a-site-that-already-runs-cert-manager).
 
@@ -197,11 +188,17 @@ make status
 
 The LokiStack should report `Ready`, the dashboards should be listed, and `make status` should show the `odf`,
 `ai-grid-o11y` and `ai-grid-usage-logs` Applications Synced and Healthy. Wait for any that are still progressing, then
-reload the page ([observability](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/07-observability.md);
-[known gaps](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/known-gaps.md)).
+reload the page.
 
 ## A model's catalog Applications don't appear
 
 **Cause:** the catalog ApplicationSets' git generator didn't pick up the catalog's first commits.
 
-**Fix:** refresh them once ([model delivery](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/05-console-and-model-delivery.md#model-delivery)).
+**Fix:** refresh each catalog ApplicationSet once on the hub. *(Unverified.)*
+
+```sh
+for a in models ingress subscriptions; do
+  scripts/with-cluster.sh hub oc -n openshift-gitops annotate applicationsets.argoproj.io acm-models-catalog-$a \
+    argocd.argoproj.io/application-set-refresh=true --overwrite
+done
+```

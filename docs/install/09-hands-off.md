@@ -17,8 +17,12 @@ worker nodes or the network.
   and location after the install, when you add it to the grid in the provider console; `.config/clusters.yaml` has
   neither.
 - [ ] **A default StorageClass on each cluster.**
+- [ ] **No platform cert-manager Operator on a site.** A site whose namespace `cert-manager-operator` has an
+  OperatorGroup other than `openshift-cert-manager-operator` can't join the grid yet: the install's `site` step stops
+  on it ([limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values)).
 - [ ] **Two worker nodes on each cluster** for Submariner's gateways. On a compact cluster or single-node OpenShift,
-  you label the gateway nodes by hand, as [site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/networking.md) describes.
+  you label two nodes `submariner.io/gateway=true` by hand, as the library's
+  [site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide) describe.
 - [ ] **Network:** each cluster has a load-balancer provider for Submariner's LoadBalancer Service, each cluster
   reaches the other clusters' load balancers on UDP 4500 and 4490, and every router name answers `AAAA` queries
   without `NXDOMAIN`.
@@ -67,11 +71,6 @@ Tell the install which clusters and repositories to use, and give it the credent
      change it once the site is imported. The hub's name is always `hub`. The file says only how to reach each
      cluster: no role and no location. If a cluster's API or apps certificate isn't publicly trusted, such as a
      self-signed one, see [An untrusted cluster certificate](#other-options).
-   - **`maasCertificate.issuer`, optional, per site:** for a site you'll make `ingress` or `combined`, the name of a
-     cert-manager ClusterIssuer on that site that issues publicly trusted certificates by DNS-01. The install then
-     gives the site's MaaS gateway its own certificate for `maas.APPS_DOMAIN`, so tenants' clients trust it. Without
-     it, the gateway keeps the cluster's internal certificate. To list a site's ClusterIssuers, after `make login`
-     (step 6), run `scripts/with-cluster.sh SITE_NAME oc get clusterissuers`.
    - **`catalog.url`:** the URL of the catalog repository you create in step 4, such as
      `https://github.com/my-org/ai-grid-catalog.git`. Pick its owner and name now.
    - **The secrets:** in `hub:` and in each site's entry, uncomment and fill in a `cluster-admin` `token`, or a `username` and
@@ -92,8 +91,6 @@ Tell the install which clusters and repositories to use, and give it the credent
      - name: site-east-1
        api: https://api.site-east-1.example.com:6443
        token: sha256~TOKEN
-       maasCertificate:
-         issuer: letsencrypt-dns01
      - name: site-east-2
        api: https://api.site-east-2.example.com:6443
        username: kubeadmin
@@ -107,10 +104,21 @@ Tell the install which clusters and repositories to use, and give it the credent
    ```
 
    A file in the old format, with `credentials:`, `repositories:`, `github:`, a `kubeconfig` key, `hub.name`, or a
-   `role` or `location` on a site, stops with a message that says what to change.
+   `role` or `location` on a site, stops with a message that says what to change. So does a site's
+   `maasCertificate`: on the library's `main` branch a site's MaaS gateway keeps the cluster's internal certificate.
 
-   The install registers the tenant portal's sign-in redirect for every site in the file, `https://maas.APPS_DOMAIN/*`
-   for each, whatever role you choose for it later.
+   The tenant portal's sign-in redirects need nothing from you: once you add a site to the grid as `ingress` or
+   `combined`, the library's Keycloak registers its redirect, `https://maas.APPS_DOMAIN/oauth2/callback`.
+
+   The install writes `root/inputs.env` with `keycloakOverlay=core`: the tenants' Keycloak has the `saas` broker
+   realm only, with no example organizations and no test users. For a test deployment that wants the library's
+   example organizations and test users, set `keycloakOverlay=default` in `root/inputs.env`, commit and push it
+   before you run `make install`; the install keeps a value that's already set. Never use `default` for a real
+   install ([set your names](02-repositories.md#4-set-your-names)).
+
+   It also writes `hubCertManager=library`: the hub installs the library's cert-manager. If the hub already runs
+   the platform's cert-manager, set `hubCertManager=platform` the same way; the install stops and says so if you
+   don't. Such a hub can't also be a site.
 
    Never paste a secret into a chat, a command line or a file you commit.
 
@@ -207,7 +215,7 @@ Confirm that every cluster and credential is ready before anything is installed.
    `OLD` or `FAIL` lines.
 
    If a site had an earlier install, also run `make site-check SITE=SITE_NAME`. It also looks for a previous AI Grid
-   install and checks that the site's apps domain resolves.
+   install and the platform's cert-manager OperatorGroup, and checks that the site's apps domain resolves.
 
 ### Run the install
 
@@ -243,6 +251,8 @@ Run the install and confirm the end state.
 
    A `WARN` line lists the hub Applications that wait for a site to join the grid. They turn healthy after you add
    the first site.
+   With `keycloakOverlay=default`, the console lists the library's example organizations, which the check reports
+   as an `INFO` line, not a `FAIL`.
 
 You now have:
 
@@ -287,22 +297,18 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 
 1. `login`: writes `.config/NAME/kubeconfig` for each cluster from its credentials and the API URL in
    `.config/clusters.yaml`.
-2. `inputs`: pins the library at `LIBRARY` under `options:`, writes your names to `root/inputs.env`, and pushes.
+2. `inputs`: pins the library at `LIBRARY` under `options:`, writes your names to `root/inputs.env` and the catalog
+   to `hub/catalog/`, and pushes.
 3. `catalog`: checks that your catalog repository holds only its README, unless the hub already uses it.
 4. `bootstrap`: installs OpenShift GitOps and applies your root on the hub, then waits until Argo CD has synced it.
 5. `acm`: waits until ACM is running.
 6. `console-secrets`: creates the provider console's Secrets from your catalog token.
 7. `hub-apps`: waits until every hub Application is `Synced` and `Healthy`, except those that wait for a site.
-8. `tenant-redirects`: adds any site's portal redirect that the live tenant realm lacks, such as a site added after
-   the first install. The realm imports the redirects only on its first start.
-9. `site NAME`: for each site, checks it, writes and pushes its own files, imports it into ACM, then waits until it's
-   available. The site's files come from `site-template/`. With `maasCertificate.issuer`, they are the MaaS
-   certificate, its Application, and `values/clusters/NAME/rhoai.yaml` with the gateway's hostname and certificate.
-   On a site that already runs the platform's cert-manager, the values file also turns off OpenShift AI's own copy,
-   which would otherwise fail with `TooManyOperatorGroups`. With neither, the install writes no files. A file without
-   the `# Written by scripts/site-files.sh` first line is yours, and the install leaves it alone.
-10. `provider-admin`: creates the provider-admin ServiceAccount and its token.
-11. `ready`: runs the ready check until it passes, which writes `.install/outputs.json`. On a rerun on a hub that
+8. `site NAME`: for each site, checks it, imports it into ACM, then waits until it's available. It writes no files
+   for the site. A site that runs the platform's cert-manager Operator stops the install here, with a `FOUND` line for
+   its `cert-manager OperatorGroup`.
+9. `provider-admin`: creates the provider-admin ServiceAccount and its token.
+10. `ready`: runs the ready check until it passes, which writes `.install/outputs.json`. On a rerun on a hub that
     already uses your catalog, it runs it with `--in-use`.
 
 ## Outputs and the provider-admin token
@@ -313,7 +319,7 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 |---|---|
 | `hub.name`, `hub.api` | The hub's name, `hub`, and its API URL |
 | `hub.consoleURL` | The provider console |
-| `hub.keycloakURL`, `hub.keycloakRealm` | The tenant Keycloak and its realm, `tenants` |
+| `hub.keycloakURL`, `hub.keycloakRealm` | The tenants' Keycloak, Route `maas-db/keycloak`, and its realm |
 | `hub.persesURL` | Perses's in-cluster URL; it isn't reachable from outside the hub |
 | `hub.thanosURL` | The Thanos query Route |
 | `hub.lokiStack` | The usage-log LokiStack, `redhat-ods-monitoring/usage-logs` |
@@ -339,12 +345,10 @@ its role and location there. The hub then installs OpenShift AI, MaaS and the gr
 To bring another cluster into the hub after the install, even after the console has written models and
 subscriptions:
 
-1. Add the site's entry under `sites:` in `.config/clusters.yaml`, with its `name`, `api` and credentials, and its
-   `maasCertificate.issuer` if it has one.
+1. Add the site's entry under `sites:` in `.config/clusters.yaml`, with its `name`, `api` and credentials.
 2. Run `make install` again.
 
-The rerun adds the site's portal redirect to `tenant-idp/manifests/settings.yaml` and to the live tenant realm, writes
-and pushes the site's own files, and imports it. The sites already there are left as they are. Then add the site to
+The rerun checks the site and imports it. The sites already there are left as they are. Then add the site to
 the grid in the console, as in [Add a site to the grid](#add-a-site-to-the-grid).
 
 ## Other options
@@ -397,8 +401,8 @@ the grid in the console, as in [Add a site to the grid](#add-a-site-to-the-grid)
   `api-ca.crt`. If the router serves a custom certificate, use the CA that issued it instead of `router-ca`.
 - **A general `quay.io` account:** put its name and password under `quay:`. The install uses it for `quay.io/rhoai`
   as it would a robot account, so it works only when that account can pull from `quay.io/rhoai`.
-- **Another library revision:** set `LIBRARY` under `options:` to a branch, tag or commit, or set it empty to keep
-  the template's own commit pin. Left out, it's `deployment-template`.
+- **Another library revision:** set `LIBRARY` under `options:` to a branch, tag or commit. Left out or empty, the
+  template's own pin in `root/applicationset.yaml` stands.
 - **Another token lifetime:** set `PROVIDER_ADMIN_TOKEN_DURATION` under `options:` for `make install`, or in the
   environment for `make provider-admin`.
 - **Longer or shorter waits:** each `GATE_*_SECONDS` value under `options:` sets a readiness check's time limit, in
@@ -411,12 +415,11 @@ the grid in the console, as in [Add a site to the grid](#add-a-site-to-the-grid)
 
 ## Known limits
 
-- Without `maasCertificate.issuer`, the site's MaaS gateway uses the cluster's internal certificate, so tenants'
-  clients don't trust it. Such a site can also need its Org UI restarted once after it's added
+- A site's MaaS gateway uses the cluster's internal certificate, so tenants' clients don't trust it. A site can also
+  need its Org UI restarted once after it's added
   ([troubleshooting](troubleshooting.md#the-org-ui-fails-on-every-page-on-a-new-site)).
-- The install writes a site's files whatever role you later choose for it, and doesn't remove them for a site you
-  delete from `.config/clusters.yaml`. Before you uninstall a site, see [Uninstall](08-uninstall.md#before-you-begin).
-- `make install` always installs its own Keycloak. Using an existing one, with `KEYCLOAK` under `options:`, comes
+- For everything the library's `main` branch can't do yet, see [the limits of `main`](../upstream-main-limits.md).
+- `make install` always installs the library's Keycloak. Using an existing one, with `KEYCLOAK` under `options:`, comes
   later; any value but `install` stops the install.
 - Starting over means new clusters, and new deployment and catalog repositories. `make install` doesn't uninstall;
   to remove AI Grid from clusters, see [Uninstall](08-uninstall.md).

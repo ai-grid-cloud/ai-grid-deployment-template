@@ -1,25 +1,25 @@
 # Install the hub components
 
-Argo CD now installs the selected components from the library at your pinned commit, and the template's own tenant
-Keycloak. On this page you create the console's secrets, which waits for the install, and check the result.
+Argo CD now installs the selected components from the library at your pinned commit, the tenants' Keycloak among
+them. On this page you create the console's secrets, which waits for the install, and check the result.
 
 ## 1. Create the console's secrets
 
-The provider console needs your catalog token for its git writer, and an admin login for the tenant Keycloak. Neither
+The provider console needs your catalog token for its git writer, and an admin login for the library's Keycloak. Neither
 goes in git. Create the secrets:
 
 ```sh
 make console-secrets
 ```
 
-It first waits until the tenant Keycloak's Application `tenant-idp` is `Synced` and `Healthy` and the console's Route
+It first waits until the library Keycloak's Application `keycloak` is `Synced` and `Healthy` and the console's Route
 exists, printing what it waits for, for up to 30 minutes. The install takes about 20 minutes after the bootstrap,
-mostly for the tenant Keycloak. Then it reads your catalog token from `~/.ai-grid/catalog-token`
+mostly for Keycloak. Then it reads your catalog token from `~/.ai-grid/catalog-token`
 ([set up your deployment repository](02-repositories.md#2-create-your-catalog-repository-and-its-token)), or from
-`CATALOG_TOKEN_FILE` if you set it, uses your tenant Keycloak in `tenant-idp`, and restarts the console to read the
+`CATALOG_TOKEN_FILE` if you set it, uses the library's Keycloak (realm `saas` in `maas-db`), and restarts the console to read the
 new Secrets. It prints no secret value. If it times out, run `make status` (next step). For every variable, and for a
 hub whose ingress certificate isn't publicly trusted, see
-[provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/05-console-and-model-delivery.md#provider-console).
+the library's [provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/hub-onboarding/README.md#provider-console).
 
 ## 2. Verify
 
@@ -30,7 +30,7 @@ hub whose ingress certificate isn't publicly trusted, see
    ```
 
    It prints the Applications that aren't `Synced` and `Healthy`, the MultiClusterHub's phase, Argo CD's application
-   controller with its restarts, the tenant Keycloak's Application, and the console's address. It changes nothing.
+   controller with its restarts, the Keycloak Application `keycloak`, and the console's address. It changes nothing.
    You should see no Application listed as not `Synced` and `Healthy`, `MultiClusterHub: Running`, no `!!` line, and
    `Console: https://CONSOLE_HOST`. For about 5 minutes after you create the secrets, `grid-bootstrap` can show
    `OutOfSync` while its root certificate is issued; run `make status` again.

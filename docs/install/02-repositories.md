@@ -49,8 +49,8 @@ again.
    `catalog.token`, and the `deployment:` and `quay:` sections. Leave `catalog.url` as `REQUIRED-catalogRepoURL` on
    these pages: a real URL there turns off the page-by-page defaults for the catalog token and the quay.io login. A file in the old format,
    with `credentials:`, `repositories:`, `github:`, a `kubeconfig` key, `hub.name`, or a `role` or `location` on a
-   site, stops with a message that says what to change. The tenant portal gets a sign-in redirect for every site's
-   apps domain in the file, `https://maas.APPS_DOMAIN/*`, whatever role you choose later.
+   site, stops with a message that says what to change. A `maasCertificate` on a site stops the same way: a site's
+   MaaS gateway keeps the cluster's internal certificate ([limits of `main`](../upstream-main-limits.md#l5-the-maas-gateway-presents-the-cluster-internal-certificate)).
    This guide keeps that committed file. If a private `.config/clusters.yaml` exists, from
    [Install with one command](09-hands-off.md), the scripts read it instead.
 
@@ -159,42 +159,72 @@ Install any tool marked `MISSING` before you continue.
 
 ## 4. Set your names
 
-Set the values that name your repositories and hosts:
+Set the values that name your repositories:
 
 ```sh
 make inputs CATALOG=CATALOG_REPO_URL
 ```
 
 Replace `CATALOG_REPO_URL` with your catalog repository's URL, such as
-`https://github.com/my-org/ai-grid-catalog.git`. It reads the apps domains through your cluster logins, prints each
-value it sets, and then runs `make check`:
+`https://github.com/my-org/ai-grid-catalog.git`. It reads no cluster. It prints each value it sets, and then runs
+`make check`:
 
 | File | Value | Set to |
 |---|---|---|
 | `root/inputs.env` | `deploymentRepoURL` | Your deployment repository's URL, from `git remote get-url origin` |
 | `root/inputs.env` | `deploymentRevision`, `catalogRevision` | `main` |
 | `root/inputs.env` | `catalogRepoURL` | `CATALOG_REPO_URL` |
-| `root/inputs.env` | `idpIssuerURL` | `https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants`, with the hub's apps domain |
-| `tenant-idp/manifests/settings.yaml` | `portalRedirectURI` | `https://maas.SITE_APPS_DOMAIN/*` for every site in `clusters.yaml`, separated by spaces |
+| `root/inputs.env` | `keycloakOverlay` | `core` |
+| `root/inputs.env` | `hubCertManager` | `library` |
+| `hub/catalog/*.yaml` | The catalog's repository and revision | `catalogRepoURL` and `catalogRevision` from `root/inputs.env` |
 
 `root/inputs.env` is yours: the template doesn't have it, so `make update` never changes it.
 `root/kustomization.yaml` copies its values over the root's `REQUIRED-` placeholders; leave those. A value that's
-already set is kept, so you can run `make inputs` again. The exception is `portalRedirectURI`: a site you add to
-`clusters.yaml` later gets its redirect added there, and the redirects already there stay.
+already set is kept, so you can run `make inputs` again. `hub/catalog/` always follows `root/inputs.env`: each run
+rewrites it from that file. If `root/inputs.env` still has inputs the root no longer reads, such as `idpIssuerURL` or
+`portalRedirectURI`, `make inputs` removes them and prints a `removed` line for each.
+
+`keycloakOverlay` chooses what the library's Keycloak, the tenants' identity provider on the hub, starts with:
+
+- `core`: the `saas` broker realm only, with no example organizations and no test users. Use it for every real
+  install. Tenants sign in through an organization's own identity provider, which you link in the provider console.
+- `default`: adds the library's example organizations and their test users
+  ([Keycloak install profiles](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/apps/keycloak/README.md#install-profiles)).
+  Use it only for a test deployment, never for a real one: anyone who knows the test users' passwords can sign in.
+
+To use `default`, set `keycloakOverlay=default` in `root/inputs.env` before you push.
+
+`hubCertManager` chooses which cert-manager the hub runs:
+
+- `library`: the hub installs the library's cert-manager, as upstream's root does. Use it on a hub that doesn't
+  run cert-manager yet, and always for a hub that you'll also add as a site.
+- `platform`: the hub already runs the platform's cert-manager, such as a demo.redhat.com cluster's. Such a hub
+  can't also be a site ([limits](../upstream-main-limits.md#l17-the-hubs-cert-manager-is-the-librarys-or-the-platforms-not-both)).
+- `site`: a hub you installed with `library` and are about to add as a site: OpenShift AI's chart then owns its
+  cert-manager ([the hub as a site](06-join-grid.md#the-hub-as-a-site-all-in-one)).
+
+To check, run `oc get operatorgroups -n cert-manager-operator` on the hub. An OperatorGroup other than
+`openshift-cert-manager-operator` is the platform's. If you leave `library` on such a hub, `make install` stops and
+says to set `platform`.
+
+The portal's sign-in redirects need nothing from you: the library's Keycloak registers
+`https://maas.SITE_APPS_DOMAIN/oauth2/callback` for every ingress or combined site itself, with its CronJob
+`keycloak-redirect-uris`.
 
 You should see `root renders; every input is set; every repository is an input.` at the end. If you see
 `unset inputs:` or `placeholders left in your files:`, set the values it names and run `make check`.
 
-Keep every other value. Each one is a tested choice: for what it means and how to change it, see
-[Appendix A: inputs and values](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/appendix-a-inputs.md) and
-[Hub components](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/hub/README.md#select-components).
+Keep every other value. Each one is a tested choice. The component selection is `root/applicationset.yaml`; to
+change it, edit that file. Its comments say how it differs from the library's own dedicated-hub root, and
+[the limits of `main`](../upstream-main-limits.md) say why. For what each component does, see the library's
+[dedicated hub](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/hub-onboarding/README.md#dedicated-hub).
 
 ## 5. Commit and push
 
 Commit your clusters file and the files `make inputs` changed, and push:
 
 ```sh
-git add clusters.yaml root tenant-idp && git commit -m "deployment: set our names" && git push origin HEAD:main
+git add clusters.yaml root hub && git commit -m "deployment: set our names" && git push origin HEAD:main
 ```
 
 Run `git status` first if you changed anything else. If git says there's nothing to commit, your repository is

@@ -20,7 +20,7 @@ The uninstall targets preview by default and delete nothing; `CONFIRM=1` runs th
 
 | Cluster | After the uninstall | Removed |
 |---|---|---|
-| Hub | OpenShift; the platform's identity provider, cert-manager and certificate issuers | OpenShift GitOps, ACM and the multicluster engine, every component and your own apps, their operators and namespaces |
+| Hub | OpenShift; the platform's identity provider, cert-manager (also the one `hubCertManager=library` installed) and certificate issuers | OpenShift GitOps, ACM and the multicluster engine, every component and your own apps, their operators and namespaces |
 | Site | OpenShift; the platform's identity provider, cert-manager, NFD and GPU operator | OpenShift AI, MaaS, the grid, Submariner, the ACM agent, everything the hub's Applications applied, their operators and namespaces |
 
 The uninstall leaves these on every cluster on purpose:
@@ -58,16 +58,11 @@ step deletes last. If your own apps leave something behind, add a line for it th
   ```
 
   Replace `my-idp` and `my-idp-operator` with your identity provider's namespace and operator package.
-- Remove the site's own files from your deployment repository, if it has any, and push: `apps/SITE-maas-tls.yaml`,
-  `sites/SITE/` and `values/clusters/SITE/`. Otherwise the hub keeps the site's `SITE-maas-tls` Application, which
-  points at a site that's gone.
 
 ## 1. Empty the catalog
 
 So a reinstall starts with no models or subscriptions, remove them from your catalog repository. In the provider
-console, delete each subscription, then each model
-([remove a subscription, model or organization](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/operate.md#remove-a-subscription-model-or-organization)).
-Or empty it in git. Preview what that removes from the catalog repository named in `root/inputs.env`: every file
+console, delete each subscription, then each model. Or empty it in git. Preview what that removes from the catalog repository named in `root/inputs.env`: every file
 but `README.md`. It changes nothing:
 
 ```sh
@@ -174,7 +169,7 @@ The hub step does the following:
 1. Stops Argo CD: deletes the ApplicationSets without cascading, then removes each Application's finalizer and
    deletes it. Deleting the root alone would delete nothing, because the root keeps its resources when it's removed.
 2. Deletes, in order: the hub's ACM Policies and Placements; custom resources while their operators run (databases,
-   ExternalSecrets, S4); MultiClusterObservability, then MultiClusterHub, then the multicluster engine; other objects;
+   ExternalSecrets, object buckets); MultiClusterObservability, then MultiClusterHub, then the multicluster engine; other objects;
    cluster-scoped objects; operator subscriptions with their CSVs; namespaces.
 3. Deletes ACM's documented leftovers (admission APIServices and webhooks), then the namespaces that ACM's add-ons,
    the multicluster engine and the operators leave outside Argo CD's record, such as `default-broker`,

@@ -8,28 +8,27 @@ this page work on the only site in your `clusters.yaml`. With several sites, add
 
 ## Before you add the site
 
-Two settings depend on the site and must be in your deployment repository before you add it. `make install`
-([page 9](09-hands-off.md)) writes both for you. On this path, copy them from [`site-template/`](../../site-template/README.md)
-to the same paths in your repository, replace its placeholders as its README says, then commit and push. The
-commands here use `scripts/with-cluster.sh SITE_NAME`, which runs `oc` with the site's login from
-`.config/SITE_NAME/kubeconfig`, not with your own kubeconfig.
+Your deployment repository holds nothing per site: on the library's `main` branch a site's OpenShift AI values come
+only from the library ([limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values)).
+Two things follow:
 
-- **A certificate for the MaaS gateway.** If the site has a cert-manager ClusterIssuer that issues publicly trusted
-  certificates by DNS-01 (`scripts/with-cluster.sh SITE_NAME oc get clusterissuers`), and the site will be
-  `ingress` or `combined`, copy `values/clusters/SITE/rhoai.yaml`, `sites/SITE/maas-tls/` and
-  `apps/SITE-maas-tls.yaml`. Tenants' clients then trust the gateway. Without it, the gateway keeps the cluster's internal certificate
-  ([MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)).
-- **The platform's cert-manager.** If the site already runs the cert-manager Operator for Red Hat OpenShift, copy
-  `values/clusters/SITE/rhoai.yaml` and uncomment its three `dependencies` lines (without a certificate, leave out
-  its `components:` part). Otherwise OpenShift AI adds a second OperatorGroup and OLM fails the operator with
-  `TooManyOperatorGroups`. To check:
+- **The MaaS gateway keeps the cluster's internal certificate.** The library names the gateway
+  `maas.SITE_APPS_DOMAIN`, but its certificate is the cluster's service certificate, so tenants' clients don't trust
+  it.
+- **A site that already runs the platform's cert-manager Operator can't join.** `make site-check` on
+  [page 5](05-prepare-site.md#1-check-the-sites-infrastructure) prints `FOUND` for its `cert-manager OperatorGroup`.
+  Don't add such a site.
 
-  ```sh
-  scripts/with-cluster.sh SITE_NAME oc get operatorgroups -n cert-manager-operator
-  ```
+### The hub as a site (all-in-one)
 
-  An OperatorGroup named other than `openshift-cert-manager-operator` is the platform's. If you already added the
-  site, see [A site that already runs cert-manager](#a-site-that-already-runs-cert-manager) instead.
+One cluster can be the hub and also a `combined` site: list only the hub in `clusters.yaml`, install it, then add
+`local-cluster` on this page as `combined`. Use a cluster without the platform's cert-manager, and install it with
+`hubCertManager=library` ([page 2](02-repositories.md#4-set-your-names)). Before you add `local-cluster`, set
+`hubCertManager=site` in `root/inputs.env`, commit and push it, and wait until `make status` shows `deployment-root`
+synced: OpenShift AI's chart then takes over the cert-manager the hub already runs, instead of two Applications
+managing it. Such a hub has no usage logs, and its
+Limitador keeps its counters in memory
+([limits](../upstream-main-limits.md#l18-a-hub-that-is-also-a-site-has-no-usage-logs)).
 
 ## 1. Add the site in the console
 
@@ -38,7 +37,7 @@ commands here use `scripts/with-cluster.sh SITE_NAME`, which runs `oc` with the 
 2. Click **Clusters**. Your site shows **Not added**.
 3. Click **Add to AI Grid** for your site. Choose the role **combined**, so tenants enter and models run on the same
    cluster, and the site's location, such as `us-east`. Confirm.
-   For `ingress` and `inference` sites, see [Sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/README.md#what-you-choose-per-site).
+   For `ingress` and `inference` sites, see the library's [deployment options](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/README.md#deployment-options).
 
 The hub then creates the site's Applications. Show them:
 
@@ -46,8 +45,7 @@ The hub then creates the site's Applications. Show them:
 make site-status
 ```
 
-Under `Applications` you should see `rhoai-SITE-…`, `cluster-config-SITE-…`, `acm-submariner-SITE` and
-`maas-db-SITE`. Most appear within a couple of minutes. `rhoai-SITE-…` can take up to 30 minutes: the hub's
+Under `Applications` you should see `rhoai-SITE-…`, `acm-submariner-SITE` and `maas-db-SITE`. Most appear within a couple of minutes. `rhoai-SITE-…` can take up to 30 minutes: the hub's
 `rhoai` Application creates it on its next sync retry after the site joins (page 4).
 OpenShift AI takes up to an hour on a new cluster, and less on one that ran OpenShift AI before.
 
@@ -75,41 +73,27 @@ OpenShift AI takes up to an hour on a new cluster, and less on one that ran Open
 
    You should see `MaaS https://maas.SITE_APPS_DOMAIN/v1/models: answers with the cluster's internal certificate,
    which isn't publicly trusted`. The MaaS gateway is up, but it uses the cluster's internal certificate, so
-   tenants' clients don't trust it until you add your own
-   ([MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)). With your own certificate, you see `401`
-   instead: no token yet.
+   tenants' clients don't trust it
+   ([limits of `main`](../upstream-main-limits.md#l5-the-maas-gateway-presents-the-cluster-internal-certificate)).
 
 ## A site that already runs cert-manager
 
-If you added a site that already runs the platform's cert-manager without turning off the chart's copy, its
-cert-manager operator fails with `TooManyOperatorGroups`, and OpenShift AI waits on it. Argo CD has also taken over
-the platform's namespace `cert-manager-operator` and its Subscription, which have the chart's names. If you turn off
-the chart's copy now, Argo CD prunes both and removes the operator. Protect them first:
+If you added a site that already runs the platform's cert-manager Operator, its cert-manager Operator fails with
+`TooManyOperatorGroups`, and OpenShift AI waits on it. On the library's `main` branch you can't turn off the chart's
+copy of cert-manager for one site, so the site can't stay in the grid.
 
-1. Annotate the namespace and the Subscription on the site:
+1. In the provider console, on the **Clusters** page, click **Remove** for the site.
+2. Ask your platform team to check the cert-manager Operator on the site. Argo CD took over the platform's namespace
+   `cert-manager-operator` and its Subscription, which have the chart's names, and its pruning can remove them.
 
-   ```sh
-   scripts/with-cluster.sh SITE_NAME oc annotate namespace cert-manager-operator \
-     argocd.argoproj.io/sync-options=Prune=false
-   scripts/with-cluster.sh SITE_NAME oc annotate subscriptions.operators.coreos.com openshift-cert-manager-operator \
-     -n cert-manager-operator argocd.argoproj.io/sync-options=Prune=false
-   ```
-
-   This assumes the platform's Subscription has the chart's name, `openshift-cert-manager-operator`. If
-   `scripts/with-cluster.sh SITE_NAME oc get subscriptions.operators.coreos.com -n cert-manager-operator` lists two,
-   stop and ask your platform team which one to keep.
-
-2. Turn off the chart's copy. If you installed with `make install` ([page 9](09-hands-off.md)), run it again.
-   Otherwise, add the `dependencies` lines from [`site-template/`](../../site-template/README.md) to the site's
-   `values/clusters/SITE/rhoai.yaml`, then commit and push.
-
-Argo CD should then remove only the chart's OperatorGroup, and the operator recover. *(Unverified.)*
+*(Unverified.)* For the fix, see
+[limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values).
 
 ## Checkpoint
 
 - The console shows the site with AI Grid status **Provisioned**.
 - The site's DataScienceCluster is `Ready` and its GridSite `Available`.
 - `make status` lists no hub Application as not `Synced` and `Healthy`.
-- `make site-status` says the MaaS gateway answers (with the internal certificate, or `401` with your own).
+- `make site-status` says the MaaS gateway answers with the cluster's internal certificate.
 
 Next: [7. First use](07-first-use.md)
