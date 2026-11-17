@@ -103,7 +103,8 @@ t "make provider-admin runs scripts/provider-admin.sh" 0 "^scripts/provider-admi
 : > "$STUB_LOG"
 t "make ready-check is read-only" 0 "^ok$" bash -c 'PATH="$1:$PATH" make -s -C "$0" ready-check >/dev/null 2>&1;
   grep -q "get " "$2" && ! grep -E " oc (apply|create|patch|delete|label)" "$2" && echo ok' "$one" "$T/bin" "$STUB_LOG"
-t "make help lists secrets" 0 "^secrets: Ask for each cluster's token or username and password" make -s -C "$one" help
+t "make secrets is gone (edit .config/clusters.yaml)" 2 "No rule to make target" make -n -C "$one" secrets
+t "make help doesn't list secrets" 0 "^ok$" bash -c '! make -s -C "$0" help | grep -q "^secrets:" && echo ok' "$one"
 t "make install HUB_ONLY=1 runs --hub-only" 0 "scripts/install.sh --hub-only" make -n -C "$one" install HUB_ONLY=1
 t "make help lists install" 0 "^install: Install the hub and import every site, unattended \(page 9\); HUB_ONLY=1 for the hub alone$" make -s -C "$one" help
 t "make login NONINTERACTIVE=1 passes --non-interactive" 0 "^scripts/login.sh --non-interactive *$" make -n -C "$one" login NONINTERACTIVE=1
@@ -138,5 +139,15 @@ mkdir -p "$T/q\"d"; printf '{}' > "$T/q\"d/x.json"
 t "console-call BODY_FILE with a double quote in its path is read" 0 '^\[\{\}\]$' make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/q\"d/x.json"
 t "console-call BODY_FILE missing, with a double quote in its path, names it" 2 'BODY_FILE .*/q"d/nope.json \(missing' make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/q\"d/nope.json"
 t "make help: CATALOG for page 2, make install reads repositories.catalog" 0 "^inputs: .*CATALOG=URL \(page 2\); make install reads repositories.catalog$" make -s -C "$one" help
+
+# make config: only creates the private file from the example, never overwrites it.
+cfg="$T/config"; mkdir -p "$cfg"; cp "$SRC/Makefile" "$SRC/clusters-example.yaml" "$cfg/"
+t "make config: creates .config/clusters.yaml from the example" 0 "^ok$" bash -c 'out=$(make -s -C "$0" config) && grep -q "Created .config/clusters.yaml.*edit it" <<<"$out" && cmp -s "$0/clusters-example.yaml" "$0/.config/clusters.yaml" && echo ok' "$cfg"
+t "  ... .config mode 700, the file mode 600" 0 "^700600$" bash -c 'for f in "$0/.config" "$0/.config/clusters.yaml"; do stat -f %Lp "$f" 2>/dev/null || stat -c %a "$f"; done | tr -d "\n"' "$cfg"
+echo "mine" >> "$cfg/.config/clusters.yaml"
+t "make config again: refuses" 2 "already exists" make -s -C "$cfg" config
+t "  ... the file kept" 0 "^mine$" tail -n1 "$cfg/.config/clusters.yaml"
+cfg2="$T/config-root"; mkdir -p "$cfg2"; cp "$SRC/Makefile" "$SRC/clusters-example.yaml" "$cfg2/"; echo "# ours" > "$cfg2/clusters.yaml"
+t "make config with a clusters.yaml: copies that one" 0 "^ok$" bash -c 'out=$(make -s -C "$0" config) && grep -q "Copied clusters.yaml" <<<"$out" && cmp -s "$0/clusters.yaml" "$0/.config/clusters.yaml" && echo ok' "$cfg2"
 
 echo "make-targets tests: $((total-fails)) ok, $fails failed"; exit "$fails"
