@@ -178,7 +178,9 @@ HINTS = {  # the fix when make install's file is missing (scripts/clusters.sh se
 
 def check_deployment_push(deployment, resolved):
     """How make install pushes this repository: with the optional deployment token, else with
-    your own git login, which is checked by reading origin with no prompt (nothing is written)."""
+    your own git login, which is checked with a dry-run push to origin, with no prompt. A dry run
+    sends no objects and creates no branch; it pushes to a branch name of its own so a main that
+    moved on doesn't read as a refusal."""
     section("Deployment push")
     path, source = resolved
     if path and os.path.isfile(path) and os.path.getsize(path):
@@ -189,11 +191,12 @@ def check_deployment_push(deployment, resolved):
         return
     os.environ["GIT_TERMINAL_PROMPT"] = "0"
     os.environ["GIT_SSH_COMMAND"] = os.environ.get("GIT_SSH_COMMAND", "ssh") + " -o BatchMode=yes"
-    rc, _, err = run(["git", "-C", deployment, "ls-remote", "origin", "HEAD"])
+    rc, _, err = run(["git", "-C", deployment, "push", "--dry-run", "--quiet", "origin",
+                      "HEAD:refs/heads/ai-grid-prereqs-push-check"])
     if rc == 0:
-        report("ok", "deployment push", "no token: your git login can read origin; whether it can push isn't checked")
+        report("ok", "deployment push", "no token: your git login can push to origin (dry run)")
     else:
-        report("FAIL", "deployment push", f"no token, and your git login can't read origin ({first_line(err)}); "
+        report("FAIL", "deployment push", f"no token, and your git login can't push to origin ({first_line(err)}); "
                "log in to GitHub (such as gh auth login), or " + HINTS["DEPLOYMENT_TOKEN_FILE"])
 
 
