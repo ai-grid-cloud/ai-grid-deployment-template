@@ -19,8 +19,9 @@
 apiVersion: ai-grid.dev/v1alpha1   # required header: the scripts parse this file with kubectl
 kind: Clusters
 
-# The ACM hub: runs Argo CD, ACM and the shared services, and no models. The
-# scripts and the guide call it "hub".
+# The ACM hub: runs Argo CD, ACM and the shared services. The scripts and the
+# guide call it "hub". It runs no models unless it's also a site: in an
+# all-in-one, see sites: below.
 hub:
   api: REQUIRED-hubAPIURL          # from oc whoami --show-server, e.g. https://api.hub.example.com:6443
   # Private file only: a cluster-admin login. Either a username and password
@@ -32,6 +33,11 @@ hub:
 
 # The clusters the hub imports into ACM. You add each one to the grid, and
 # choose its role and location, in the provider console.
+#
+# All-in-one (one cluster that is both hub and site): write "sites: []" and
+# remove the entry below. After make install, add the hub to the grid in the
+# provider console: Add to AI Grid on local-cluster, role combined
+# (install guide, page 9, "All-in-one: one cluster").
 sites:
   - name: REQUIRED-siteName        # its ACM name, a DNS label, e.g. site-1; fixed once imported
     api: REQUIRED-siteAPIURL       # e.g. https://api.site-1.example.com:6443
