@@ -86,6 +86,21 @@ sed -i.bak 's#^idpIssuerURL=.*#idpIssuerURL=#' "$mine/root/inputs.env"; rm "$min
 g -C "$mine" commit -qam "unset the issuer"; echo "# note" >> "$tpl/root/self.yaml"; g -C "$tpl" commit -qam "a template change"
 t "a failing check says don't push" 1 "DON'T PUSH" runl
 
+# A repository from the template that was never installed: no root/inputs.env
+# yet, which make install (or make inputs) writes. The update merges and says
+# so, instead of failing the check.
+mine="$T/mine-fresh"; mkdir -p "$mine"; cp -R "$tpl/scripts" "$tpl/root" "$mine/"
+g -C "$mine" init -q && g -C "$mine" add -A && g -C "$mine" commit -qm "Initial commit"
+echo "# another note" >> "$tpl/root/self.yaml"; g -C "$tpl" commit -qam "another template change"
+t "no inputs.env yet merges without don't push" 0 "root/inputs.env isn't written yet" runl
+t "  ... names make install" 0 "make install" cat "$T/last"
+t "  ... no DON'T PUSH" 1 "^0$" grep -c "DON'T PUSH" "$T/last"
+# An installed repository whose root/inputs.env was committed, then removed: still checked.
+echo "x=y" > "$mine/root/inputs.env"; g -C "$mine" add -A && g -C "$mine" commit -qm "inputs"
+g -C "$mine" rm -q root/inputs.env && g -C "$mine" commit -qm "lose the inputs"
+echo "# a third note" >> "$tpl/root/self.yaml"; g -C "$tpl" commit -qam "a third template change"
+t "inputs.env committed, then removed: don't push" 1 "DON'T PUSH" runl
+
 # A repository from the template before root/inputs.env (320f038), with its
 # values in root/inputs.yaml, which the template has since deleted: the merge
 # stops on that file and prints the commands that finish it.
