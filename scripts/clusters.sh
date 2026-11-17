@@ -116,7 +116,7 @@ clusters_load() {
       | map(. // "" | tostring) | @tsv' <<<"$json")
   [ -n "$rows" ] || { echo "error: clusters.yaml has no hub" >&2; return 1; }
   # The private file is for make install, which needs the catalog: say so now, not later.
-  [ -z "$private" ] || [ -n "$(jq -r '.repositories.catalog // empty' <<<"$json")" ] ||
+  [ -z "$private" ] || [ -n "$(jq -r '.repositories.catalog // "" | select(startswith("REQUIRED-") | not)' <<<"$json")" ] ||
     { echo "error: set repositories.catalog in .config/clusters.yaml" >&2; return 1; }
   left=$(jq -r --arg names "$(awk '{print $1}' <<<"$rows")" '
       ($names | split("\n")) as $n | (.credentials // {}) | keys - $n | .[]' <<<"$json" | tr '\n' ' ')

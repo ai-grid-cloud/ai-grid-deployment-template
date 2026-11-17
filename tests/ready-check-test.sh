@@ -239,6 +239,10 @@ W="$T/notoken-w"; ready "$W"
 out=$(env -u DEPLOYMENT_TOKEN_FILE -u AI_GRID_DEPLOYMENT_TOKEN -u GIT_ASKPASS PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?
 t "no token: origin read with your git login" 0 "^OK .*deployment-root Synced" \
   '[ ! -e "$W/askpass.out" ]' '! grep -qF "credential.helper=" "$W/git-argv.log"'
+D="$T/nologin"; newrepo "$D"; rm -f "$D/.config/deployment-token"; git -C "$D" remote set-url origin "$T/no-such-origin.git"
+W="$T/nologin-w"; ready "$W"
+out=$(env -u DEPLOYMENT_TOKEN_FILE -u AI_GRID_DEPLOYMENT_TOKEN -u GIT_ASKPASS PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?
+t "no token, origin unreadable: says to log in or set the token" 1 "can't read origin.*gh auth login.*make secrets NAME=github"
 D="$T/emptytoken"; newrepo "$D"; : > "$D/.config/deployment-token"
 W="$T/emptytoken-w"; ready "$W"
 out=$(env -u DEPLOYMENT_TOKEN_FILE -u AI_GRID_DEPLOYMENT_TOKEN -u GIT_ASKPASS PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?

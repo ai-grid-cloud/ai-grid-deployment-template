@@ -220,6 +220,9 @@ D="$T/config"; mkdir -p "$D"; cp -R "$SRC/scripts" "$SRC/Makefile" "$SRC/cluster
 out=$(make -s -C "$D" config 2>&1) && rc=0 || rc=$?
 t "make config: creates .config/clusters.yaml from the example" bash -c '[ "$0" = 0 ] && grep -q "Created .config/clusters.yaml.*edit it" <<<"$1" && cmp -s "$2/clusters-example.yaml" "$2/.config/clusters.yaml"' "$rc" "$out" "$D"
 t "  ... .config mode 700, the file mode 600" bash -c '[ "$(stat -f %Lp "$0/.config" 2>/dev/null || stat -c %a "$0/.config")$(stat -f %Lp "$0/.config/clusters.yaml" 2>/dev/null || stat -c %a "$0/.config/clusters.yaml")" = 700600 ]' "$D"
+D2="$T/config-root"; mkdir -p "$D2"; cp -R "$SRC/scripts" "$SRC/Makefile" "$SRC/clusters-example.yaml" "$D2/"; echo "# ours" > "$D2/clusters.yaml"
+out=$(make -s -C "$D2" config 2>&1) && rc=0 || rc=$?
+t "make config with a clusters.yaml: copies that one, as make secrets does" bash -c '[ "$0" = 0 ] && grep -q "Copied clusters.yaml" <<<"$1" && cmp -s "$2/clusters.yaml" "$2/.config/clusters.yaml"' "$rc" "$out" "$D2"
 echo "mine" >> "$D/.config/clusters.yaml"
 out=$(make -s -C "$D" config 2>&1) && rc=0 || rc=$?
 t "make config again: refuses, the file kept" bash -c '[ "$0" != 0 ] && grep -q "already exists" <<<"$1" && tail -n1 "$2/.config/clusters.yaml" | grep -qx mine' "$rc" "$out" "$D"
