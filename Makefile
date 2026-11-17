@@ -11,7 +11,7 @@
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
 .PHONY: help config login prereqs inputs check bootstrap status console-secrets console-call test update \
-  site-check site-wipe site-import site-join site-status tenant-user tenant-call \
+  site-check site-wipe site-import site-status tenant-user tenant-call \
   empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
 
 # The site targets work on the only site in clusters.yaml; with several, set
@@ -78,9 +78,6 @@ site-wipe: ## Preview removing a site's old install; CONFIRM=1 removes it (page 
 
 site-import: ## Preview importing a site into the hub's ACM; CONFIRM=1 imports it (page 5)
 	@scripts/import-site.sh $(SITE) $(if $(CONFIRM),--yes)
-
-site-join: ## Label a site on the hub so the hub installs it (page 6)
-	@scripts/join-site.sh $(SITE)
 
 site-status: ## Show a site's ACM state, hub Applications, MaaS host and models; read-only
 	@scripts/site-status.sh $(SITE)
