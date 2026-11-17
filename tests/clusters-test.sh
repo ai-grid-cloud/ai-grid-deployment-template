@@ -444,6 +444,12 @@ t "  ... cluster_secret: site-2's password" 0 "^fixture-pw$" bash -c '. "$0/scri
 t "  ... cluster_api: site-2" 0 "^https://api.site-2.example.com:6443$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_api site-2' "$d"
 t "  ... deployment_load: no deployment token, the rest resolved" 0 "^ok$" \
   bash -c '. "$0/scripts/clusters.sh"; deployment_load "$0" && [ -z "$DEPLOYMENT_TOKEN_FILE" ] && [ -s "$CATALOG_TOKEN_FILE" ] && [ -s "$QUAY_AUTH_FILE" ] && echo ok' "$d"
+t "  ... settings: the library pin defaults to deployment-template" 0 "^LIBRARY_REVISION=deployment-template$" bash "$d/scripts/clusters.sh" --settings "$d"
+d=$(acc accept-library "$FILL"' s/^  # LIBRARY: deployment-template.*/  LIBRARY: main/;')
+t "  ... options.LIBRARY set: that revision" 0 "^LIBRARY_REVISION=main$" bash "$d/scripts/clusters.sh" --settings "$d"
+d=$(acc accept-library-empty "$FILL"' s/^  # LIBRARY: deployment-template.*/  LIBRARY: ""/;')
+t "  ... options.LIBRARY empty: keeps the template's pin" 0 "^LIBRARY_REVISION=$" bash "$d/scripts/clusters.sh" --settings "$d"
+t "committed file without options.LIBRARY: no library setting" 0 "^none$" bash -c 'bash "$0/scripts/clusters.sh" --settings "$0" | grep -q LIBRARY_REVISION || echo none' "$(repo nolibrary "hub: {api: 'https://h:6443'}")"
 d=$(acc accept-token "$FILL"' s/^(\s*)username: admin\s*$// if $. < 16; s/^(\s*)password: fixture-pw\s*$// if $. < 16; s/^  # token: sha256~TOKEN.*/  token: sha256~fixture/;')
 t "acceptance file with a hub token instead: loads" 0 "^sha256~fixture$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret hub token' "$d"
 d=$(acc accept-committed "$FILL"); mv "$d/.config/clusters.yaml" "$d/clusters.yaml"; chmod 644 "$d/clusters.yaml"
