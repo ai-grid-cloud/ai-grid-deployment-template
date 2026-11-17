@@ -11,7 +11,8 @@ You need the following. In step 6, `make prereqs` checks the clusters and logins
 worker nodes or the network.
 
 - [ ] **A hub and one or more sites on OpenShift 4.21 or later,** with nothing of AI Grid on them, and the API URL
-  and a `cluster-admin` login for each: a token, or a username and password.
+  and a `cluster-admin` login for each: a token, or a username and password. For a test, one cluster can be both
+  ([All-in-one: one cluster](#all-in-one-one-cluster)).
 - [ ] **A role in mind for each site:** `combined` (tenants enter and models run), `ingress` (tenants enter, no
   models) or `inference` (models only). At least one site is `ingress` or `combined`. You choose each site's role
   and location after the install, when you add it to the grid in the provider console; `.config/clusters.yaml` has
@@ -173,7 +174,8 @@ Tell the install which clusters and repositories to use, and give it the credent
 
    It also writes `hubCertManager=library`: the hub installs the library's cert-manager. If the hub already runs
    the platform's cert-manager, set `hubCertManager=platform` the same way; the install stops and says so if you
-   don't. Such a hub can't also be a site.
+   don't. Such a hub can't also be a site, so it can't be an
+   [all-in-one](#all-in-one-one-cluster).
 
    Never paste a secret into a chat, a command line or a file you commit.
 
@@ -253,6 +255,22 @@ You now have:
 - every site imported into the hub's ACM and available, but **not in the grid**: no `ai-grid/` or `location` label
   and no OpenShift AI on it;
 - no organizations, models or subscriptions.
+
+## All-in-one: one cluster
+
+For a test, one cluster can be both the hub and a `combined` site. It needs everything a hub and a site need,
+including no platform cert-manager Operator, so leave `hubCertManager=library`. The network items about reaching the
+other clusters' load balancers don't apply.
+
+1. In `.config/clusters.yaml`, give the hub's `api` and login, and write `sites: []` with no entries.
+2. Run `make install`, not `make install HUB_ONLY=1`: `HUB_ONLY=1` skips the provider-admin token and the ready
+   check. With no sites, the install imports nothing, and the ready check reports the hub Applications that wait for a
+   site as `WARN`.
+3. Add the hub to the grid: in the provider console, click **Clusters**, then **Add to AI Grid** for
+   `local-cluster`, and choose role **combined** and a location.
+
+The hub is `local-cluster` in ACM and in the console. With no site in `clusters.yaml`, `make site-status` and
+`make tenant-call` use the hub; `make site-check` and `make site-import` are for separate sites only.
 
 ## If it stops
 

@@ -7,7 +7,8 @@ Submariner gateway nodes: check those yourself.
   Submariner's gateways. Any two worker nodes do: the hub labels them. On a compact cluster or single-node OpenShift,
   you label two nodes `submariner.io/gateway=true` by hand
   ([site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide)). Size the site for its
-  models; GPU models need GPU nodes.
+  models; GPU models need GPU nodes. For a test, one cluster can be both hub and site
+  ([all-in-one](09-hands-off.md#all-in-one-one-cluster)).
 - **No platform cert-manager Operator on the site.** On the library's `main` branch, a site that already runs the
   cert-manager Operator for Red Hat OpenShift can't join the grid
   ([limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values)).
@@ -23,7 +24,8 @@ Submariner gateway nodes: check those yourself.
   ([general `quay.io` login](troubleshooting.md#make-bootstrap-refuses-a-general-quayio-login)).
 - **A `registry.stage.redhat.io` login:** the library mirrors the model runtime images
   (`registry.redhat.io/rhaii*`) to `registry.stage.redhat.io`, with no fallback, so sites pull them only with this
-  login. Put it in the same auth file ([limits of `main`, L20](../upstream-main-limits.md#l20-model-runtimes-pull-only-from-registrystageredhatio)).
+  login. Put it in the same auth file, or, for [Install with one command](09-hands-off.md), under `stage:` in
+  `.config/clusters.yaml` ([limits of `main`, L20](../upstream-main-limits.md#l20-model-runtimes-pull-only-from-registrystageredhatio)).
 - **Tools:** `oc`, `kubectl` (it comes with `oc`), `git`, `jq`, `curl`, `openssl`, `python3`, `clusteradm` and `make`.
 
 ## Checkpoint
