@@ -13,13 +13,18 @@ after install, see the library's [troubleshooting](https://github.com/ai-grid-cl
 ## A script stops because `clusters.yaml` uses the old format
 
 **Cause:** your `clusters.yaml` or `.config/clusters.yaml` was written for an earlier version of the template. It has
-`credentials:`, a `kubeconfig` key, a `name` on the hub, or a `role` or `location` on a site.
+`credentials:`, `repositories:`, `github:`, a `kubeconfig` key, a `name` on the hub, or a `role` or `location` on a
+site.
 
 **Fix:** change the file as the message says, then run the command again:
 
 - Remove each site's `role` and `location`. You choose them in the provider console when you click **Add to AI Grid**
   ([join the site to the grid](06-join-grid.md)).
 - Remove the hub's `name`: the hub is always `hub`.
+- Move `repositories.catalog` to `catalog.url`, and `repositories.library`, if you set it, to `LIBRARY` under
+  `options:`. Then remove `repositories:`.
+- In `.config/clusters.yaml`, move `github.catalogToken` to `catalog.token`, and `github.deploymentToken`, if you set
+  it, to `deployment.token`. Then remove `github:`.
 - In `.config/clusters.yaml`, move each cluster's `token`, or `username` and `password`, from `credentials:` into
   `hub:` or into that site's entry under `sites:`, then remove `credentials:`. For a kubeconfig, copy it to
   `.config/NAME/kubeconfig` instead.
