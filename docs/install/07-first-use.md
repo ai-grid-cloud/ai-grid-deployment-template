@@ -26,8 +26,8 @@ The **Monitoring** page shows the hub's dashboards. If it can't load them, see
 ## 2. Create an organization
 
 1. Go to **Organizations** and click **Create organization**.
-2. In **Organization details**, enter the **Name**. Click **Add domain** and enter the organization's email domain in
-   **Domain 1**. Click **Next**.
+2. In **Organization details**, enter the **Name**, and enter the organization's email domain in **Domain 1**. Click
+   **Next**.
 3. In **Identity provider**, leave every field empty, and click **Next**. The organization's users then sign in with
    accounts in your tenant Keycloak.
 4. In **Review**, click **Create organization**.
@@ -99,10 +99,12 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
    hostname, and prints no password or token. You should see a short reply, `HTTP 200` and `x-grid-site: SITE`.
 
    > **Note:** `make tenant-call` needs a publicly trusted certificate on the site's MaaS gateway. With the
-   > cluster's internal certificate, which the install leaves, it stops with a certificate error. To add your own,
-   > see [MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md).
+   > cluster's internal certificate, it stops with a certificate error. To add your own, see
+   > [Before you add the site](06-join-grid.md#before-you-add-the-site).
 
 Tenants normally call with an API key, and create keys in the Org UI at `https://maas.SITE_APPS_DOMAIN/maas-portal`.
+If every Org UI page fails with an error, see
+[troubleshooting](troubleshooting.md#the-org-ui-fails-on-every-page-on-a-new-site).
 For API keys, refusal checks and revoking a key, see [tenant access](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/tenant-access.md). To remove what you created,
 see [operate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/operate.md#remove-a-subscription-model-or-organization).
 

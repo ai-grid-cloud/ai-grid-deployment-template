@@ -58,6 +58,9 @@ step deletes last. If your own apps leave something behind, add a line for it th
   ```
 
   Replace `my-idp` and `my-idp-operator` with your identity provider's namespace and operator package.
+- Remove the site's own files from your deployment repository, if it has any, and push: `apps/SITE-maas-tls.yaml`,
+  `sites/SITE/` and `values/clusters/SITE/`. Otherwise the hub keeps the site's `SITE-maas-tls` Application, which
+  points at a site that's gone.
 
 ## 1. Empty the catalog
 
