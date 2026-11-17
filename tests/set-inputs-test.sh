@@ -38,6 +38,8 @@ chmod +x "$T/bin/oc"
 repo() { # name origin -> a deployment copy with clusters.yaml and logins
   local d="$T/$1"; mkdir -p "$d"
   cp -R "$SRC/scripts" "$SRC/root" "$SRC/tenant-idp" "$d/"
+  # The template has no inputs.env; a deployment repository running these tests has its own.
+  rm -f "$d/root/inputs.env"
   # Take the library from the local checkout instead of github.com.
   local rel; rel=$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$LIB/bootstrap/hub" "$d/root")
   sed -i.bak -E "s#^  - https://github.com/[^ ]+//bootstrap/hub\?ref=[0-9a-f]+#  - $rel#" "$d/root/kustomization.yaml"
