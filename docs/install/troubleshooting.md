@@ -122,8 +122,46 @@ The restarts stop and the Applications progress within a few minutes.
 **Cause:** the MaaS gateway presents the cluster's internal certificate, `openshift-ai-inference-service-tls`, on
 the public hostname. Clients don't trust it.
 
-**Fix:** add your own certificate for the MaaS hostname
-([MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)).
+**Fix:** add your own certificate for the MaaS hostname: with `make install`, set `maasCertificate.issuer` on the
+site in `.config/clusters.yaml` and run it again ([page 9](09-hands-off.md)); page by page, copy `site-template/`
+([Before you add the site](06-join-grid.md#before-you-add-the-site)). For the details, see
+[MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md).
+
+## The Org UI fails on every page on a new site
+
+**Symptom:** on an `ingress` or `combined` site, every Org UI call at `https://maas.SITE_APPS_DOMAIN/maas-portal`
+fails with `500` and `EOF`.
+
+**Cause:** the Org UI reads the MaaS URL once, when it starts. On a new site it can start before the library sets
+the MaaS gateway's hostname, and it then keeps the load balancer's name. A site whose `values/clusters/SITE/rhoai.yaml`
+gives the listeners their hostname, as `make install` writes it with `maasCertificate.issuer`, doesn't hit this.
+
+**Fix:** after the site is **Provisioned**, restart the Org UI on the site:
+
+```sh
+scripts/with-cluster.sh SITE_NAME oc rollout restart deployment/maas-ui -n redhat-ods-applications
+```
+
+## A site's `SITE-maas-tls` Application never turns `Healthy`
+
+**Symptom:** `make install` stops at `hub-apps-final` or the ready check, naming `SITE-maas-tls`.
+
+**Cause:** the site's ClusterIssuer, `maasCertificate.issuer`, can't issue for `maas.APPS_DOMAIN`, such as when its
+DNS-01 zone doesn't cover the site's apps domain.
+
+**Fix:** read why the certificate isn't ready, fix the issuer or set another one, and run `make install` again:
+
+```sh
+scripts/with-cluster.sh SITE_NAME oc describe certificate maas-gateway-public -n openshift-ingress
+scripts/with-cluster.sh SITE_NAME oc get challenges.acme.cert-manager.io -n openshift-ingress
+```
+
+## A site's cert-manager operator fails with `TooManyOperatorGroups`
+
+**Cause:** the site already ran the platform's cert-manager, and OpenShift AI added its own OperatorGroup beside the
+platform's.
+
+**Fix:** see [A site that already runs cert-manager](06-join-grid.md#a-site-that-already-runs-cert-manager).
 
 ## `KserveReady` flaps `False` on a site
 

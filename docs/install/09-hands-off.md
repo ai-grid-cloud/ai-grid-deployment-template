@@ -65,7 +65,13 @@ Tell the install which clusters and repositories to use, and give it the credent
    - **`hub` and `sites`:** replace each `REQUIRED-` value, and add an entry under `sites:` for each site, with
      its `name` and `api`. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't
      change it once the site is imported. The hub's name is always `hub`. The file says only how to reach each
-     cluster: no role and no location.
+     cluster: no role and no location. If a cluster's API or apps certificate isn't publicly trusted, such as a
+     self-signed one, see [An untrusted cluster certificate](#other-options).
+   - **`maasCertificate.issuer`, optional, per site:** for a site you'll make `ingress` or `combined`, the name of a
+     cert-manager ClusterIssuer on that site that issues publicly trusted certificates by DNS-01. The install then
+     gives the site's MaaS gateway its own certificate for `maas.APPS_DOMAIN`, so tenants' clients trust it. Without
+     it, the gateway keeps the cluster's internal certificate. To list a site's ClusterIssuers, after `make login`
+     (step 6), run `scripts/with-cluster.sh SITE_NAME oc get clusterissuers`.
    - **`catalog.url`:** the URL of the catalog repository you create in step 4, such as
      `https://github.com/my-org/ai-grid-catalog.git`. Pick its owner and name now.
    - **The secrets:** in `hub:` and in each site's entry, uncomment and fill in a `cluster-admin` `token`, or a `username` and
@@ -86,6 +92,8 @@ Tell the install which clusters and repositories to use, and give it the credent
      - name: site-east-1
        api: https://api.site-east-1.example.com:6443
        token: sha256~TOKEN
+       maasCertificate:
+         issuer: letsencrypt-dns01
      - name: site-east-2
        api: https://api.site-east-2.example.com:6443
        username: kubeadmin
@@ -280,7 +288,12 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 5. `acm`: waits until ACM is running.
 6. `console-secrets`: creates the provider console's Secrets from your catalog token.
 7. `hub-apps`: waits until every hub Application is `Synced` and `Healthy`, except those that wait for a site.
-8. `site NAME`: for each site, checks it and imports it into ACM, then waits until it's available.
+8. `site NAME`: for each site, checks it, writes and pushes its own files, imports it into ACM, then waits until it's
+   available. The site's files come from `site-template/`. With `maasCertificate.issuer`, they are the MaaS
+   certificate, its Application, and `values/clusters/NAME/rhoai.yaml` with the gateway's hostname and certificate.
+   On a site that already runs the platform's cert-manager, the values file also turns off OpenShift AI's own copy,
+   which would otherwise fail with `TooManyOperatorGroups`. With neither, the install writes no files. A file without
+   the `# Written by scripts/site-files.sh` first line is yours, and the install leaves it alone.
 9. `provider-admin`: creates the provider-admin ServiceAccount and its token.
 10. `ready`: runs the ready check until it passes, which writes `.install/outputs.json`.
 
@@ -310,7 +323,8 @@ command line. It lasts 168 hours. To get a new one, run `make provider-admin`.
 `make install` leaves each site imported but outside the grid. To add a site, open the provider console
 (`hub.consoleURL` in `.install/outputs.json`), click **Clusters**, and click **Add to AI Grid** for the site. Choose
 its role and location there. The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it, run
-`make site-status SITE=SITE_NAME`.
+`make site-status SITE=SITE_NAME`. If the Org UI then fails on every page, see
+[troubleshooting](troubleshooting.md#the-org-ui-fails-on-every-page-on-a-new-site).
 
 ## Other options
 
@@ -379,8 +393,11 @@ its role and location there. The hub then installs OpenShift AI, MaaS and the gr
 - The tenant Keycloak imports its realm only once, on its first start (`--override false`). A site you add to
   `.config/clusters.yaml` after the first install doesn't get its portal redirect, `https://maas.APPS_DOMAIN/*`,
   automatically. To add it, see [A tenant can't sign in to the portal on a site added after the install](troubleshooting.md#a-tenant-cant-sign-in-to-the-portal-on-a-site-added-after-the-install).
-- The MaaS gateway uses the cluster's internal certificate, so tenants' clients don't trust it until you add your own
-  certificate.
+- Without `maasCertificate.issuer`, the site's MaaS gateway uses the cluster's internal certificate, so tenants'
+  clients don't trust it. Such a site can also need its Org UI restarted once after it's added
+  ([troubleshooting](troubleshooting.md#the-org-ui-fails-on-every-page-on-a-new-site)).
+- The install writes a site's files whatever role you later choose for it, and doesn't remove them for a site you
+  delete from `.config/clusters.yaml`. Before you uninstall a site, see [Uninstall](08-uninstall.md#before-you-begin).
 - `make install` always installs its own Keycloak. Using an existing one, with `KEYCLOAK` under `options:`, comes
   later; any value but `install` stops the install.
 - Starting over means new clusters, and new deployment and catalog repositories. `make install` doesn't uninstall;

@@ -6,6 +6,31 @@ settings in that role. Your `clusters.yaml` names no role or location: you choos
 this page work on the only site in your `clusters.yaml`. With several sites, add the site's name, such as
 `make site-status SITE=SITE_NAME`.
 
+## Before you add the site
+
+Two settings depend on the site and must be in your deployment repository before you add it. `make install`
+([page 9](09-hands-off.md)) writes both for you. On this path, copy them from [`site-template/`](../../site-template/README.md)
+to the same paths in your repository, replace its placeholders as its README says, then commit and push. The
+commands here use `scripts/with-cluster.sh SITE_NAME`, which runs `oc` with the site's login from
+`.config/SITE_NAME/kubeconfig`, not with your own kubeconfig.
+
+- **A certificate for the MaaS gateway.** If the site has a cert-manager ClusterIssuer that issues publicly trusted
+  certificates by DNS-01 (`scripts/with-cluster.sh SITE_NAME oc get clusterissuers`), and the site will be
+  `ingress` or `combined`, copy `values/clusters/SITE/rhoai.yaml`, `sites/SITE/maas-tls/` and
+  `apps/SITE-maas-tls.yaml`. Tenants' clients then trust the gateway. Without it, the gateway keeps the cluster's internal certificate
+  ([MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)).
+- **The platform's cert-manager.** If the site already runs the cert-manager Operator for Red Hat OpenShift, copy
+  `values/clusters/SITE/rhoai.yaml` and uncomment its three `dependencies` lines (without a certificate, leave out
+  its `components:` part). Otherwise OpenShift AI adds a second OperatorGroup and OLM fails the operator with
+  `TooManyOperatorGroups`. To check:
+
+  ```sh
+  scripts/with-cluster.sh SITE_NAME oc get operatorgroups -n cert-manager-operator
+  ```
+
+  An OperatorGroup named other than `openshift-cert-manager-operator` is the platform's. If you already added the
+  site, see [A site that already runs cert-manager](#a-site-that-already-runs-cert-manager) instead.
+
 ## 1. Add the site in the console
 
 1. Open `https://CONSOLE_HOST` (from [install the hub components](04-hub-components.md#2-verify)) and sign in as a
@@ -53,6 +78,32 @@ OpenShift AI takes up to an hour on a new cluster, and less on one that ran Open
    tenants' clients don't trust it until you add your own
    ([MaaS gateway certificate](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/maas-certificate.md)). With your own certificate, you see `401`
    instead: no token yet.
+
+## A site that already runs cert-manager
+
+If you added a site that already runs the platform's cert-manager without turning off the chart's copy, its
+cert-manager operator fails with `TooManyOperatorGroups`, and OpenShift AI waits on it. Argo CD has also taken over
+the platform's namespace `cert-manager-operator` and its Subscription, which have the chart's names. If you turn off
+the chart's copy now, Argo CD prunes both and removes the operator. Protect them first:
+
+1. Annotate the namespace and the Subscription on the site:
+
+   ```sh
+   scripts/with-cluster.sh SITE_NAME oc annotate namespace cert-manager-operator \
+     argocd.argoproj.io/sync-options=Prune=false
+   scripts/with-cluster.sh SITE_NAME oc annotate subscriptions.operators.coreos.com openshift-cert-manager-operator \
+     -n cert-manager-operator argocd.argoproj.io/sync-options=Prune=false
+   ```
+
+   This assumes the platform's Subscription has the chart's name, `openshift-cert-manager-operator`. If
+   `scripts/with-cluster.sh SITE_NAME oc get subscriptions.operators.coreos.com -n cert-manager-operator` lists two,
+   stop and ask your platform team which one to keep.
+
+2. Turn off the chart's copy. If you installed with `make install` ([page 9](09-hands-off.md)), run it again.
+   Otherwise, add the `dependencies` lines from [`site-template/`](../../site-template/README.md) to the site's
+   `values/clusters/SITE/rhoai.yaml`, then commit and push.
+
+Argo CD should then remove only the chart's OperatorGroup, and the operator recover. *(Unverified.)*
 
 ## Checkpoint
 
