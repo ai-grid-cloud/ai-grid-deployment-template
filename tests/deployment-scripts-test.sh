@@ -104,6 +104,8 @@ t "a placeholder left in a deployment file fails" 1 "^tenant-idp/settings.yaml:2
 d=$(fixture template-tests)
 cp -R tests "$d/tests"
 t "the template's own tests/ (fixtures with placeholders) are ignored" 0 "every repository is an input" bash scripts/check-deployment.sh "$d"
+mkdir -p "$d/sites/x/tests"; printf 'host: REQUIRED-nestedHost\n' > "$d/sites/x/tests/values.yaml"
+t "  ... but a tests/ directory elsewhere is still scanned" 1 "sites/x/tests/values.yaml:1:REQUIRED-nestedHost" bash scripts/check-deployment.sh "$d"
 
 d=$(fixture fetched-library)
 mkdir -p "$d/.library/apps"; printf 'x: REQUIRED-libraryRepoURL\n' > "$d/.library/apps/inputs.yaml"
