@@ -7,8 +7,9 @@
 #
 # FILE holds the API key and nothing else: create the key in the Org UI at
 # https://maas.SITE_APPS_DOMAIN/maas-portal and save it there. The MaaS host,
-# maas.SITE_APPS_DOMAIN, comes from the site (the only site unless --site names
-# one; with no site in clusters.yaml, the hub, an all-in-one). --subscription sends X-MaaS-Subscription, for a user in several. The key
+# maas.SITE_APPS_DOMAIN, comes from the site: the only site unless --site names
+# one, or the hub when clusters.yaml has no site (an all-in-one).
+# --subscription sends X-MaaS-Subscription, for a user in several. The key
 # stays in files; nothing prints it. It prints the reply's text, the HTTP status
 # and the x-grid-site header, and exits 1 unless the status is 200.
 #

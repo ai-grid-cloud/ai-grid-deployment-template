@@ -160,7 +160,7 @@ if [ "$loki" = True ]; then ok "LokiStack redhat-ods-monitoring/usage-logs Ready
 else fail "LokiStack redhat-ods-monitoring/usage-logs Ready: ${loki:-not created yet}"; fi
 
 # The sites: imported and waiting, not added to the grid.
-sites_json='[]' root_checked=""
+sites_json='[]'
 for name in $(site_names); do
   check "site $name: ManagedCluster available" managedcluster_available "$name"
   if ! mc=$(ready_read get managedclusters.cluster.open-cluster-management.io "$name" -o json); then
@@ -186,14 +186,21 @@ for name in $(site_names); do
     fail "site $name: ${login#error: }"; sk=""
   fi
 
-  if [ -z "$root_checked" ]; then
-    root_checked=1; read_main
-    if [ -z "$main_err" ]; then check "deployment-root Synced at origin's $branch ($main_sha)" root_synced_to "$main_sha"
-    else fail "deployment-root Synced at origin's $branch: $main_err"; fi
-  fi
   sites_json=$(jq -c --arg n "$name" --arg a "$(cluster_api "$name")" --arg d "$domain" \
     '. + [{name: $n, api: $a, appsDomain: $d, acmName: $n}]' <<<"$sites_json")
 done
+# An all-in-one (no site in clusters.yaml): the hub is the site, as local-cluster
+# once it's added to the grid, so outputs.json names it for a test suite.
+if [ -z "$(site_names)" ]; then
+  domain=$(oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}' 2>/dev/null || true)
+  [ -n "$domain" ] || fail "hub: can't read its apps domain"
+  sites_json=$(jq -c --arg n "$hub" --arg a "$(cluster_api "$hub")" --arg d "$domain" \
+    '[{name: $n, api: $a, appsDomain: $d, acmName: "local-cluster"}]' <<<'[]')
+fi
+
+read_main
+if [ -z "$main_err" ]; then check "deployment-root Synced at origin's $branch ($main_sha)" root_synced_to "$main_sha"
+else fail "deployment-root Synced at origin's $branch: $main_err"; fi
 
 # No test content: the console lists no organizations, models or subscriptions.
 none_listed() { # SERVICE NOUN: ai_grid.v1.SERVICE/List lists no NOUN

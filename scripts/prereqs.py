@@ -191,7 +191,7 @@ def check_deployment_push(deployment, resolved):
         return
     os.environ["GIT_TERMINAL_PROMPT"] = "0"
     os.environ["GIT_SSH_COMMAND"] = os.environ.get("GIT_SSH_COMMAND", "ssh") + " -o BatchMode=yes"
-    rc, _, err = run(["git", "-C", deployment, "push", "--dry-run", "--quiet", "origin",
+    rc, _, err = run(["git", "-C", deployment, "push", "--dry-run", "--no-verify", "--quiet", "origin",
                       "HEAD:refs/heads/ai-grid-prereqs-push-check"])
     if rc == 0:
         report("ok", "deployment push", "no token: your git login can push to origin (dry run)")

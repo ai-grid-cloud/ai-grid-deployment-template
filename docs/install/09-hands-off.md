@@ -119,7 +119,7 @@ Tell the install which clusters and repositories to use, and give it the credent
    secret lines are commented out in the example: uncomment each one you use and fill it in.
 
    - **`hub` and `sites`:** replace each `REQUIRED-` value, and add an entry under `sites:` for each site, with
-     its `name` and `api`. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't
+     its `name` and `api`; for an [all-in-one](#all-in-one-one-cluster), write `sites: []`. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't
      change it once the site is imported. The hub's name is always `hub`. The file says only how to reach each
      cluster: no role and no location. If a cluster's API or apps certificate isn't publicly trusted, such as a
      self-signed one, see [An untrusted cluster certificate](#other-options).
@@ -259,18 +259,26 @@ You now have:
 ## All-in-one: one cluster
 
 For a test, one cluster can be both the hub and a `combined` site. It needs everything a hub and a site need,
-including no platform cert-manager Operator, so leave `hubCertManager=library`. The network items about reaching the
-other clusters' load balancers don't apply.
+including no platform cert-manager Operator, so install it with `hubCertManager=library`. The network items about
+reaching the other clusters' load balancers don't apply.
 
 1. In `.config/clusters.yaml`, give the hub's `api` and login, and write `sites: []` with no entries.
 2. Run `make install`, not `make install HUB_ONLY=1`: `HUB_ONLY=1` skips the provider-admin token and the ready
    check. With no sites, the install imports nothing, and the ready check reports the hub Applications that wait for a
    site as `WARN`.
-3. Add the hub to the grid: in the provider console, click **Clusters**, then **Add to AI Grid** for
+3. Before you add the hub to the grid, set `hubCertManager=site` in `root/inputs.env`, commit and push it, and wait
+   until `make status` shows `deployment-root` synced. OpenShift AI's chart then takes over the cert-manager the hub
+   already runs, instead of two Applications managing it
+   ([limits of `main`, L17](../upstream-main-limits.md#l17-the-hubs-cert-manager-is-the-librarys-or-the-platforms-not-both)).
+4. Add the hub to the grid: in the provider console, click **Clusters**, then **Add to AI Grid** for
    `local-cluster`, and choose role **combined** and a location.
 
-The hub is `local-cluster` in ACM and in the console. With no site in `clusters.yaml`, `make site-status` and
-`make tenant-call` use the hub; `make site-check` and `make site-import` are for separate sites only.
+The hub is `local-cluster` in ACM and in the console. With no site in `clusters.yaml`, `make status`,
+`make site-status` and `make tenant-call` use the hub, and `sites[]` in `.install/outputs.json` names the hub with
+`acmName` `local-cluster`. `make site-check` and `make site-import` are for separate sites only. Such a hub has no
+usage logs, and its Limitador keeps its counters in memory
+([limits of `main`, L18](../upstream-main-limits.md#l18-a-hub-that-is-also-a-site-has-no-usage-logs)). Page 6 has
+[the same steps](06-join-grid.md#the-hub-as-a-site-all-in-one).
 
 ## If it stops
 
@@ -336,7 +344,7 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 | `hub.lokiStack` | The usage-log LokiStack, `redhat-ods-monitoring/usage-logs` |
 | `providerAdminTokenFile` | The path of the provider-admin token file, never the token |
 | `library.url`, `library.revision` | The library and the commit you pin |
-| `sites[]` | For each site: `name`, `api`, `appsDomain`, and `acmName`, its ManagedCluster's name |
+| `sites[]` | For each site: `name`, `api`, `appsDomain`, and `acmName`, its ManagedCluster's name. On an [all-in-one](#all-in-one-one-cluster), the hub, with `acmName` `local-cluster` |
 
 The provider-admin token is in `.config/provider-admin-token`. It belongs to ServiceAccount
 `ai-grid-test/provider-admin`, which is bound to the console's ClusterRole `ai-grid-provider-admin`, so a test suite

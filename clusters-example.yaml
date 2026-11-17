@@ -35,9 +35,9 @@ hub:
 # choose its role and location, in the provider console.
 #
 # All-in-one (one cluster that is both hub and site): write "sites: []" and
-# remove the entry below. After make install, add the hub to the grid in the
-# provider console: Add to AI Grid on local-cluster, role combined
-# (install guide, page 9, "All-in-one: one cluster").
+# remove the entry below. After make install, set hubCertManager=site, then
+# add the hub to the grid in the provider console: Add to AI Grid on
+# local-cluster, role combined (install guide, page 9, "All-in-one: one cluster").
 sites:
   - name: REQUIRED-siteName        # its ACM name, a DNS label, e.g. site-1; fixed once imported
     api: REQUIRED-siteAPIURL       # e.g. https://api.site-1.example.com:6443
