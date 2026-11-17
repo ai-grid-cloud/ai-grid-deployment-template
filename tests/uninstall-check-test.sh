@@ -17,9 +17,9 @@ cp -R "$SRC/scripts" "$D/"; touch "$D/.config/hub/kubeconfig" "$D/.config/site-b
 cat > "$D/clusters.yaml" <<'YAML'
 apiVersion: ai-grid.dev/v1alpha1
 kind: Clusters
-hub: {name: hub, api: "https://api.hub.example.com:6443"}
+hub: {api: "https://api.hub.example.com:6443"}
 sites:
-  - {name: site-b, role: combined, location: us-east, api: "https://api.site.example.com:6443"}
+  - {name: site-b, api: "https://api.site.example.com:6443"}
 YAML
 for b in kubectl jq; do ln -s "$(command -v "$b")" "$T/bin/$b"; done
 # Stub oc: the cluster is the login's directory; $STUB/NAME.crd means the

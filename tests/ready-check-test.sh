@@ -82,11 +82,11 @@ chmod +x "$T/bin/oc" "$T/bin/curl" "$T/bin/git"
 # site-b, inference site-c), every login, and the
 # provider-admin token. origin, a local bare repository, has its one commit as main.
 newrepo() { # DIR [SITES_YAML]
-  local d=$1 sites=${2:-$'  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n  - {name: site-c, role: inference, location: us-west, api: "https://api.site-c.example.com:6443"}'}
+  local d=$1 sites=${2:-$'  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n  - {name: site-c, api: "https://api.site-c.example.com:6443"}'}
   mkdir -p "$d/.config/hub" "$d/.config/site-b" "$d/.config/site-c"
   cp -R "$SRC/scripts" "$SRC/root" "$d/"
   : > "$d/.config/hub/kubeconfig"; : > "$d/.config/site-b/kubeconfig"; : > "$d/.config/site-c/kubeconfig"
-  printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n%s\n' "$sites" > "$d/clusters.yaml"
+  printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n%s\n' "$sites" > "$d/clusters.yaml"
   (umask 077; printf '%s\n' "$SECRET" > "$d/.config/provider-admin-token")
   git -C "$d" init -q && git -C "$d" add -A . ':!.config' &&
     git -C "$d" -c core.hooksPath=/dev/null -c user.name=test -c user.email=test@example.com commit -qm init &&
@@ -158,7 +158,7 @@ W="$T/dsc"; ready "$W"; echo "datasciencecluster.datasciencecluster.opendatahub.
 t "a DataScienceCluster on a site: FAIL" 1 "^FAIL .*site-c.*DataScienceCluster" '[ ! -f "$(OUT)" ]'
 
 
-D="$T/inference"; newrepo "$D" '  - {name: site-c, role: inference, location: us-west, api: "https://api.site-c.example.com:6443"}'
+D="$T/inference"; newrepo "$D" '  - {name: site-c, api: "https://api.site-c.example.com:6443"}'
 W="$T/inference-w"; ready "$W"; run
 t "an inference site" 0 "^OK .*site-c" '! grep -q "^FAIL" <<<"$out"' \
   '! grep -q clusterissuers "$W/argv.log"' 'jqt ".sites == [{name: \"site-c\", role: \"inference\", location: \"us-west\", api: \"https://api.site-c.example.com:6443\", appsDomain: \"apps.site-c.example.com\", acmName: \"site-c\"}]"'

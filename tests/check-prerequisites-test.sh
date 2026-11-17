@@ -119,7 +119,7 @@ t "bad step" 2 "^Usage:" "$w" --step nope
 # Cluster mode: a klusterlet from your own hub is your install, not a previous one.
 D="$T/repo"; mkdir -p "$D/.config/hub" "$D/.config/site-b"; cp -R "$HERE/../scripts" "$D/"
 : > "$D/.config/hub/kubeconfig"; : > "$D/.config/site-b/kubeconfig"
-printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
 tc() { # name want_rc expect_grep world: --step spoke on the only site, through clusters.yaml
   local name=$1 want=$2 expect=$3 w=$4 rc out; total=$((total+1))
   out=$(env PATH="$T/bin:$PATH" STUB_DIR="$w" bash "$D/scripts/check-prerequisites.sh" --step spoke 2>&1) && rc=0 || rc=$?

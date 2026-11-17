@@ -42,7 +42,7 @@ STUB
 chmod +x "$T/bin/oc"
 
 D="$T/repo"; mkdir -p "$D/.config/hub"; cp -R "$SRC/scripts" "$D/"; : > "$D/.config/hub/kubeconfig"
-printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\n' > "$D/clusters.yaml"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\n' > "$D/clusters.yaml"
 
 app() { printf '{"metadata":{"name":"%s"},"status":{"sync":{"status":"%s"},"health":{"status":"%s"}}}' "$@"; }
 pods() { # restarts [last-termination [waiting-reason]]
@@ -151,7 +151,7 @@ t "console pod not ready: names the reason" "^Console pod: ai-grid-provider-cons
 # Sites: each one's DataScienceCluster phase and GridSite, through its login.
 D="$T/repo-sites"; mkdir -p "$D/.config/hub" "$D/.config/site-b"; cp -R "$SRC/scripts" "$D/"
 : > "$D/.config/hub/kubeconfig"; : > "$D/.config/site-b/kubeconfig"
-printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n  - {name: site-c, role: inference, location: us-west, api: "https://api.site-c.example.com:6443"}\n' > "$D/clusters.yaml"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n  - {name: site-c, api: "https://api.site-c.example.com:6443"}\n' > "$D/clusters.yaml"
 W="$T/sites"; mkdir -p "$W"
 t "site not installed yet" "^  OpenShift AI \(DataScienceCluster\): not created yet$"
 t "  ... no GridSite yet" "^  GridSite: not created yet$"

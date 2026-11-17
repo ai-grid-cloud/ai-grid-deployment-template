@@ -52,7 +52,7 @@ chmod +x "$T/bin/oc" "$T/bin/curl"
 
 D="$T/repo"; mkdir -p "$D/root"; cp -R "$SRC/scripts" "$D/"; cp "$SRC/root/kustomization.yaml" "$D/root/"
 printf 'catalogRevision=main\nidpIssuerURL=https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants\n' > "$D/root/inputs.env"
-printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
 for n in hub site-b; do mkdir -p "$D/.config/$n"; : > "$D/.config/$n/kubeconfig"; done
 printf 'FAKE_password' > "$T/pw"
 ARGS=(--user alice --password-file "$T/pw" --subscription smollm2-users --model smollm2-chat)

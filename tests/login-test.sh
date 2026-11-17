@@ -53,7 +53,7 @@ chmod +x "$T/bin/curl"
 new_repo() { # a fresh repository copy in $D, a fresh stub log in $W
   D="$T/repo-$total"; W="$T/stub-$total"; rm -rf "$D" "$W"; mkdir -p "$D" "$W"; : > "$W/argv.log"
   cp -R "$SRC/scripts" "$D/"
-  printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
+  printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
 }
 run() { # [VAR=value...] -- args: runs login.sh in $D; sets rc and out
   local envs=()
@@ -125,12 +125,16 @@ new_repo; mkdir -p "$D/.config/hub"; printf '%s\r\n' "$SENTINEL" > "$D/.config/h
 run -- --non-interactive hub
 t "token file ending in CRLF: works" working_kubeconfig hub https://api.hub.example.com:6443
 
-# The private .config/clusters.yaml with a credentials: block.
+# The private .config/clusters.yaml with each cluster's credentials inline.
 PW='PW~SENTINEL pass'
 OTHER_TOKEN=sha256~OTHER EXPIRED_TOKEN=sha256~EXPIRED
-private() { # credentials-block lines: writes $D/.config/clusters.yaml (mode 600) with the same clusters
-  mkdir -p "$D/.config"
-  { cat "$D/clusters.yaml"; echo "repositories: {catalog: 'https://github.com/o/c.git'}"; echo "credentials:"; printf '  %s\n' "$@"; } > "$D/.config/clusters.yaml"
+private() { # "NAME: {credentials}"...: writes $D/.config/clusters.yaml (mode 600), the same clusters with those credentials inline
+  local creds; mkdir -p "$D/.config"
+  creds=$({ printf 'apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c}\ndata:\n'; printf '  %s\n' "$@"; } |
+    KUBECONFIG=/dev/null kubectl label --local -f - x=y -o json | jq .data)
+  KUBECONFIG=/dev/null kubectl label --local -f "$D/clusters.yaml" x=y -o json | jq --argjson c "$creds" '
+    del(.metadata) | .catalog = {url: "https://github.com/o/c.git"}
+    | .hub += ($c.hub // {}) | .sites = [.sites[] | . + ($c[.name] // {})]' > "$D/.config/clusters.yaml"
   chmod 600 "$D/.config/clusters.yaml"
 }
 no_secret() { # [SECRET...]: none in the stubs' argv or the output (default the token and $PW)

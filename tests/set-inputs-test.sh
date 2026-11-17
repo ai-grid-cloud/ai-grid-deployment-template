@@ -45,10 +45,10 @@ repo() { # name origin -> a deployment copy with clusters.yaml and logins
   cat > "$d/clusters.yaml" <<'YAML'
 apiVersion: ai-grid.dev/v1alpha1
 kind: Clusters
-hub: {name: hub, api: 'https://api.hub.example.com:6443'}
+hub: {api: 'https://api.hub.example.com:6443'}
 sites:
-  - {name: site-i, role: inference, location: us-west, api: 'https://api.site-i.example.com:6443'}
-  - {name: site-c, role: combined, location: us-east, api: 'https://api.site-c.example.com:6443'}
+  - {name: site-i, api: 'https://api.site-i.example.com:6443'}
+  - {name: site-c, api: 'https://api.site-c.example.com:6443'}
 YAML
   for n in hub site-i site-c; do mkdir -p "$d/.config/$n"; : > "$d/.config/$n/kubeconfig"; done
   git -C "$d" init -q && git -C "$d" remote add origin "$2"
@@ -113,7 +113,7 @@ t "https origin: credentials dropped, .git added" 0 "deploymentRepoURL = https:/
 d2=$(repo noarg https://github.com/acme/deploy.git)
 t "no argument, page by page: names make inputs CATALOG=" 1 "run make inputs CATALOG=CATALOG_REPO_URL \(page 2\)" \
   env PATH="$T/bin:$PATH" "$d2/scripts/set-inputs.sh"
-printf 'repositories:\n  catalog: git@github.com:acme/catalog2.git\n' >> "$d2/clusters.yaml"
+printf 'catalog:\n  url: git@github.com:acme/catalog2.git\n' >> "$d2/clusters.yaml"
 t "no argument: reads repositories.catalog" 0 "every repository is an input" \
   env PATH="$T/bin:$PATH" "$d2/scripts/set-inputs.sh"
 check "  ... and writes it as https" grep -qx 'catalogRepoURL=https://github.com/acme/catalog2.git' "$d2/root/inputs.env"

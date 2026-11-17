@@ -79,10 +79,10 @@ mkdep() { # name clusters-body: a deployment at the pin with that clusters.yaml 
   local d="$T/$1"; mkdir -p "$d/root"
   printf '        libraryRevision: %s\n' "$("$GIT" -C "$LIBD" rev-parse HEAD)" > "$d/root/kustomization.yaml"
   printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\n%b\n' "$2" > "$d/clusters.yaml"
-  for n in $(grep -oE 'name: [a-z0-9-]+' "$d/clusters.yaml" | cut -d' ' -f2); do mkdir -p "$d/.config/$n"; : > "$d/.config/$n/kubeconfig"; done
+  for n in hub $(grep -oE 'name: [a-z0-9-]+' "$d/clusters.yaml" | cut -d' ' -f2); do mkdir -p "$d/.config/$n"; : > "$d/.config/$n/kubeconfig"; done
   echo "$d"
 }
-D=$(mkdep deployment "hub: {name: hub, api: 'https://api.hub:6443'}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: 'https://api.site-b:6443'}")
+D=$(mkdep deployment "hub: {api: 'https://api.hub:6443'}\nsites:\n  - {name: site-b, api: 'https://api.site-b:6443'}")
 ALL=(--deployment "$D" --quay-auth-file "$A" --catalog-token-file "$TOK")
 t "all ok: no problem lines" '^[0-9]+ ok$' "$T/bin" "$w" "${ALL[@]}"
 out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$T" STUB_DIR="$w" "$PY" "$SCRIPT" "${ALL[@]}" 2>&1) || true
@@ -107,7 +107,7 @@ t "missing tool: summary and note" 'Nothing was changed' "$T/nojq" "$w"
 
 t "nothing set: registry skipped" '^skipped +registry logins +no auth file at ~/.config/containers/auth.json or \$XDG_RUNTIME_DIR/containers/auth.json; set QUAY_AUTH_FILE$' "$T/bin" "$w"
 t "no clusters.yaml: skipped, no guide page" '^skipped +cluster checks +no clusters.yaml: run cp clusters-example.yaml clusters.yaml and fill it in$' "$T/bin" "$w" --deployment "$T/other"
-P=$(mkdep placeholder 'hub: {name: hub, api: REQUIRED-hubAPIURL}')
+P=$(mkdep placeholder 'hub: {api: REQUIRED-hubAPIURL}')
 t "clusters placeholder: skipped" '^skipped +cluster checks +.*REQUIRED-hubAPIURL' "$T/bin" "$w" --deployment "$P"
 t "site section named" '^Site site-b \(combined\)' "$T/bin" "$w" "${ALL[@]}"
 t "nothing set: token skipped" '^skipped +catalog token file' "$T/bin" "$w"
@@ -166,7 +166,7 @@ dflt "no default token file: skipped" '^skipped +catalog token file +no ~/.ai-gr
 # and a key it leaves out takes the environment, else install.sh's default under .config/.
 settings_dep() { # dir options-body: a deployment with a hub and that options: block
   mkdir -p "$1/.config"
-  printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\nrepositories: {catalog: 'https://example.com/c.git'}\n%b\n" "$2" > "$1/clusters.yaml"
+  printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\ncatalog: {url: 'https://example.com/c.git'}\n%b\n" "$2" > "$1/clusters.yaml"
 }
 envt() { # name expect_regex [VAR=value ...]: runs from home1 against the deployment $ED
   local name=$1 expect=$2; shift 2; total=$((total+1))
@@ -175,7 +175,7 @@ envt() { # name expect_regex [VAR=value ...]: runs from home1 against the deploy
 }
 # The private .config/clusters.yaml: the quay.io/rhoai robot account and the tokens from it.
 EP="$T/private"; mkdir -p "$EP/.config"
-printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\nrepositories: {catalog: 'https://example.com/c.git'}\nquay: {username: stub-user, password: FAKE_TOKEN_do_not_print_424242}\ngithub: {catalogToken: SECRET_do_not_print_c, deploymentToken: SECRET_do_not_print_d}\n" > "$EP/.config/clusters.yaml"
+printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\ncatalog: {url: 'https://example.com/c.git', token: SECRET_do_not_print_c}\nquay: {username: stub-user, password: FAKE_TOKEN_do_not_print_424242}\ndeployment: {token: SECRET_do_not_print_d}\n" > "$EP/.config/clusters.yaml"
 chmod 600 "$EP/.config/clusters.yaml"
 ED=$EP envt "private file: the quay.io/rhoai login from quay:" "^ok +auth file +quay: in .config/clusters.yaml"
 ED=$EP envt "  ... has the quay.io/rhoai entry" "^ok +quay.io/rhoai login +quay.io/rhoai entry"
@@ -185,7 +185,7 @@ ED=$EP envt "  ... pushes with github.deploymentToken" "^ok +deployment push +wi
 ED=$EP envt "  ... AI_GRID_CATALOG_TOKEN wins" "^ok +catalog token +AI_GRID_CATALOG_TOKEN" AI_GRID_CATALOG_TOKEN=x
 ED=$EP envt "  ... no temporary auth file left" "." && { total=$((total+1)); if ls "${TMPDIR:-/tmp}" 2>/dev/null | grep -q '^prereqs-quay-'; then echo "   FAIL temp auth file left"; fails=$((fails+1)); else echo "   ok     ... (none in TMPDIR)"; fi; }
 EM="$T/private-missing"; mkdir -p "$EM/.config"
-printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\nrepositories: {catalog: 'https://example.com/c.git'}\n" > "$EM/.config/clusters.yaml"; chmod 600 "$EM/.config/clusters.yaml"
+printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\ncatalog: {url: 'https://example.com/c.git'}\n" > "$EM/.config/clusters.yaml"; chmod 600 "$EM/.config/clusters.yaml"
 ED=$EM envt "private file without secrets: the auth file hint names quay:" "^MISSING +auth file +$EM/.config/quay-auth.json: not found; set quay.username and quay.password in .config/clusters.yaml \(make secrets NAME=quay\)"
 ED=$EM envt "  ... the token hint names github.catalogToken" "^MISSING +catalog token file +$EM/.config/catalog-token not found; set github.catalogToken in .config/clusters.yaml \(make secrets NAME=github\)"
 ED=$EM envt "  ... no token, no origin: FAIL with how to log in or set the token" "^FAIL +deployment push +no token, and your git login can't read origin .*gh auth login.*make secrets NAME=github"
@@ -206,12 +206,12 @@ ED=$E3 envt "missing auth file names quay:" "^MISSING +auth file +$E3/.config/qu
 E4="$T/env-old"; settings_dep "$E4" ""
 # A clusters.yaml with no catalog (the page-by-page guide): the home directory's files, as before.
 E5="$T/no-catalog"; settings_dep "$E5" ""
-sed -i.bak 's/^repositories: .*$/repositories: {catalog: ""}/' "$E5/clusters.yaml"; rm "$E5/clusters.yaml.bak"
+sed -i.bak 's/^catalog: .*$/catalog: {url: ""}/' "$E5/clusters.yaml"; rm "$E5/clusters.yaml.bak"
 ED=$E5 envt "no catalog: the home directory's auth file" "^ok +auth file +$H1/.config/containers/auth.json"
 ED=$E5 envt "no catalog: the home directory's token file" "^ok +catalog token file +$H1/.ai-grid/catalog-token"
 # The catalog only in the environment, as a CI job might set it: still make install's files.
 E6="$T/env-catalog"; settings_dep "$E6" ""
-sed -i.bak '/^repositories: /d' "$E6/clusters.yaml"; rm "$E6/clusters.yaml.bak"
+sed -i.bak '/^catalog: /d' "$E6/clusters.yaml"; rm "$E6/clusters.yaml.bak"
 ED=$E6 envt "catalog from CATALOG_REPO_URL: make install's auth file" "auth file +$E6/.config/quay-auth.json" CATALOG_REPO_URL=https://example.com/c.git
 ED=$E6 envt "  ... without it: the home directory's" "^ok +auth file +$H1/.config/containers/auth.json"
 # An install.env, which make install no longer reads, is a FAIL with the migration.

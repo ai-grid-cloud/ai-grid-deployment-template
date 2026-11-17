@@ -80,13 +80,13 @@ setup() { # NAME: a deployment repository $D and a stub directory $W, for one ca
   cat > "$D/clusters.yaml" <<'YAML'
 apiVersion: ai-grid.dev/v1alpha1
 kind: Clusters
-hub: {name: hub, api: "https://api.hub.example.com:6443"}
-repositories:
-  catalog: https://github.com/acme/catalog.git
-  library: ""
+hub: {api: "https://api.hub.example.com:6443"}
+catalog:
+  url: https://github.com/acme/catalog.git
 options:
+  LIBRARY: ""
 sites:
-- {name: site-a, role: combined, location: us-east, api: "https://api.site-a.example.com:6443"}
+- {name: site-a, api: "https://api.site-a.example.com:6443"}
 YAML
   for f in deployment-token catalog-token; do printf '%s\n' "$SENTINEL" > "$D/.config/$f"; done
   printf '{"auths":{"quay.io/rhoai":{"auth":"%s"}}}\n' "$SENTINEL" > "$D/.config/quay-auth.json"
@@ -140,7 +140,7 @@ t "rerun: every step already done; console-secrets always reruns" eval '[ "$rc" 
   grep -q "^== bootstrap" <<<"$out"'
 
 setup required
-sed -i.bak 's#^  catalog: .*#  catalog: REQUIRED-catalogRepoURL#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+sed -i.bak 's#^  url: .*#  url: REQUIRED-catalogRepoURL#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 run
 t "catalog placeholder left in clusters.yaml: stops before any cluster call" eval '[ "$rc" = 1 ] &&
   grep -q "set repositories.catalog" <<<"$out" && [ ! -s "$W/calls.log" ] && [ ! -s "$W/argv.log" ]'
@@ -173,7 +173,7 @@ t "changed CATALOG_REPO_URL: stops and names both" eval '[ "$rc" = 1 ] &&
   grep -q "root/inputs.env" <<<"$out" && ! grep -q "^git-push.sh" "$W/calls.log"'
 
 setup quoted
-sed -i.bak 's%^  catalog: .*%  catalog: "https://github.com/acme/catalog.git #frag" # a comment%' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+sed -i.bak 's%^  url: .*%  url: "https://github.com/acme/catalog.git #frag" # a comment%' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 sed -i.bak 's#^catalogRepoURL=.*#catalogRepoURL=https://github.com/acme/catalog.git \#frag#' "$D/root/inputs.env"; rm "$D/root/inputs.env.bak"
 run
 t "clusters.yaml: a quoted value keeps its #" eval '[ "$rc" = 0 ] &&
@@ -185,7 +185,7 @@ run
 t "clusters.yaml: GATE_ROOT_SECONDS: 5x stops" eval '[ "$rc" = 1 ] && grep -q "GATE_ROOT_SECONDS" <<<"$out" && [ ! -s "$W/calls.log" ]'
 
 setup nocatalog
-sed -i.bak 's#^  catalog: .*#  catalog: ""#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+sed -i.bak 's#^  url: .*#  url: ""#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 run
 t "no catalog in clusters.yaml: stops and names the key" eval '[ "$rc" = 1 ] && [ ! -s "$W/calls.log" ] &&
   grep -q "set repositories.catalog in clusters.yaml" <<<"$out"'
@@ -193,8 +193,9 @@ t "no catalog in clusters.yaml: stops and names the key" eval '[ "$rc" = 1 ] && 
 # The private file: secrets from .config/clusters.yaml, the environment over it.
 private() { # moves $D's clusters.yaml to .config/ with a secrets block, mode 600; drops the legacy files
   mv "$D/clusters.yaml" "$D/.config/clusters.yaml"; g -C "$D" rm -q --cached clusters.yaml; g -C "$D" commit -qm private
+  SENTINEL=$SENTINEL perl -i -pe '$_ .= "  token: \"$ENV{SENTINEL}-catalog\"\n" if /^  url: /' "$D/.config/clusters.yaml"
   cat >> "$D/.config/clusters.yaml" <<YAML
-github: {deploymentToken: "$SENTINEL-deploy", catalogToken: "$SENTINEL-catalog"}
+deployment: {token: "$SENTINEL-deploy"}
 quay: {username: "rhoai+robot", password: "$SENTINEL-quay"}
 YAML
   chmod 600 "$D/.config/clusters.yaml"; rm -f "$D/.config/deployment-token" "$D/.config/catalog-token" "$D/.config/quay-auth.json"
@@ -215,11 +216,11 @@ AI_GRID_DEPLOYMENT_TOKEN="$SENTINEL-env" run
 t "AI_GRID_DEPLOYMENT_TOKEN beats the file" grep -qx "$SENTINEL-env" "$W/deployment-token-seen"
 
 setup privatemissing; private
-sed -i.bak 's/^github:.*/github: {catalogToken: "'"$SENTINEL"'-catalog"}/' "$D/.config/clusters.yaml"; rm "$D/.config/clusters.yaml.bak"
+sed -i.bak '/^deployment:/d' "$D/.config/clusters.yaml"; rm "$D/.config/clusters.yaml.bak"
 run
 t "no deployment token: installs, git-push uses your git login" eval '[ "$rc" = 0 ] && [ -z "$(cat "$W/deployment-token-path")" ]'
 setup privatenocatalog; private
-sed -i.bak 's/^github:.*/github: {deploymentToken: "'"$SENTINEL"'-deploy"}/' "$D/.config/clusters.yaml"; rm "$D/.config/clusters.yaml.bak"
+sed -i.bak '/^  token: /d' "$D/.config/clusters.yaml"; rm "$D/.config/clusters.yaml.bak"
 run
 t "no catalog token: stops before any cluster call, naming the key" eval '[ "$rc" = 1 ] && [ ! -s "$W/calls.log" ] &&
   grep -q "github.catalogToken in .config/clusters.yaml" <<<"$out"'
@@ -279,7 +280,7 @@ t "rerun, nothing to push: no new commit, hub-root gates on HEAD" eval '[ "$rc" 
   grep -q "gate hub-root: passed" <<<"$out"'
 
 two_sites() { # adds site-b, an inference site, to clusters.yaml
-  printf '%s\n' '- {name: site-b, role: inference, location: us-west, api: "https://api.site-b.example.com:6443"}' >> "$D/clusters.yaml"
+  printf '%s\n' '- {name: site-b, api: "https://api.site-b.example.com:6443"}' >> "$D/clusters.yaml"
   g -C "$D" commit -qam "site-b"
 }
 
@@ -318,7 +319,7 @@ t "an ingress site: no certificate step, no ClusterIssuer read, imported" eval '
   ! grep -q "^== site-files" <<<"$out" && grep -q "^import-site.sh site-a --yes" "$W/calls.log"'
 
 setup issuerkey
-sed -i.bak 's/name: site-a, role: combined,/name: site-a, issuer: acme-prod, role: combined,/' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+sed -i.bak 's/name: site-a,/name: site-a, issuer: acme-prod,/' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 g -C "$D" commit -qam issuer
 run
 t "an issuer: site key is an unknown key now" eval '[ "$rc" = 1 ] && grep -q "unknown keys (typos?): sites\[0\].issuer" <<<"$out" && [ ! -s "$W/calls.log" ]'
