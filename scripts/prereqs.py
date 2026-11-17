@@ -187,7 +187,7 @@ def check_deployment_push(deployment, resolved):
     os.environ["GIT_TERMINAL_PROMPT"] = "0"
     rc, _, err = run(["git", "-C", deployment, "ls-remote", "origin", "HEAD"])
     if rc == 0:
-        report("ok", "deployment push", "with your git login: it reads origin (pushing isn't tried)")
+        report("ok", "deployment push", "no token: your git login can read origin; whether it can push isn't checked")
     else:
         report("FAIL", "deployment push", f"no token, and your git login can't read origin ({first_line(err)}); "
                "log in to GitHub (such as gh auth login), or " + HINTS["DEPLOYMENT_TOKEN_FILE"])

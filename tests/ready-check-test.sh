@@ -239,6 +239,11 @@ W="$T/notoken-w"; ready "$W"
 out=$(env -u DEPLOYMENT_TOKEN_FILE -u AI_GRID_DEPLOYMENT_TOKEN -u GIT_ASKPASS PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?
 t "no token: origin read with your git login" 0 "^OK .*deployment-root Synced" \
   '[ ! -e "$W/askpass.out" ]' '! grep -qF "credential.helper=" "$W/git-argv.log"'
+D="$T/emptytoken"; newrepo "$D"; : > "$D/.config/deployment-token"
+W="$T/emptytoken-w"; ready "$W"
+out=$(env -u DEPLOYMENT_TOKEN_FILE -u AI_GRID_DEPLOYMENT_TOKEN -u GIT_ASKPASS PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?
+t "an empty legacy token file counts as no token, as in git-push.sh" 0 "^OK .*deployment-root Synced" \
+  '! grep -qF "credential.helper=" "$W/git-argv.log"'
 
 # deploymentRevision in root/inputs.env names the branch the hub syncs.
 D="$T/rev"; newrepo "$D"

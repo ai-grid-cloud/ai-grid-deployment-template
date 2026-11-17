@@ -191,7 +191,7 @@ ED=$EM envt "  ... the token hint names github.catalogToken" "^MISSING +catalog 
 ED=$EM envt "  ... no token, no origin: FAIL with how to log in or set the token" "^FAIL +deployment push +no token, and your git login can't read origin .*gh auth login.*make secrets NAME=github"
 ED=$EM envt "  ... never MISSING for the deployment token" "." && { total=$((total+1)); if env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$H1" STUB_DIR="$w" "$PY" "$SCRIPT" --deployment "$EM" 2>&1 | grep -q "^MISSING .*deployment"; then echo "   FAIL deployment token reported MISSING"; fails=$((fails+1)); else echo "   ok     ... (not MISSING)"; fi; }
 git init -q --bare "$T/em-origin.git"; git -C "$EM" init -q; git -C "$EM" remote add origin "$T/em-origin.git"
-ED=$EM envt "  ... no token, origin readable: ok with your git login" "^ok +deployment push +with your git login"
+ED=$EM envt "  ... no token, origin readable: ok with your git login" "^ok +deployment push +no token: your git login can read origin; whether it can push isn't checked"
 # A catalog and no secrets: the legacy files under .config/, not the home directory's.
 E2="$T/env-defaults"; settings_dep "$E2" ""
 cp "$A" "$E2/.config/quay-auth.json"; printf 'x' > "$E2/.config/catalog-token"; chmod 600 "$E2/.config/catalog-token"
