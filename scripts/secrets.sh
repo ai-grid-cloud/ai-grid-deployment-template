@@ -20,7 +20,7 @@
 #   credentials.NAME   each cluster's login, hub first: a token (oc whoami -t),
 #                      or, when you leave the token empty, a username and a
 #                      password. A cluster that has a kubeconfig: is kept as is.
-#   github.deploymentToken   a token that can push to this repository
+#   github.deploymentToken   optional: a token that can push to this repository
 #   github.catalogToken      a token that can write your catalog repository
 #   quay.username, quay.password   the quay.io/rhoai robot account
 #
@@ -129,7 +129,7 @@ one() { # VAR JQ_PATH PROMPT hidden|visible: keeps VAR's current value or asks f
   fi
   printf -v "$1" '%s' "$_v"
 }
-one gh_deploy .github.deploymentToken "Token that can push to this deployment repository" hidden
+one gh_deploy .github.deploymentToken "Optional: a token that can push to this deployment repository; leave it empty to push with your own git login" hidden
 one gh_catalog .github.catalogToken "Token that can write the catalog repository" hidden
 one quay_user .quay.username "The quay.io/rhoai robot account's username" visible
 one quay_pw .quay.password "The quay.io/rhoai robot account's password" hidden
