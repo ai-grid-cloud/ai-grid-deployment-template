@@ -178,7 +178,7 @@ options: {LIBRARY: deployment-template, GATE_ROOT_SECONDS: 900, ALLOW_GENERIC_LO
 t "the hub is always named hub" 0 "^hub$" bash "$d/scripts/clusters.sh" --hub
 t "settings: the catalog" 0 "^CATALOG_REPO_URL=https://github.com/acme/catalog.git$" bash "$d/scripts/clusters.sh" --settings "$d"
 t "settings: the library" 0 "^LIBRARY_REVISION=deployment-template$" bash "$d/scripts/clusters.sh" --settings "$d"
-t "an issuer: on a site is an unknown key" 1 "sites\[0\].issuer" bash "$(repo siteissuer "hub: {api: 'https://h:6443'}
+t "an issuer: on a site is an unknown key" 1 "sites\[s1\].issuer" bash "$(repo siteissuer "hub: {api: 'https://h:6443'}
 sites:
   - {name: s1, api: 'https://s:6443', issuer: x}")/scripts/clusters.sh" --hub
 t "settings: a number" 0 "^GATE_ROOT_SECONDS=900$" bash "$d/scripts/clusters.sh" --settings "$d"
@@ -204,7 +204,7 @@ t "unknown catalog and options keys" 1 "unknown keys \(typos\?\): catalog.uri op
 d=$(repo typo3 "hub: {api: 'https://h:6443'}
 sites:
   - {name: s1, api: 'https://s:6443', isuer: x}")
-t "an unknown site key" 1 "sites\[0\].isuer" bash "$d/scripts/clusters.sh" --hub
+t "an unknown site key" 1 "sites\[s1\].isuer" bash "$d/scripts/clusters.sh" --hub
 d=$(repo multiline "hub: {api: 'https://h:6443'}
 options: {KEYCLOAK: \"a\\nb\"}")
 t "a value spanning lines is refused" 1 "spans lines" bash "$d/scripts/clusters.sh" --settings "$d"
@@ -266,7 +266,7 @@ t "a misspelled hub key is named" 1 "unknown keys \(typos\?\): hub.tokn$" bash "
 d=$(priv pastedkey "hub: {api: 'https://h:6443'}
 sites:
   - {name: s1, api: 'https://s:6443', '$SECRET-as-a-key': x}")
-t "a key that may be a pasted secret: counted, never named" 1 "unknown keys \(typos\?\): sites\[0\] \(1 unknown key\)$" bash "$d/scripts/clusters.sh" --rows "$d"
+t "a key that may be a pasted secret: counted, never named" 1 "unknown keys \(typos\?\): sites\[s1\] \(1 unknown key\)$" bash "$d/scripts/clusters.sh" --rows "$d"
 t "  ... the key never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
 d=$(priv deploykeys "hub: {api: 'https://h:6443'}
 deployment: {'$SECRET-as-a-key': x, other: y}")
@@ -377,10 +377,10 @@ pub hub-password "hub: {api: 'https://h:6443', password: '$SECRET'}" "hub.passwo
 pub hub-username "hub: {api: 'https://h:6443', username: admin}" "hub.username"
 pub site-token "hub: {api: 'https://h:6443'}
 sites:
-  - {name: s1, api: 'https://s:6443', token: '$SECRET'}" "sites\[0\].token"
+  - {name: s1, api: 'https://s:6443', token: '$SECRET'}" "sites\[s1\].token"
 pub site-password "hub: {api: 'https://h:6443'}
 sites:
-  - {name: s1, api: 'https://s:6443', username: admin, password: '$SECRET'}" "sites\[0\].username sites\[0\].password"
+  - {name: s1, api: 'https://s:6443', username: admin, password: '$SECRET'}" "sites\[s1\].username sites\[s1\].password"
 pub catalog-token "hub: {api: 'https://h:6443'}
 catalog: {url: 'https://github.com/o/c.git', token: '$SECRET'}" "catalog.token"
 pub deployment "hub: {api: 'https://h:6443'}
@@ -393,7 +393,7 @@ pub quay "hub: {api: 'https://h:6443'}
 quay: {username: u, password: '$SECRET'}" "quay"
 d=$(priv pub-beside "hub: {api: 'https://h:6443'}")
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\nsites:\n  - {name: s1, api: "https://s:6443", password: "%s"}\n' "$SECRET" > "$d/clusters.yaml"
-t "committed file refuses an inline password, even beside a private one" 1 "can't hold secrets: sites\[0\].password" bash "$d/scripts/clusters.sh" --rows "$d"
+t "committed file refuses an inline password, even beside a private one" 1 "can't hold secrets: sites\[s1\].password" bash "$d/scripts/clusters.sh" --rows "$d"
 t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
 
 d=$(priv pub-github-beside "hub: {api: 'https://h:6443'}")
@@ -453,7 +453,7 @@ t "committed file without options.LIBRARY: no library setting" 0 "^none$" bash -
 d=$(acc accept-token "$FILL"' s/^(\s*)username: admin\s*$// if $. < 16; s/^(\s*)password: fixture-pw\s*$// if $. < 16; s/^  # token: sha256~TOKEN.*/  token: sha256~fixture/;')
 t "acceptance file with a hub token instead: loads" 0 "^sha256~fixture$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret hub token' "$d"
 d=$(acc accept-committed "$FILL"); mv "$d/.config/clusters.yaml" "$d/clusters.yaml"; chmod 644 "$d/clusters.yaml"
-t "acceptance file filled in, committed: refused for its secrets" 1 "can't hold secrets: hub.username hub.password sites\[0\].username" bash "$d/scripts/clusters.sh" --rows "$d"
+t "acceptance file filled in, committed: refused for its secrets" 1 "can't hold secrets: hub.username hub.password sites\[site-1\].username" bash "$d/scripts/clusters.sh" --rows "$d"
 
 # clusters-example.yaml: copied to the committed clusters.yaml (page 2), it
 # holds no secret, so filled in it loads page by page.

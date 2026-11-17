@@ -311,7 +311,7 @@ setup issuerkey
 sed -i.bak 's/name: site-a,/name: site-a, issuer: acme-prod,/' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 g -C "$D" commit -qam issuer
 run
-t "an issuer: site key is an unknown key now" eval '[ "$rc" = 1 ] && grep -q "unknown keys (typos?): sites\[0\].issuer" <<<"$out" && [ ! -s "$W/calls.log" ]'
+t "an issuer: site key is an unknown key now" eval '[ "$rc" = 1 ] && grep -q "unknown keys (typos?): sites\[site-a\].issuer" <<<"$out" && [ ! -s "$W/calls.log" ]'
 
 t "no token value in any output" eval '[ -n "$all_out" ] && ! grep -qF "$SENTINEL" <<<"$all_out" &&
   ! grep -rqF "$SENTINEL" "$T"/*/repo/.install "$T"/*/stub/calls.log "$T"/*/stub/argv.log 2>/dev/null'

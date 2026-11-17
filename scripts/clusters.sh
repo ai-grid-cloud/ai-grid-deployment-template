@@ -3,7 +3,7 @@
 # exists (private: git-ignored, mode 600, and the only place secrets may go),
 # else clusters.yaml at the root (copied from clusters-example.yaml). It says
 # only how to reach each cluster: the hub and each site with its API URL and,
-# in the private file only, its token or username and password; make
+# in the private file only, its token or username and password;
 # the catalog repository (catalog.url; its token, catalog.token, in the private
 # file only); make install's settings (options:); and, in the private file
 # only, deployment.token and quay:. Roles and locations aren't in it: the
@@ -74,12 +74,13 @@ clusters_load() {
        ! left=$(jq -r '
         def secrets($p): objects | ["token", "username", "password"][] as $k | select(has($k)) | "\($p).\($k)";
         (.hub | secrets("hub")),
-        ((.sites // []) | arrays | to_entries[] | .key as $i | .value | secrets("sites[\($i)]")),
+        ((.sites // []) | arrays | to_entries[] | .key as $i | .value | objects
+          | secrets("sites[\(.name | if type == "string" and test("\\A[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\z") then . else $i end)]")),
         (.catalog | objects | select(has("token")) | "catalog.token"),
         (["credentials", "github", "deployment", "quay"][] as $k | select(has($k)) | $k)' <<<"$cjson" 2>/dev/null); then
       echo "error: clusters.yaml isn't valid YAML" >&2; return 1
     fi
-    left=$(echo $left)
+    left=$(tr '\n' ' ' <<<"$left"); left=${left% }
     [ -z "$left" ] || { echo "error: clusters.yaml is committed, so it can't hold secrets: $left: move them to .config/clusters.yaml (chmod 600), which git ignores" >&2; return 1; }
     # Beside the private file, an old committed file would otherwise go unnoticed.
     left=$(_old_format <<<"$cjson")
@@ -116,8 +117,9 @@ clusters_load() {
       ((.deployment // {}) | keys - ["token"] | count("deployment")),
       ((.quay // {}) | keys - ["username", "password"] | count("quay")),
       ((.hub // {}) | keys - ["api", "token", "username", "password"] | beside("hub")),
-      ((.sites // []) | to_entries[] | .key as $i | (.value // {}) | keys
-        - ["name", "api", "token", "username", "password"] | beside("sites[\($i)]")),
+      ((.sites // []) | to_entries[] | .key as $i | (.value // {})
+        | (.name | if type == "string" and test("\\A[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\z") then . else $i end) as $ref
+        | keys - ["name", "api", "token", "username", "password"] | beside("sites[\($ref)]")),
       ((.options // {}) | keys | map(select(test($opts) | not)) | map("options." + .))
       | .[]' <<<"$json" | tr '\n' ' ')
   [ -z "$left" ] || { echo "error: clusters.yaml: unknown keys (typos?): ${left% }" >&2; return 1; }
@@ -125,12 +127,16 @@ clusters_load() {
   # secret's path, never its value. In the committed file the catalog URL's
   # is allowed: it means no catalog yet (settings_lines).
   left=$(jq -r '
-      def path_text: map(if type == "number" then "[\(.)]" else ".\(.)" end) | join("") | ltrimstr(".") | gsub("\\.\\["; "[");
+      # A site is named by its name when that is a DNS label (not a placeholder), else by its index.
+      def site_ref($root; $i): ($root.sites[$i].name) as $n
+        | if ($n | type) == "string" and ($n | test("\\A[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\z")) then $n else $i end;
+      def path_text($root): (if .[0] == "sites" and (.[1] | type) == "number" then ["sites[\(site_ref($root; .[1]))]"] + .[2:] else . end)
+        | map(if type == "number" then "[\(.)]" else ".\(.)" end) | join("") | ltrimstr(".") | gsub("\\.\\["; "[");
       def secret_paths: paths(strings) | select(.[0] == "deployment" or .[0] == "quay" or . == ["catalog", "token"]
         or ((.[0] == "hub" or .[0] == "sites") and (.[-1] | IN("token", "username", "password"))));
       ([secret_paths] as $s | (if $private then . else del(.catalog.url) end) | reduce $s[] as $p (.; delpaths([$p]))
         | .. | strings | select(test("REQUIRED-")) | match("REQUIRED-[A-Za-z]+").string),
-      (secret_paths as $p | select(getpath($p) | test("REQUIRED-")) | $p | path_text)' --argjson private "$([ -n "$private" ] && echo true || echo false)" <<<"$json" | awk '!seen[$0]++' | tr '\n' ' ')
+      (. as $root | secret_paths as $p | select(getpath($p) | test("REQUIRED-")) | $p | path_text($root))' --argjson private "$([ -n "$private" ] && echo true || echo false)" <<<"$json" | awk '!seen[$0]++' | tr '\n' ' ')
   [ -z "$left" ] || { echo "error: set these in $rel: ${left% }" >&2; return 1; }
   # One tab-separated row per cluster: what (hub or site N), name, kind, api.
   while IFS=$'\t' read -r what name kind api; do
