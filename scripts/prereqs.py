@@ -13,7 +13,7 @@ The clusters come from the deployment's clusters.yaml, each with its login in
 Without --quay-auth-file and --catalog-token-file, it checks the secrets make
 install uses, as scripts/clusters.sh deployment_load finds them (clusters.sh
 --resolve): AI_GRID_* values, then QUAY_AUTH_FILE and CATALOG_TOKEN_FILE, then
-quay: and github: in .config/clusters.yaml, then .config/quay-auth.json and
+quay:, catalog.token and deployment.token in .config/clusters.yaml, then .config/quay-auth.json and
 .config/catalog-token. That refreshes .config/generated/ from .config/clusters.yaml,
 the only thing it writes. Page by page (no .config/clusters.yaml and no catalog in
 clusters.yaml or CATALOG_REPO_URL), the environment variables apply, else
@@ -265,11 +265,8 @@ def check_registry(auth_file, from_settings=False, label=None):
         report("FAIL", "pull the pinned catalog", f"{short}: {first_line(err or out) or 'oc image info failed'}")
 
 
-ROLES = ("hub", "combined", "ingress", "inference")
-
-
 def read_clusters(deployment):
-    """[(name, role)] from DIR/clusters.yaml, or an error string. scripts/clusters.sh reads and checks it."""
+    """[(name, kind)] from DIR/clusters.yaml, kind hub or site, or an error string. scripts/clusters.sh reads and checks it."""
     if not clusters_file(deployment):
         return "no clusters.yaml: run cp clusters-example.yaml clusters.yaml and fill it in"
     if not (shutil.which("kubectl") and shutil.which("jq")):
@@ -291,13 +288,12 @@ def check_clusters(deployment):
         section("Clusters")
         report("skipped", "cluster checks", rows)
         return
-    for name, role in rows:
-        check_cluster(name, role, os.path.join(deployment, ".config", name, "kubeconfig"))
+    for name, kind in rows:
+        check_cluster(name, kind, os.path.join(deployment, ".config", name, "kubeconfig"))
 
 
-def check_cluster(name, role, kubeconfig):
-    site = role != "hub"
-    section(f"Site {name} ({role})" if site else f"Hub {name}")
+def check_cluster(name, kind, kubeconfig):
+    section(f"Hub {name}" if kind == "hub" else f"Site {name}")
     names = ["reachable", "OpenShift 4.21 or later", "cluster-admin", "default StorageClass"]
     if not os.path.isfile(kubeconfig):
         report("skipped", f"{name} checks", f"no login: run make login NAME={name}")
@@ -427,7 +423,7 @@ def from_value(source):
 def deployment_settings(deployment):
     """{KEY: value} for the install settings in DIR/clusters.yaml, read by scripts/clusters.sh
     --settings as scripts/install.sh reads them, or None when it can't be read or sets no
-    repositories.catalog."""
+    catalog.url."""
     if not (clusters_file(deployment) and shutil.which("kubectl") and shutil.which("jq")):
         return None
     env = dict(os.environ, PATH=os.environ.get("PATH", "") + ":/usr/bin:/bin")
