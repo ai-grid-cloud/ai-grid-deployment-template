@@ -6,6 +6,9 @@
 #   scripts/secrets.sh           asks for each secret the file doesn't hold yet
 #   FORCE=1 scripts/secrets.sh   asks for every one again (only 1 counts); an
 #                                answer replaces the value, an empty one keeps it
+#   scripts/secrets.sh --config  only creates .config/clusters.yaml from
+#                                clusters-example.yaml, for you to edit (make
+#                                config); it never overwrites one
 #   scripts/secrets.sh NAME      asks only for NAME's secrets and replaces them,
 #                                whatever is stored (make secrets NAME=NAME): a
 #                                cluster's name (its token, or username and
@@ -36,11 +39,20 @@ cfg="$root/.config" file="$root/.config/clusters.yaml"
 force=""; [ "${FORCE:-}" != 1 ] || force=1
 MARK='# Secrets (make secrets writes this part; you can edit it).'
 
+from_example() { # starts the private file from the example, for you to fill in
+  ( umask 077; mkdir -p "$cfg"; cp "$root/clusters-example.yaml" "$file" )
+  chmod 700 "$cfg"; chmod 600 "$file"
+}
+if [ "${1:-}" = --config ]; then
+  [ ! -e "$file" ] || { echo "error: .config/clusters.yaml already exists; edit it, or move it away first" >&2; exit 1; }
+  from_example
+  echo "Created .config/clusters.yaml from clusters-example.yaml (readable only by you): edit it."
+  exit 0
+fi
+
 if [ ! -f "$file" ]; then
   if [ ! -f "$root/clusters.yaml" ]; then
-    # A first run: start the private file from the example, for you to fill in.
-    ( umask 077; mkdir -p "$cfg"; cp "$root/clusters-example.yaml" "$file" )
-    chmod 700 "$cfg"; chmod 600 "$file"
+    from_example
     # Not an error: the first step of a new deployment.
     echo "Created .config/clusters.yaml from clusters-example.yaml: edit it, then run make secrets again."
     exit 0

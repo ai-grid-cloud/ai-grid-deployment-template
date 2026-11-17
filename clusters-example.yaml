@@ -43,8 +43,9 @@ sites:
 
 repositories:
   # The catalog repository the provider console writes models and
-  # subscriptions to, such as https://github.com/OWNER/CATALOG.git.
-  catalog: ""
+  # subscriptions to, such as https://github.com/OWNER/CATALOG.git. Page by
+  # page, leave it as it is.
+  catalog: REQUIRED-catalogRepoURL
   # The library revision make install pins: a branch, a tag or a full commit
   # SHA, resolved to its current commit on each run. Empty keeps the
   # template's own pin in root/kustomization.yaml.
@@ -90,8 +91,9 @@ options:
 #                                # next day; or
 #     # kubeconfig: /path/to/kubeconfig   # a working kubeconfig to copy
 # github:
-#   deploymentToken: github_pat_TOKEN   # can push to this repository
 #   catalogToken: github_pat_TOKEN      # can write the catalog repository
+#   # deploymentToken: github_pat_TOKEN # optional, for CI: can push to this repository;
+#                                       # without it, make install uses your own git login
 # quay:                          # your quay.io/rhoai robot account
 #   username: rhoai+robot
 #   password: PASSWORD

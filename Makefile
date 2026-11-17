@@ -10,7 +10,7 @@
 # KEYCLOAK_REALM default to the template's tenant-idp and tenants (console-secrets).
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
-.PHONY: help secrets login prereqs inputs check bootstrap status console-secrets console-call test update \
+.PHONY: help config secrets login prereqs inputs check bootstrap status console-secrets console-call test update \
   site-check site-wipe site-import site-join site-status tenant-user tenant-call \
   empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
 
@@ -24,6 +24,9 @@ need = $(if $($(1)),,$(error set $(1), such as: make $@ $(1)=$(2)))
 
 help: ## Show the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /: /'
+
+config: ## Create .config/clusters.yaml from clusters-example.yaml for you to edit; never overwrites it (page 9)
+	@scripts/secrets.sh --config
 
 secrets: ## Ask for each cluster's token or username and password, the two GitHub tokens and the quay.io/rhoai robot account; write them to .config/clusters.yaml (FORCE=1 replaces; NAME=cluster, github or quay asks for that one only)
 	@FORCE=$(FORCE) scripts/secrets.sh $(NAME)
