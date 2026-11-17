@@ -54,11 +54,13 @@ Tell the install which clusters and repositories to use, and give it the credent
    make config
    ```
 
-   It copies `clusters-example.yaml` to `.config/clusters.yaml`, readable only by you, and prints `edit it`. Git
+   It copies `clusters-example.yaml` to `.config/clusters.yaml`, readable only by you, and prints `edit it`. If you
+   already have a `clusters.yaml` at the root (from pages 1 to 8), it copies that one instead. Git
    ignores `.config/`, so the file stays on your machine and can hold your secrets. It never overwrites a file that's
    already there.
 
-3. Open `.config/clusters.yaml` in an editor and fill it in. Each field has a comment that says what it is.
+3. Open `.config/clusters.yaml` in an editor and fill it in. Each field has a comment that says what it is. The
+   secret lines are commented out in the example: uncomment each one you use and fill it in.
 
    - **`hub` and `sites`:** replace each `REQUIRED-` value, and add an entry under `sites:` for each site, with
      its `name` and `api`. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't
@@ -66,9 +68,9 @@ Tell the install which clusters and repositories to use, and give it the credent
      cluster: no role and no location.
    - **`catalog.url`:** the URL of the catalog repository you create in step 4, such as
      `https://github.com/my-org/ai-grid-catalog.git`. Pick its owner and name now.
-   - **The secrets:** in `hub:` and in each site's entry, give a `cluster-admin` `token`, or a `username` and
+   - **The secrets:** in `hub:` and in each site's entry, uncomment and fill in a `cluster-admin` `token`, or a `username` and
      `password`. A cluster token usually expires in about 24 hours; with a username and password, the scripts get a
-     fresh token on every run, so a rerun the next day works. Fill in `quay:` too. You set `catalog.token` in
+     fresh token on every run, so a rerun the next day works. Uncomment and fill in `quay:` too. You set `catalog.token` in
      step 5, and leave `deployment:` commented.
 
    For example:
@@ -376,7 +378,7 @@ its role and location there. The hub then installs OpenShift AI, MaaS and the gr
 
 - The tenant Keycloak imports its realm only once, on its first start (`--override false`). A site you add to
   `.config/clusters.yaml` after the first install doesn't get its portal redirect, `https://maas.APPS_DOMAIN/*`,
-  automatically.
+  automatically. To add it, see [A tenant can't sign in to the portal on a site added after the install](troubleshooting.md#a-tenant-cant-sign-in-to-the-portal-on-a-site-added-after-the-install).
 - The MaaS gateway uses the cluster's internal certificate, so tenants' clients don't trust it until you add your own
   certificate.
 - `make install` always installs its own Keycloak. Using an existing one, with `KEYCLOAK` under `options:`, comes
