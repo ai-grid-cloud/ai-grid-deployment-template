@@ -3,7 +3,7 @@
 #
 # - .config/clusters.yaml, for the one-command install (install guide, page 9).
 #   It's private: git ignores .config/, and the file also holds your secrets
-#   (the credentials:, github: and quay: sections at the end). make secrets
+#   (the credentials:, github: and quay: sections at the end). make config
 #   creates it from this file, readable only by you. The scripts stop if the
 #   file is readable by anyone but you.
 #
