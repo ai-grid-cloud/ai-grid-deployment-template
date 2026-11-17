@@ -10,7 +10,7 @@ A GitHub template for an AI Grid **deployment repository**. You create your own 
 Argo CD installs AI Grid from that repository:
 
 - **On the hub:** ACM, the grid, the MaaS database and Redis, a Keycloak for tenants, and the provider console.
-- **On each site:** OpenShift AI with MaaS and the grid, in the site's role.
+- **On each site:** OpenShift AI with MaaS and the grid, in the role you choose when you add it in the provider console.
 
 The template carries choices tested end to end on 2026-11-10, so you change only your names.
 

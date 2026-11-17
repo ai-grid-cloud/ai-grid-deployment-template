@@ -26,8 +26,9 @@ again.
    cp clusters-example.yaml clusters.yaml
    ```
 
-   In `clusters.yaml`, replace each `REQUIRED-` value: the hub's API URL, and the site's name, location and API URL.
-   Keep the site's role, `combined`: the guide's commands use it. The guide calls the hub `hub`. Leave the
+   In `clusters.yaml`, replace each `REQUIRED-` value: the hub's API URL, and the spoke's name and API URL. The file
+   says only how to reach each cluster: you choose the spoke's role and location when you add it to the grid in the
+   provider console, on page 6. The guide calls the hub `hub`. Leave the
    `repositories:` and `options:` sections as they are: they're for `make install`, and these pages name the catalog
    with `make inputs CATALOG=` instead. To find a cluster's API URL, open its web console, click your user name >
    **Copy login command**, and read the `--server=` value, or take it from the cluster installer's output. For example:
@@ -37,16 +38,18 @@ again.
    kind: Clusters
    hub:
      api: https://api.hub.example.com:6443
-   sites:
+   spokes:
      - name: site-east-1
-       role: combined
-       location: us-east
        api: https://api.site-east-1.example.com:6443
    ```
 
-   The site's name becomes its ACM cluster name, and you can't change it once the site is imported. Commit
-   `clusters.yaml` with your other changes in part 5; it records which clusters make up your grid, and holds no
-   secrets. This guide keeps that committed file. If a private `.config/clusters.yaml` exists, from
+   <!-- TODO(D11): how the tenant portal's redirect (portalRedirectURI) picks its spoke; open decision. -->
+
+   The spoke's name is a DNS label. It becomes the site's ACM cluster name, and you can't change it once the site is
+   imported. Commit `clusters.yaml` with your other changes in part 5; it records which clusters make up your grid,
+   and holds no secrets: the scripts refuse a `token`, `username` or `password` on the hub or a spoke, and the
+   `github:` and `quay:` sections. A file in the old format, with `sites:`, `credentials:`, `role:` or `location:`,
+   stops with a message that says what to change. This guide keeps that committed file. If a private `.config/clusters.yaml` exists, from
    [Install with one command](09-hands-off.md), the scripts read it instead.
 
 3. Log in to each cluster as a `cluster-admin` user:

@@ -1,7 +1,7 @@
 # Prepare the site and join it to ACM
 
-On this page you check the site and import it into ACM. The site's name in `clusters.yaml` becomes its ACM cluster
-name. The `make` targets on this page work on the only site in your `clusters.yaml`. With several sites, add the
+On this page you check the site and import it into ACM. The spoke's `name` in `clusters.yaml` becomes its ACM
+cluster name. The `make` targets on this page work on the only site in your `clusters.yaml`. With several sites, add the
 site's name, such as `make site-import SITE=SITE_NAME`.
 
 If the cluster was a site of another hub, first [reuse it](#reuse-a-cluster-from-another-hub).
@@ -69,7 +69,7 @@ Run again for a site that's already joined and available, it says `already impor
 
 The site joins ACM, and the hub's Argo CD registers it. The hub then prepares the site: it creates empty namespaces
 for OpenShift AI and the grid, delivers the registry logins, labels the Submariner gateway nodes and starts
-Submariner. OpenShift AI and the grid wait for the labels you add on the next page.
+Submariner. OpenShift AI and the grid wait until you add the site to the grid on the next page.
 
 The import ends with `Import complete.` once the ManagedCluster has joined and the hub's Argo CD has its cluster
 Secret for the site; the script waits for both.
