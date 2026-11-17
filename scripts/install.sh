@@ -25,7 +25,7 @@
 #   inputs           scripts/set-library.sh LIBRARY_REVISION (when set),
 #                    scripts/set-inputs.sh (make inputs), a check that
 #                    root/inputs.env names the same catalog, then
-#                    scripts/git-push.sh of root/ and the tenant IdP settings
+#                    scripts/git-push.sh of root/
 #   catalog          scripts/empty-catalog.sh --check: the catalog repository
 #                    must hold nothing but its README; the install never empties it.
 #                    Skipped when the hub's root ApplicationSet apps already names
@@ -40,16 +40,13 @@
 #                    safe to rerun
 #   hub-apps         gate hub-apps: every hub Application Synced and Healthy,
 #                    except those waiting for a site
-#   tenant-redirects scripts/tenant-redirects.sh: the portal redirect of every
-#                    site, from the tenant IdP settings, in the live tenant realm
-# Then the sites phase, unless --hub-only. A site's MaaS gateway gets a
-# certificate of its own only when its clusters.yaml entry names an issuer
-# (maasCertificate.issuer); otherwise it keeps the chart's internal certificate,
-# as upstream does, and the library sets its hostname, maas.<apps domain>.
+# The tenant portal's sign-in redirects need no step: the library Keycloak's
+# CronJob keycloak-redirect-uris registers every ingress or combined site's.
+# Then the sites phase, unless --hub-only. A site's MaaS gateway keeps the
+# chart's internal certificate, and the library sets its hostname,
+# maas.<apps domain> (docs/upstream-main-limits.md).
 # Then for each site in clusters.yaml order:
-#   site NAME        scripts/site-check.sh NAME, scripts/site-files.sh NAME and
-#                    scripts/git-push.sh of the files it writes,
-#                    scripts/import-site.sh NAME --yes,
+#   site NAME        scripts/site-check.sh NAME, scripts/import-site.sh NAME --yes,
 #                    then gate site-NAME-import: ManagedCluster NAME available
 # then gate hub-apps-final: every hub Application Synced and Healthy, except
 # those waiting for a site. Last:
@@ -194,7 +191,17 @@ step_inputs() {
     echo "error: root/inputs.env names the catalog $have, but clusters.yaml's catalog.url is $want; set-inputs.sh keeps a value that's set. Edit catalogRepoURL in root/inputs.env, or delete that line so set-inputs.sh writes it again." >&2
     stopped inputs
   fi
-  run_step inputs git-push.sh "install: inputs and library pin" root/ tenant-idp/manifests/settings.yaml
+  # hubCertManager=library adds the library's cert-manager OperatorGroup; a hub
+  # that runs the platform's would then fail both (TooManyOperatorGroups). This
+  # runs on every install, a rerun or an upgraded hub too, before the push.
+  local pre
+  pre=$("$here/check-prerequisites.sh" --step hub --cluster "$(hub_name)" --cert-manager "$(inputs_value hubCertManager)" 2>&1 || true)
+  if grep -qE '^(FOUND|MISSING) +cert-manager OperatorGroup' <<<"$pre"; then
+    grep -E '^(FOUND|MISSING) +cert-manager OperatorGroup' <<<"$pre" >&2
+    echo "error: set hubCertManager=platform in root/inputs.env (or fix the read), commit it, then run make install again" >&2
+    stopped inputs
+  fi
+  run_step inputs git-push.sh "install: inputs and library pin" root/ hub/catalog/
   pushed=$(git -C "$dir" rev-parse HEAD)
 }
 
@@ -243,11 +250,6 @@ step_hub_apps() {
   hub_gate hub-apps "$GATE_HUB_APPS_SECONDS" apps_healthy ${in_use:+--in-use}
 }
 
-step_tenant_redirects() {
-  step tenant-redirects
-  run_step tenant-redirects tenant-redirects.sh
-}
-
 hub_phase() {
   step_login
   step_inputs
@@ -256,23 +258,16 @@ hub_phase() {
   step_acm
   step_console_secrets
   step_hub_apps
-  step_tenant_redirects
 }
 
 # --- sites phase -------------------------------------------------------------
 
-step_site() { # NAME: check the site, write and push its own files, import it into the hub's ACM, wait until it's available
+step_site() { # NAME: check the site, import it into the hub's ACM, wait until it's available
   local name=$1
   step "site $name"
   # site-check.sh prints its own OK, MISSING or FOUND lines, a previous install
   # included; they stay above the stop line.
   run_step "site $name" site-check.sh "$name"
-  # Its values, and its MaaS certificate when it names an issuer, reach the
-  # hub before the site can join the grid (scripts/site-files.sh).
-  run_step "site $name" site-files.sh "$name"
-  run_step "site $name" git-push.sh "install: site $name files" \
-    "values/clusters/$name/rhoai.yaml" "sites/$name/maas-tls/certificate.yaml" \
-    "sites/$name/maas-tls/kustomization.yaml" "apps/$name-maas-tls.yaml"
   # import-site.sh leaves a site that is already joined and available alone.
   run_step "site $name" import-site.sh "$name" --yes
   hub_gate "site-$name-import" "$GATE_SITE_IMPORT_SECONDS" managedcluster_available "$name"

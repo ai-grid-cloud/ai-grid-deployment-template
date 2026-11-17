@@ -1,0 +1,41 @@
+# The hub's observability chart (the library's charts/ai-grid-o11y). The
+# library's dedicated-hub root generates this Application from a list generator
+# with its own values/hub/ai-grid-o11y/values.yaml; here the optional values
+# file is this repository's (none by default). Same format as the library's
+# apps/*/application.yaml.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-grid-o11y
+  namespace: openshift-gitops
+spec:
+  project: default
+  sources:
+    - repoURL: '@deploymentRepoURL@'
+      targetRevision: '@deploymentRevision@'
+      ref: deployment
+    - repoURL: '@libraryRepoURL@'
+      targetRevision: '@libraryRevision@'
+      path: charts/ai-grid-o11y
+      helm:
+        ignoreMissingValueFiles: true
+        valueFiles:
+          - values.yaml
+          - $deployment/values/hub/ai-grid-o11y/values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: open-cluster-management-observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      refresh: true
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 10m
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true

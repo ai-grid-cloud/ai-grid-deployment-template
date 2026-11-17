@@ -39,11 +39,6 @@ sites:
     # username: kubeadmin
     # password: PASSWORD
     # token: sha256~TOKEN
-    # Optional, for an ingress or combined site: a cert-manager ClusterIssuer
-    # on the site that issues publicly trusted certificates by DNS-01. make
-    # install then gives the MaaS gateway its own certificate (page 9).
-    # maasCertificate:
-    #   issuer: letsencrypt-dns01
   # Another site: copy the lines above, from "- name:".
 
 # The catalog repository the provider console writes models and subscriptions to.
@@ -67,7 +62,7 @@ catalog:
 # line to change it. A setting left out comes from the environment variable of
 # the same name, else the default.
 options:
-  # LIBRARY: deployment-template         # the library revision make install pins: a branch, a tag or a full SHA; empty keeps root/kustomization.yaml's
+  # LIBRARY: main                        # repin the library at this revision (a branch, a tag or a full SHA); left out, root/applicationset.yaml's pin stands
   # KEYCLOAK: install                    # only "install" is supported
   # ALLOW_GENERIC_LOGIN: 1               # let bootstrap use a general quay.io login from QUAY_AUTH_FILE
   # PROVIDER_ADMIN_TOKEN_DURATION: 168h  # lifetime of .config/provider-admin-token

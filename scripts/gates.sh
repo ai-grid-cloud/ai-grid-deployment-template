@@ -50,8 +50,6 @@
 : "${GATE_ROOT_SECONDS:=600}"         # deployment-root Synced
 : "${GATE_MCH_SECONDS:=1800}"         # MultiClusterHub Running
 : "${GATE_HUB_APPS_SECONDS:=5400}"    # every hub Application
-: "${GATE_O11Y_SECONDS:=2700}"        # ODF and the o11y Applications
-: "${GATE_TENANT_IDP_SECONDS:=1800}"  # tenant-idp
 : "${GATE_SITE_IMPORT_SECONDS:=900}"  # a site's import
 : "${GATE_READY_SECONDS:=600}"        # the ready check (make install's last gate)
 

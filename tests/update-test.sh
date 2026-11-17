@@ -51,45 +51,69 @@ t "  ... which is the template's" 0 "^template updater marker$" cat "$T/last"
 t "  ... once" 0 "^1$" grep -c "Running the template's latest" "$T/last"
 (cd "$mine" && git merge --abort)
 
-# With the real root/, rendered against a local copy of the library (lib2) so
-# check-deployment.sh runs offline. Both repositories sit at the same depth, so
-# one relative path reaches lib2 from either root.
-LIB=$(cd "$SRC" && scripts/library.sh); lib2="$T/lib2"; cp -R "$LIB" "$lib2"
+# With the real root/, pinned at a local copy of the library's commits (lib2):
+# check-deployment.sh runs offline (it reads no library).
+# lib2 is a repository of its own (never a copy of a library checkout, whose
+# .git may be a worktree link back to a real library repository).
+lib2="$T/lib2"; g init -q "$lib2"; g -C "$lib2" commit -q --allow-empty -m "a library commit"
 pin() { git -C "$lib2" rev-parse HEAD; }
-localize() { # root dir: the library from lib2 at its HEAD
-  sed -i.bak -E -e "s#^  - https://github.com/[^ ]+//bootstrap/hub\?ref=[0-9a-f]+#  - ../../lib2/bootstrap/hub#" \
-    -e "s/[0-9a-f]{40}/$(pin)/g" "$1/kustomization.yaml"; rm "$1/kustomization.yaml.bak"
+localize() { # root dir: pinned at lib2's HEAD
+  sed -i.bak -E -e "s/[0-9a-f]{40}/$(pin)/g" "$1/applicationset.yaml"; rm "$1/applicationset.yaml.bak"
+}
+fill_catalog() { # repo dir: hub/catalog names the catalog input, as set-inputs.sh writes it
+  local f; for f in "$1"/hub/catalog/*.yaml; do
+    sed -i.bak -e 's#REQUIRED-catalogRepoURL#https://github.com/acme/catalog.git#g' -e 's#REQUIRED-catalogRevision#main#g' "$f"; rm "$f.bak"
+  done
 }
 runl() { (cd "$mine" && TEMPLATE_URL="$tpl" LIBRARY="$lib2" bash scripts/update-from-template.sh); }
 
 # A repository from the template with its inputs set: root/inputs.env is its
 # own file, which the template doesn't have.
-tpl="$T/tpl-root"; mkdir -p "$tpl"; cp -R "$SRC/scripts" "$SRC/root" "$tpl/"; rm -f "$tpl/root/inputs.env"
+tpl="$T/tpl-root"; mkdir -p "$tpl"; cp -R "$SRC/scripts" "$SRC/root" "$SRC/apps" "$SRC/hub" "$tpl/"; rm -f "$tpl/root/inputs.env"
 localize "$tpl/root"; g -C "$tpl" init -q && g -C "$tpl" add -A && g -C "$tpl" commit -qm "root"
-mine="$T/mine-root"; mkdir -p "$mine"; cp -R "$tpl/scripts" "$tpl/root" "$mine/"
+mine="$T/mine-root"; mkdir -p "$mine"; cp -R "$tpl/scripts" "$tpl/root" "$tpl/apps" "$tpl/hub" "$mine/"
 g -C "$mine" init -q && g -C "$mine" add -A && g -C "$mine" commit -qm "Initial commit"
 printf '%s\n' deploymentRepoURL=https://github.com/acme/deploy.git deploymentRevision=main \
-  catalogRepoURL=https://github.com/acme/catalog.git catalogRevision=main \
-  idpIssuerURL=https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants > "$mine/root/inputs.env"
+  catalogRepoURL=https://github.com/acme/catalog.git catalogRevision=main keycloakOverlay=core hubCertManager=library > "$mine/root/inputs.env"
+fill_catalog "$mine"
 g -C "$mine" add -A && g -C "$mine" commit -qm "set our names"
 
 # A template commit that moves the library pin merges cleanly.
 g -C "$lib2" commit -q --allow-empty -m "new pin"
 localize "$tpl/root"; g -C "$tpl" commit -qam "move the pin"
 t "a pin move merges with your inputs set, and checks" 0 "every repository is an input" runl
-t "  ... takes the new pin" 0 "libraryRevision: $(pin)" cat "$mine/root/kustomization.yaml"
+t "  ... takes the new pin" 0 "libraryRevision: &libraryRevision $(pin)" cat "$mine/root/applicationset.yaml"
 t "  ... keeps your inputs" 0 "^catalogRepoURL=https://github.com/acme/catalog.git$" cat "$mine/root/inputs.env"
 t "  ... in the merge commit only" 0 "^Merge the template's main$" g -C "$mine" log -1 --format=%s
 
 # A merge that leaves an input unset says not to push.
-sed -i.bak 's#^idpIssuerURL=.*#idpIssuerURL=#' "$mine/root/inputs.env"; rm "$mine/root/inputs.env.bak"
-g -C "$mine" commit -qam "unset the issuer"; echo "# note" >> "$tpl/root/self.yaml"; g -C "$tpl" commit -qam "a template change"
+sed -i.bak 's#^catalogRevision=.*#catalogRevision=#' "$mine/root/inputs.env"; rm "$mine/root/inputs.env.bak"
+g -C "$mine" commit -qam "unset the catalog revision"; echo "# note" >> "$tpl/root/self.yaml"; g -C "$tpl" commit -qam "a template change"
 t "a failing check says don't push" 1 "DON'T PUSH" runl
+
+# Your tenant-idp settings, which the template deleted: the merge stops on them
+# and prints how to finish.
+mkdir -p "$tpl/tenant-idp/manifests"; echo "portalRedirectURI: REQUIRED-portalRedirectURI" > "$tpl/tenant-idp/manifests/settings.yaml"
+g -C "$tpl" add -A && g -C "$tpl" commit -qm "tenant-idp"
+g -C "$mine" checkout -q -- . 2>/dev/null || true
+sed -i.bak 's#^catalogRevision=.*#catalogRevision=main#' "$mine/root/inputs.env"
+rm "$mine/root/inputs.env.bak"; g -C "$mine" commit -qam "the catalog revision again"
+runl >/dev/null 2>&1 || true
+echo "portalRedirectURI: https://maas.apps.site.example.com/*" > "$mine/tenant-idp/manifests/settings.yaml"
+g -C "$mine" commit -qam "my redirects"
+g -C "$tpl" rm -rq tenant-idp && g -C "$tpl" commit -qm "the library's Keycloak"
+t "a deleted tenant-idp/ you changed stops the merge" 1 "conflict in tenant-idp/manifests/settings.yaml" runl
+cp "$T/last" "$T/out"
+t "  ... says to remove it" 0 "^  git rm -rq tenant-idp && git commit --no-edit$" cat "$T/out"
+t "  ... then make inputs" 0 "^  make inputs$" cat "$T/out"
+t "  ... and not the generic edit-each-file line" 1 "^0$" grep -c "Edit each file" "$T/out"
+finish() { (cd "$mine" && g rm -rq tenant-idp && g commit -q --no-edit && git status --porcelain); }
+t "  ... and those steps finish the merge" 0 "^$" finish
 
 # A repository from the template that was never installed: no root/inputs.env
 # yet, which make install (or make inputs) writes. The update merges and says
 # so, instead of failing the check.
-mine="$T/mine-fresh"; mkdir -p "$mine"; cp -R "$tpl/scripts" "$tpl/root" "$mine/"
+mine="$T/mine-fresh"; mkdir -p "$mine"; cp -R "$tpl/scripts" "$tpl/root" "$tpl/apps" "$tpl/hub" "$mine/"
 g -C "$mine" init -q && g -C "$mine" add -A && g -C "$mine" commit -qm "Initial commit"
 echo "# another note" >> "$tpl/root/self.yaml"; g -C "$tpl" commit -qam "another template change"
 t "no inputs.env yet merges without don't push" 0 "root/inputs.env isn't written yet" runl
@@ -117,7 +141,7 @@ else
   g -C "$mine" init -q && g -C "$mine" add -A && g -C "$mine" commit -qm "Initial commit"
   sed -i.bak -e 's#REQUIRED-deploymentRepoURL#https://github.com/acme/deploy.git#' \
     -e 's#REQUIRED-catalogRepoURL#https://github.com/acme/catalog.git#' \
-    -e 's#REQUIRED-idpIssuerURL#https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants#' \
+    -e 's#REQUIRED-idpIssuerURL#https://keycloak-maas-db.apps.hub.example.com/realms/saas#' \
     "$mine/root/inputs.yaml" "$mine/root/self.yaml"; rm "$mine/root/"*.bak
   g -C "$mine" commit -qam "set our names"
   rm -rf "$tpl/root"; cp -R "$SRC/root" "$tpl/"; rm -f "$tpl/root/inputs.env"; g -C "$tpl" add -A
@@ -129,8 +153,7 @@ else
   t "  ... then add inputs.env and commit" 0 "^  git add root/inputs.env && git commit$" cat "$T/out"
   # What set-inputs.sh writes (it reads the clusters, so the test writes it), then the printed steps.
   printf '%s\n' deploymentRepoURL=https://github.com/acme/deploy.git deploymentRevision=main \
-    catalogRepoURL=https://github.com/acme/catalog.git catalogRevision=main \
-    idpIssuerURL=https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants > "$mine/root/inputs.env"
+    catalogRepoURL=https://github.com/acme/catalog.git catalogRevision=main keycloakOverlay=core hubCertManager=library > "$mine/root/inputs.env"
   finish() { (cd "$mine" && g rm -q root/inputs.yaml && g add root/inputs.env && g commit -q --no-edit && git status --porcelain); }
   t "  ... and those steps finish the merge, leaving nothing else" 0 "^$" finish
 fi

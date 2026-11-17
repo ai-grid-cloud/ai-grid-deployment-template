@@ -3,13 +3,19 @@
 # step needs before AI Grid components go on it. Read only: it never changes
 # the cluster and never reads a Secret's data.
 #
-# Usage: scripts/check-prerequisites.sh --step hub|spoke --cluster NAME|--kubeconfig FILE [--expect-idp library|own]
+# Usage: scripts/check-prerequisites.sh --step hub|spoke --cluster NAME|--kubeconfig FILE [--cert-manager library|platform]
+#        [--expect-idp library|own]
 #        [--idp-secret NS/NAME:KEY --idp-ca NS/NAME:KEY]
 #
+#   --cert-manager the hub's cert-manager (root/inputs.env hubCertManager):
+#                  library (default; the root installs it, so the platform's
+#                  must not be there), platform (its CRDs must be) or site (the
+#                  hub is also a site: OpenShift AI's chart owns it; checked as
+#                  platform)
 #   --step hub     the hub, before and after its infrastructure step: OpenShift
-#                  version, a default StorageClass, cert-manager's CRDs, the
+#                  version, a default StorageClass, cert-manager, the
 #                  quay.io/rhoai pull-secret file ($RHOAI_QUAY_PULL_SECRET_FILE)
-#                  and the object-storage Secret (apps/object-storage/README.md)
+#                  and the object-storage Secret (the library's apps/odf writes it)
 #   --step spoke   a spoke (with no --cluster, the only site in clusters.yaml) before it joins ACM: OpenShift version, a default
 #                  StorageClass (the hub's policies deliver its pull secret),
 #                  and a previous install (a klusterlet, a DataScienceCluster, a model,
@@ -28,15 +34,16 @@
 # bad usage. A key is checked for presence only; its value is never printed.
 set -Eeuo pipefail
 
-usage() { sed -n '5,28p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '5,30p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
-step="" kubeconfig="" cluster="" idp="" idp_secret="" idp_ca=""
+step="" kubeconfig="" cluster="" idp="" idp_secret="" idp_ca="" cert_manager=library
 while [ $# -gt 0 ]; do
   case "$1" in
     --step) step=${2:-}; shift 2 ;;
     --kubeconfig) kubeconfig=${2:-}; shift 2 ;;
     --cluster) cluster=${2:-}; shift 2 ;;
     --expect-idp) idp=${2:-}; shift 2 ;;
+    --cert-manager) cert_manager=${2:-}; shift 2 ;;
     --idp-secret) idp_secret=${2:-}; shift 2 ;;
     --idp-ca) idp_ca=${2:-}; shift 2 ;;
     -h|--help) usage ;;
@@ -54,6 +61,7 @@ if [ -n "$cluster" ] || $only_site; then
 fi
 [ -f "$kubeconfig" ] || { echo "--cluster or --kubeconfig is required" >&2; usage; }
 case "$idp" in ""|library|own) ;; *) echo "--expect-idp must be library or own" >&2; usage ;; esac
+case "$cert_manager" in library|platform|site) ;; *) echo "--cert-manager must be library, platform or site" >&2; usage ;; esac
 ref_ok() { [[ $1 =~ ^[a-z0-9.-]+/[a-z0-9.-]+:[A-Za-z0-9._-]+$ ]]; }
 if [ "$idp" = own ]; then
   if ! ref_ok "$idp_secret" || ! ref_ok "$idp_ca"; then
@@ -86,12 +94,29 @@ if [ -n "$default_sc" ]; then report OK "default StorageClass" "$default_sc"; el
 crds_present() { local crd; for crd in "$@"; do oc_ get crd "$crd" -o name >/dev/null 2>&1 || return 1; done; }
 
 if [ "$step" = hub ]; then
-  # cert-manager: grid enrollment issues its CA and identities with it. The
-  # library doesn't install it on a hub unless apps/cert-manager is selected.
-  if crds_present certificates.cert-manager.io issuers.cert-manager.io clusterissuers.cert-manager.io; then
-    report OK "cert-manager CRDs"
+  # cert-manager: grid enrollment issues its CA and identities with it.
+  if [ "$cert_manager" != library ]; then
+    if crds_present certificates.cert-manager.io issuers.cert-manager.io clusterissuers.cert-manager.io; then
+      report OK "cert-manager CRDs" "present (hubCertManager=$cert_manager)"
+    else
+      report MISSING "cert-manager CRDs" "hubCertManager=$cert_manager, but the hub has no cert-manager: install it, or set hubCertManager=library"
+    fi
   else
-    report MISSING "cert-manager CRDs" "install cert-manager, or select apps/cert-manager"
+    # The root installs the library's, whose OperatorGroup is
+    # openshift-cert-manager-operator; another one in that namespace is the
+    # platform's, and two OperatorGroups fail both (TooManyOperatorGroups).
+    read_ok=1
+    if ! ogs=$(oc_ get operatorgroups.operators.coreos.com -n cert-manager-operator -o jsonpath='{.items[*].metadata.name}' 2>&1); then
+      report MISSING "cert-manager OperatorGroup" "can't read OperatorGroups in cert-manager-operator: $(tail -n1 <<<"$ogs")"
+      other="" read_ok=""
+    else
+      other=$(tr ' ' '\n' <<<"$ogs" | grep -vx -e openshift-cert-manager-operator -e '' | head -n1 || true)
+    fi
+    if [ -n "$other" ]; then
+      report FOUND "cert-manager OperatorGroup" "$other: the hub runs the platform's cert-manager; set hubCertManager=platform in root/inputs.env (the hub then can't also be a site)"
+    elif [ -n "$read_ok" ]; then
+      report OK "cert-manager" "the root installs the library's (hubCertManager=library)"
+    fi
   fi
   # The pull secret for quay.io/rhoai, which apps/rhoai-prerequisites
   # distributes; never read here, only found.
@@ -104,7 +129,7 @@ if [ "$step" = hub ]; then
   if oc_ get secret thanos-object-storage -n open-cluster-management-observability -o name >/dev/null 2>&1; then
     report OK "object storage" "open-cluster-management-observability/thanos-object-storage"
   else
-    report MISSING "object storage" "Secret open-cluster-management-observability/thanos-object-storage (apps/object-storage)"
+    report MISSING "object storage" "Secret open-cluster-management-observability/thanos-object-storage (apps/odf writes it once ODF is installed)"
   fi
 fi
 

@@ -27,6 +27,9 @@ case "$args" in
   *" get datascienceclusters "*) [ -f "$d/dsc" ] || exit 1; cat "$d/dsc" ;;
   *" get subscriptions.operators.coreos.com "*) [ -f "$d/subs" ] || exit 1; cat "$d/subs" ;;
   *" get gridnetworks,gridsites "*) [ -f "$d/grid" ] || exit 1; cat "$d/grid" ;;
+  *" get operatorgroups.operators.coreos.com -n cert-manager-operator "*)
+    [ ! -f "$d/og-error" ] || { echo "error: Forbidden" >&2; exit 1; }
+    cat "$d/ogs" 2>/dev/null || true ;;
   *" get crds -o name "*) sed 's#^#customresourcedefinition.apiextensions.k8s.io/#' "$d/crds" 2>/dev/null ;;
   *" get crd "*)
     name=${args##* get crd }; name=${name%% *}
@@ -97,7 +100,19 @@ t "  ... another namespace in Terminating isn't" 0 "^OK +previous AI Grid instal
 w=$(world klusterlet); echo open-cluster-management-agent > "$w/namespaces"
 t "a klusterlet alone is a previous install" 1 "^FOUND +previous AI Grid install +klusterlet" "$w" --step spoke
 w=$(world no-cm); : > "$w/crds"
-t "hub without cert-manager" 1 "^MISSING +cert-manager CRDs" "$w" --step hub
+t "hubCertManager=platform, hub without cert-manager" 1 "^MISSING +cert-manager CRDs +hubCertManager=platform" "$w" --step hub --cert-manager platform
+t "hubCertManager=library (default), hub without cert-manager: the root installs it" 1 "^OK +cert-manager +the root installs the library's" "$w" --step hub
+w=$(world platform-cm); printf 'cert-manager-operator-og' > "$w/ogs"; echo "open-cluster-management-observability/thanos-object-storage" > "$w/secrets"
+PULL="$T/pull" t "hubCertManager=library on a hub with the platform's: FOUND, says to set platform" 1 \
+  "^FOUND +cert-manager OperatorGroup +cert-manager-operator-og: .*set hubCertManager=platform" "$w" --step hub
+PULL="$T/pull" t "hubCertManager=platform on that hub: OK" 0 "^OK +cert-manager CRDs +present \(hubCertManager=platform\)" "$w" --step hub --cert-manager platform
+w=$(world library-cm); printf 'openshift-cert-manager-operator' > "$w/ogs"; echo "open-cluster-management-observability/thanos-object-storage" > "$w/secrets"
+PULL="$T/pull" t "hubCertManager=library, the library's own OperatorGroup (a rerun): OK" 0 "^OK +cert-manager +the root installs" "$w" --step hub
+t "a bad --cert-manager: usage" 2 "cert-manager must be library, platform or site" "$w" --step hub --cert-manager both
+PULL="$T/pull" t "hubCertManager=site (the chart owns it): its CRDs are enough" 0 "^OK +cert-manager CRDs +present \(hubCertManager=site\)" "$w" --step hub --cert-manager site
+w=$(world og-error); touch "$w/og-error"; echo "open-cluster-management-observability/thanos-object-storage" > "$w/secrets"
+PULL="$T/pull" t "hubCertManager=library, OperatorGroups unreadable: MISSING, not OK" 1 \
+  "^MISSING +cert-manager OperatorGroup +can't read OperatorGroups in cert-manager-operator" "$w" --step hub
 IDP=(--idp-secret tenant-idp/tenant-idp-client:client-secret --idp-ca openshift-config-managed/default-ingress-cert:ca-bundle.crt)
 KEYS=$'secret tenant-idp/tenant-idp-client:client-secret\nconfigmap openshift-config-managed/default-ingress-cert:ca-bundle.crt'
 # Any OIDC provider meets the contract: no Keycloak or RHBK CRDs required.

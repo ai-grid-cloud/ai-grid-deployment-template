@@ -73,8 +73,17 @@ else
   echo "note: no registry.stage.redhat.io login in $auth_file; sites pull model runtimes from registry.redhat.io" >&2
 fi
 
-RHOAI_QUAY_PULL_SECRET_FILE="$auth_file" bash "$here/check-prerequisites.sh" --step hub --kubeconfig "$KUBECONFIG" ||
-  echo "Prerequisites incomplete before install; the ones this script installs are expected to be missing."
+# hubCertManager (root/inputs.env): library installs cert-manager from the root,
+# which a hub already running the platform's can't take; that stops here.
+cert_manager=$(deployment_input hubCertManager)
+pre_rc=0
+pre=$(RHOAI_QUAY_PULL_SECRET_FILE="$auth_file" bash "$here/check-prerequisites.sh" --step hub --kubeconfig "$KUBECONFIG" \
+  --cert-manager "$cert_manager" 2>&1) || pre_rc=$?
+[ "$pre_rc" != 2 ] || die "check-prerequisites.sh: $(tail -n1 <<<"$pre")"
+[ "$pre_rc" = 0 ] || echo "Prerequisites incomplete before install; the ones this script installs are expected to be missing."
+printf '%s\n' "$pre"
+! grep -qE '^(FOUND|MISSING) *cert-manager OperatorGroup' <<<"$pre" ||
+  die "the hub runs the platform's cert-manager, and hubCertManager is library: set hubCertManager=platform in root/inputs.env, commit it, then run this again"
 
 oc apply -f "$lib/bootstrap/namespace.yaml" -f "$lib/bootstrap/gitops-operator-group.yaml" -f "$lib/bootstrap/openshift-gitops-sub.yaml"
 for crd in applications.argoproj.io applicationsets.argoproj.io; do

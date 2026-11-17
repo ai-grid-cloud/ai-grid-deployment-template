@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The library at the commit a deployment repository pins (libraryRevision and
-# libraryRepoURL in root/kustomization.yaml).
+# libraryRepoURL in root/applicationset.yaml).
 #
 #   scripts/library.sh [DEPLOYMENT_DIR]   fetch it and print its path
 #   . scripts/library.sh; library_dir DIR sets $LIB, for the other scripts
@@ -9,11 +9,19 @@
 # on first use and moved when the pin changes. To use your own checkout instead,
 # set LIBRARY to its path; it must already be at the pin.
 
+# library_pin DIR NAME: prints libraryRevision or libraryRepoURL from DIR's
+# root/applicationset.yaml, the one place each is set (a YAML anchor on the
+# value, such as libraryRevision: &libraryRevision SHA, is skipped).
+library_pin() {
+  sed -n -E "s/^[[:space:]]*$2:[[:space:]]*(&[A-Za-z]+[[:space:]]+)?([^[:space:]#*&]+).*/\\2/p" \
+    "$1/root/applicationset.yaml" 2>/dev/null | head -n1
+}
+
 library_dir() {
   local dir=${1:-.} k rev url
-  k="$dir/root/kustomization.yaml"
-  rev=$(sed -n -E 's/^[[:space:]]*libraryRevision:[[:space:]]*([^[:space:]#]+).*/\1/p' "$k" 2>/dev/null | head -n1)
-  url=$(sed -n -E 's/^[[:space:]]*libraryRepoURL:[[:space:]]*([^[:space:]#]+).*/\1/p' "$k" 2>/dev/null | head -n1)
+  k="$dir/root/applicationset.yaml"
+  rev=$(library_pin "$dir" libraryRevision)
+  url=$(library_pin "$dir" libraryRepoURL)
   [[ "$rev" =~ ^[0-9a-f]{40}$ ]] || { echo "error: no full libraryRevision in $k" >&2; return 1; }
   if [ -n "${LIBRARY:-}" ]; then
     LIB=$(cd "$LIBRARY" 2>/dev/null && pwd) || { echo "error: LIBRARY=$LIBRARY isn't a directory" >&2; return 1; }

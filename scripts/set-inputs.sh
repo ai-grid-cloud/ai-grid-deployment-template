@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
-# Set the values that name your repositories and hosts (install guide, page 2),
-# then check the repository:
+# Set the values that name your repositories (install guide, page 2), then check
+# the repository:
 #
-#   root/inputs.env                     deploymentRepoURL, deploymentRevision,
-#                                       catalogRepoURL, catalogRevision, idpIssuerURL
-#   tenant-idp/manifests/settings.yaml  portalRedirectURI
+#   root/inputs.env   deploymentRepoURL, deploymentRevision, catalogRepoURL,
+#                     catalogRevision, keycloakOverlay, hubCertManager
+#   hub/catalog/      the catalog repository and revision, from inputs.env
 #
-# deploymentRepoURL is this repository's origin, catalogRepoURL the argument,
-# idpIssuerURL https://keycloak-tenant-idp.HUB_APPS_DOMAIN/realms/tenants, and
-# portalRedirectURI https://maas.SITE_APPS_DOMAIN/* for every site in
-# clusters.yaml, space-separated, whatever role the provider console later gives
-# it, with the apps domains read from the hub and each site through their
-# logins; both revisions are main. root/inputs.env is yours: the
+# deploymentRepoURL is this repository's origin, catalogRepoURL the argument or catalog.url;
+# both revisions are main. keycloakOverlay is core (the library Keycloak with no
+# example organizations or test users); set it to default only for a test
+# deployment that wants the library's examples. hubCertManager is library (the
+# root installs cert-manager on the hub, as upstream's root does); set it to
+# platform when the hub already runs the platform's cert-manager (such a hub
+# can't also be a site). root/inputs.env is yours: the
 # template has none, and root/kustomization.yaml copies its values into the
-# root. A value that's already set is left alone, except that portalRedirectURI
-# gains the redirect of a site added to clusters.yaml since (it removes none).
+# root. A value that's already set in it is left alone. hub/catalog/ always follows inputs.env: it's
+# rewritten from it on every run. It reads no cluster.
+#
+# The tenant portal's sign-in redirects need nothing from you: the library
+# Keycloak's CronJob keycloak-redirect-uris registers
+# https://maas.SITE_APPS_DOMAIN/oauth2/callback for every ingress or combined site.
 #
 # CATALOG_REPO_URL defaults to clusters.yaml's catalog.url (make inputs).
 #
@@ -52,34 +57,34 @@ fi
 catalog=$(https_url "$want")
 origin=$(git -C "$dir" remote get-url origin 2>/dev/null) || { echo "error: this repository has no origin remote" >&2; exit 1; }
 deployment=$(https_url "$origin")
-apps_domain() {
-  "$here/with-cluster.sh" "$1" oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}'
-}
-hub_domain=$(apps_domain "$(hub_name)") && [ -n "$hub_domain" ] || { echo "error: no apps domain for the hub" >&2; exit 1; }
-# Every site may become ingress or combined in the console's Add, so each gets a redirect.
-redirects=""
-for s in $(site_names); do
-  site_domain=$(apps_domain "$s") && [ -n "$site_domain" ] || { echo "error: no apps domain for $s" >&2; exit 1; }
-  redirects+="${redirects:+ }https://maas.$site_domain/*"
-done
-[ -n "$redirects" ] || { echo "error: clusters.yaml has no site" >&2; exit 1; }
 
-DIR=$dir python3 - "$deployment" "$catalog" "https://keycloak-tenant-idp.$hub_domain/realms/tenants" \
-  "$redirects" <<'PY'
-import os, sys
-deployment, catalog, issuer, redirect = sys.argv[1:]
+DIR=$dir python3 - "$deployment" "$catalog" <<'PY'
+import os, re, sys
+deployment, catalog = sys.argv[1:]
 d = os.environ["DIR"]
 
 # root/inputs.env: keep each value that's set, add the rest.
 path = "root/inputs.env"
 f = os.path.join(d, path)
 want = [("deploymentRepoURL", deployment), ("deploymentRevision", "main"), ("catalogRepoURL", catalog),
-        ("catalogRevision", "main"), ("idpIssuerURL", issuer)]
+        ("catalogRevision", "main"), ("keycloakOverlay", "core"), ("hubCertManager", "library")]
 lines = open(f).read().splitlines() if os.path.exists(f) else [
     "# Your deployment's inputs (install guide, page 2), written by scripts/set-inputs.sh.",
     "# root/kustomization.yaml copies them into the root. This file is yours: the",
-    "# template has none. Reference: the library's docs/install/appendix-a-inputs.md.",
+    "# template has none.",
 ]
+# Inputs the root no longer reads (the tenant IdP's, before the library's
+# Keycloak became the only one): removed, so they don't look like settings.
+gone = {"idpIssuerURL", "idpClientID", "idpClientSecretNamespace", "idpClientSecretName", "idpClientSecretKey",
+        "idpCANamespace", "idpCAName", "idpCAKey", "portalRedirectURI"}
+kept = []
+for line in lines:
+    key = line.split("=", 1)[0].strip() if "=" in line and not line.lstrip().startswith("#") else ""
+    if key in gone:
+        print(f"removed  {path}: {key} (the root no longer reads it)")
+        continue
+    kept.append(line)
+lines = kept
 have = {}
 for i, line in enumerate(lines):
     if "=" in line and not line.lstrip().startswith("#"):
@@ -99,34 +104,28 @@ tmp = f + ".tmp"
 open(tmp, "w").write("\n".join(lines) + "\n")
 os.replace(tmp, f)
 
-# The portal's redirects: the placeholder becomes every site's; once set, a
-# site added to clusters.yaml since gets its redirect added, and the
-# redirects already there (yours included) stay.
-import re
-path, name = "tenant-idp/manifests/settings.yaml", "portalRedirectURI"
-f = os.path.join(d, path)
-text = open(f).read()
-token = "REQUIRED-" + name
-m = re.search(r"^(\s*" + name + r":[ \t]*)(.*)$", text, re.M)
-if token in text:
-    new = text.replace(token, redirect)
-    print(f"set      {path}: {name} = {redirect}")
-elif m:
-    have = re.sub(r"\s+#.*$", "", m.group(2)).strip().strip("'\"")
-    uris = have.replace(",", " ").split()
-    missing = [u for u in redirect.split() if u not in uris]
-    if missing:
-        value = " ".join(uris + missing)
-        new = text[:m.start(2)] + value + re.search(r"(\s+#.*)?$", m.group(2)).group(0) + text[m.end(2):]
-        print(f"added    {path}: {name} += {' '.join(missing)}")
+# hub/catalog/: the catalog repository and revision inputs.env now names.
+final = {}
+for line in lines:
+    if "=" in line and not line.lstrip().startswith("#"):
+        k, v = line.split("=", 1)
+        final[k.strip()] = v.strip()
+url, rev = final.get("catalogRepoURL", ""), final.get("catalogRevision", "")
+cdir = os.path.join(d, "hub", "catalog")
+for name in sorted(os.listdir(cdir)) if url and rev else []:
+    if not name.endswith(".yaml"):
+        continue
+    f = os.path.join(cdir, name)
+    text = open(f).read()
+    new = re.sub(r"(?m)^(\s*repoURL:[ \t]*)\S+$", lambda m: m.group(1) + url, text)
+    new = re.sub(r"(?m)^(\s*(?:target)?[rR]evision:[ \t]*)\S+$", lambda m: m.group(1) + rev, new)
+    new = re.sub(r"(?m)^(\s*sourceRepos:\n\s*-[ \t]*)\S+$", lambda m: m.group(1) + url, new)
+    if new != text:
+        tmp = f + ".tmp"
+        open(tmp, "w").write(new)
+        os.replace(tmp, f)
+        print(f"set      hub/catalog/{name}: {url} at {rev}")
     else:
-        new = text
-        print(f"kept     {path}: {name} has every site's redirect")
-else:
-    sys.exit(f"error: {path} has no {name}")
-if new != text:
-    tmp = f + ".tmp"
-    open(tmp, "w").write(new)
-    os.replace(tmp, f)
+        print(f"kept     hub/catalog/{name}: already {url} at {rev}")
 PY
 "$here/check-deployment.sh" "$dir"

@@ -23,7 +23,7 @@ g -C "$seed" init -q && g -C "$seed" add -A && g -C "$seed" commit -qm seed
 g clone -q --bare "$seed" "$T/catalog.git"
 D="$T/deploy"; mkdir -p "$D/root"; cp -R "$SRC/scripts" "$SRC/Makefile" "$D/"
 printf '%s\n' deploymentRepoURL=https://github.com/acme/deploy.git deploymentRevision=main \
-  "catalogRepoURL=$T/catalog.git" catalogRevision=main idpIssuerURL=https://idp.example.com/realms/tenants \
+  "catalogRepoURL=$T/catalog.git" catalogRevision=main keycloakOverlay=core hubCertManager=library \
   > "$D/root/inputs.env"
 files() { g --git-dir="$T/catalog.git" ls-tree -r --name-only main | tr '\n' ' '; }
 

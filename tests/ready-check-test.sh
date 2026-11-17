@@ -104,11 +104,11 @@ ready() { # W
   local w=$1 h=$1/hub sha
   sha=$(git -C "$D" rev-parse origin/main)
   mkdir -p "$h" "$w/site-b" "$w/site-c"
-  echo "{\"items\":[$(app acm Synced Healthy),$(app tenant-idp Synced Healthy),$(app limitador-redis Synced Healthy)]}" > "$h/apps.json"
+  echo "{\"items\":[$(app acm Synced Healthy),$(app keycloak Synced Healthy),$(app limitador-redis Synced Healthy)]}" > "$h/apps.json"
   echo '{"items":[{"status":{"phase":"Running"}}]}' > "$h/mch.json"
   echo "{\"items\":[$(route console console.apps.hub.example.com)]}" > "$h/route-ai-grid-provider-console.json"
   route ai-grid-provider-console console.apps.hub.example.com > "$h/route-ai-grid-provider-console-ai-grid-provider-console.json"
-  route keycloak keycloak.apps.hub.example.com > "$h/route-tenant-idp-keycloak.json"
+  route keycloak keycloak.apps.hub.example.com > "$h/route-maas-db-keycloak.json"
   echo '{"items":[{"endpoints":[{"addresses":["10.0.0.9"],"conditions":{"ready":true}}]}]}' > "$h/perses-endpointslices.json"
   route rbac-query-proxy thanos.apps.hub.example.com > "$h/route-open-cluster-management-observability-rbac-query-proxy.json"
   echo '{"status":{"conditions":[{"type":"Ready","status":"True"}]}}' > "$h/lokistack.json"
@@ -125,7 +125,7 @@ t "all ready: OK and outputs.json" 0 "^OK " \
   '! grep -q "^FAIL" <<<"$out"' 'grep -q "^OK .*no organizations" <<<"$out"' \
   'jqt ".hub.name == \"hub\" and .hub.api == \"https://api.hub.example.com:6443\""' \
   'jqt ".hub.consoleURL == \"https://console.apps.hub.example.com\""' \
-  'jqt ".hub.keycloakURL == \"https://keycloak.apps.hub.example.com\" and .hub.keycloakRealm == \"tenants\""' \
+  'jqt ".hub.keycloakURL == \"https://keycloak.apps.hub.example.com\" and .hub.keycloakRealm == \"saas\""' \
   'jqt ".hub.persesURL == \"https://perses.openshift-cluster-observability-operator.svc:8080\" and .hub.thanosURL == \"https://thanos.apps.hub.example.com\""' \
   'jqt ".hub.lokiStack == \"redhat-ods-monitoring/usage-logs\""' \
   'jqt ".providerAdminTokenFile == \".config/provider-admin-token\""' \
@@ -166,6 +166,11 @@ D="$T/repo"
 
 W="$T/org"; ready "$W"; echo '{"items":[{"id":"7c0e","name":"org1"}],"size":1}' > "$W/Tenants.json"; rm -f "$(OUT)"; run
 t "an organization exists: FAIL" 1 "^FAIL .*1 organization" '[ ! -f "$(OUT)" ]'
+D="$T/examples"; newrepo "$D"; printf 'keycloakOverlay=default\n' > "$D/root/inputs.env"
+W="$T/org-ex"; ready "$W"; echo '{"items":[{"id":"7c0e","name":"Grid Tenant 1"}],"size":1}' > "$W/Tenants.json"; run
+t "  ... with keycloakOverlay=default: INFO, the library's examples" 0 "^INFO .*1 organization.*keycloakOverlay=default" \
+  '! grep -q "^FAIL" <<<"$out"'
+D="$T/repo"
 
 W="$T/model"; ready "$W"; echo '{"size":1,"total":1,"items":[{"id":"m1"}]}' > "$W/Models.json"; rm -f "$(OUT)"; run
 t "a model exists: FAIL" 1 "^FAIL .*1 model" '[ ! -f "$(OUT)" ]'
@@ -240,8 +245,8 @@ t "an Application waiting for a site: WARN, not FAIL" 0 "^WARN .*limitador-redis
   '! grep -q "^FAIL" <<<"$out"' 'grep -q "^OK .*hub Applications" <<<"$out"' '[ -f "$(OUT)" ]'
 
 W="$T/degraded"; ready "$W"
-echo "{\"items\":[$(app acm Synced Healthy),$(app tenant-idp Synced Degraded),$(app limitador-redis Synced Degraded)]}" > "$W/hub/apps.json"; rm -f "$(OUT)"; run
-t "a Degraded Application not waiting for a site: FAIL" 1 "^FAIL .*tenant-idp" \
+echo "{\"items\":[$(app acm Synced Healthy),$(app keycloak Synced Degraded),$(app limitador-redis Synced Degraded)]}" > "$W/hub/apps.json"; rm -f "$(OUT)"; run
+t "a Degraded Application not waiting for a site: FAIL" 1 "^FAIL .*keycloak" \
   '! grep -q "^FAIL .*limitador-redis" <<<"$out"' '[ ! -f "$(OUT)" ]'
 
 # With no DEPLOYMENT_TOKEN_FILE, origin is read with .config/deployment-token.

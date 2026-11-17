@@ -4,7 +4,7 @@
 # reports, the Applications that aren't Synced and Healthy and those whose sync
 # waits for its next retry, the MultiClusterHub's phase, Argo CD's application
 # controller (restarts, and OOMKilled or CrashLoopBackOff called out), the
-# tenant Keycloak's Application, the provider console's Route and pod; then, for each site in clusters.yaml, its
+# library Keycloak's Application (keycloak), the provider console's Route and pod; then, for each site in clusters.yaml, its
 # AI Grid role (ManagedCluster labels ai-grid/enabled=true and ai-grid/role, set
 # by the provider console's Add to AI Grid) or "not added to the grid yet", and
 # for an added site OpenShift AI's DataScienceCluster phase and its GridSite. Read-only; always exits 0
@@ -93,9 +93,9 @@ else
   fi
 fi
 
-idp=$(oc get applications.argoproj.io tenant-idp -n openshift-gitops \
+idp=$(oc get applications.argoproj.io keycloak -n openshift-gitops \
   -o jsonpath='{.status.sync.status} {.status.health.status}' 2>/dev/null)
-echo "tenant-idp: ${idp:-not created yet}"
+echo "keycloak: ${idp:-not created yet}"
 
 host=$(oc get route ai-grid-provider-console -n ai-grid-provider-console -o jsonpath='{.spec.host}' 2>/dev/null)
 if [ -n "$host" ]; then echo "Console: https://$host"; else echo "Console: no Route yet"; fi
