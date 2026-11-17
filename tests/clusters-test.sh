@@ -396,6 +396,14 @@ printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:
 t "committed file refuses an inline password, even beside a private one" 1 "can't hold secrets: sites\[0\].password" bash "$d/scripts/clusters.sh" --rows "$d"
 t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
 
+d=$(priv pub-github-beside "hub: {api: 'https://h:6443'}")
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\ngithub: {catalogToken: "%s"}\n' "$SECRET" > "$d/clusters.yaml"
+t "committed file with an old github: block stops, even beside a private one" 1 "can't hold secrets: github" bash "$d/scripts/clusters.sh" --rows "$d"
+t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+d=$(priv pub-repos-beside "hub: {api: 'https://h:6443'}")
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\nrepositories: {catalog: "https://github.com/o/c.git"}\n' > "$d/clusters.yaml"
+t "committed file with old repositories: beside a private one: the old-format message" 1 "^error: clusters.yaml uses the old format: replace repositories.catalog with catalog.url" bash "$d/scripts/clusters.sh" --rows "$d"
+
 # options: with every line commented out is null.
 d=$(repo nulloptions "hub: {api: 'https://h:6443'}
 options:
