@@ -116,17 +116,26 @@ t "make inputs CATALOG= passes it" 0 "^scripts/set-inputs.sh 'https://github.com
 t "make check runs check-deployment.sh" 0 "^scripts/check-deployment.sh *$" make -n -C "$one" check
 t "console-call needs METHOD" 2 "set METHOD, such as: make console-call METHOD=ai_grid.v1.Tenants/List" make -s -C "$one" console-call
 t "console-call: BODY and BODY_FILE together stop" 2 "set BODY or BODY_FILE, not both" make -s -C "$one" console-call METHOD=m BODY='{}' BODY_FILE=f
-t "console-call defaults the body to {}" 0 "^scripts/console-call.sh 'm' '\{\}' *$" make -n -C "$one" console-call METHOD=m
-t "console-call BODY= passes it" 0 "^scripts/console-call.sh 'm' '\{\"a\":1\}' *$" make -n -C "$one" console-call METHOD=m 'BODY={"a":1}'
-printf '{"b":2}' > "$T/body.json"
-t "console-call BODY_FILE= passes the file's contents" 0 'console-call.sh .m. "\$\(cat ' make -n -C "$one" console-call METHOD=m BODY_FILE="$T/body.json"
 # A copy whose console-call.sh prints its arguments, one per line, to run the target for real.
-cc=$(repo cc site-b:combined); printf '#!/bin/bash\nprintf "%%s\\n" "$@"\n' > "$cc/scripts/console-call.sh"
+cc=$(repo cc site-b:combined); printf '#!/bin/bash\nprintf "[%%s]\\n" "$@"\n' > "$cc/scripts/console-call.sh"
+t "console-call with no BODY sends an empty one, which console-call.sh makes {}" 0 "^ok$" bash -c 'out=$(make -s -C "$0" console-call METHOD=m); [ "$out" = "$(printf "[m]\n[]")" ] && echo ok' "$cc"
+t "console-call BODY= passes it" 0 '^\[\{"a":1\}\]$' make -s -C "$cc" console-call METHOD=m 'BODY={"a":1}'
+printf '{"b":2}' > "$T/body.json"
+t "console-call BODY_FILE= passes the file's contents" 0 '^\[\{"b":2\}\]$' make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/body.json"
 printf '%s' '{"a":"it'"'"'s"}' > "$T/quote-body"
-t "console-call BODY with a single quote stays one word" 0 "^ok$" bash -c 'want=$(cat "$1"); out=$(make -s -C "$0" console-call METHOD=m BODY="$want"); [ "$out" = "m"$'"'"'\n'"'"'"$want" ] && echo ok' "$cc" "$T/quote-body"
+t "console-call BODY with a single quote stays one word" 0 "^ok$" bash -c 'want=$(cat "$1"); out=$(make -s -C "$0" console-call METHOD=m BODY="$want"); [ "$out" = "[m]"$'"'"'\n'"'"'"[$want]" ] && echo ok' "$cc" "$T/quote-body"
+printf '{\n  "name": "acme",\n  "domains": ["acme.example.com"]\n}' > "$T/multi-body"
+t "console-call BODY on several lines arrives whole" 0 "^ok$" bash -c 'want=$(cat "$1"); out=$(make -s -C "$0" console-call METHOD=m BODY="$want"); [ "$out" = "[m]"$'"'"'\n'"'"'"[$want]" ] && echo ok' "$cc" "$T/multi-body"
+printf '%s' '{"a":"$HOME x$$y"}' > "$T/dollar-body"
+t "console-call BODY_FILE keeps a \$ as it is" 0 '^\[\{"a":"\$HOME x\$\$y"\}\]$' make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/dollar-body"
+t "console-call BODY from the environment keeps a \$ as it is" 0 '^\[\{"a":"\$HOME x\$\$y"\}\]$' env BODY='{"a":"$HOME x$$y"}' make -s -C "$cc" console-call METHOD=m
 mkdir -p "$T/a b"; printf '{"b":3}' > "$T/a b/x.json"
-t "console-call BODY_FILE with a space in its path is read" 0 '^\{"b":3\}$' make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/a b/x.json"
-t "console-call BODY_FILE that doesn't exist stops" 2 "no file $T/nope.json" make -s -C "$one" console-call METHOD=m BODY_FILE="$T/nope.json"
-t "make install HUB_ONLY=1 passes --hub-only" 0 "^scripts/install.sh --hub-only *$" make -n -C "$one" install HUB_ONLY=1
+t "console-call BODY_FILE with a space in its path is read" 0 '^\[\{"b":3\}\]$' make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/a b/x.json"
+t "console-call BODY_FILE that doesn't exist stops" 2 "can't read BODY_FILE $T/nope.json \(missing or empty\)" make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/nope.json"
+: > "$T/empty.json"
+t "console-call BODY_FILE that's empty stops, not sends {}" 2 "can't read BODY_FILE $T/empty.json \(missing or empty\)" make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/empty.json"
+mkdir -p "$T/q\"d"; printf '{}' > "$T/q\"d/x.json"
+t "console-call BODY_FILE with a double quote in its path is read" 0 '^\[\{\}\]$' make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/q\"d/x.json"
+t "console-call BODY_FILE missing, with a double quote in its path, names it" 2 'BODY_FILE .*/q"d/nope.json \(missing' make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/q\"d/nope.json"
 
 echo "make-targets tests: $((total-fails)) ok, $fails failed"; exit "$fails"

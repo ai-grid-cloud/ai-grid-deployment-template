@@ -50,11 +50,14 @@ status: ## Show how the hub's install is going; read-only (pages 3 and 4)
 console-secrets: ## Create the console's secrets from your catalog token (page 4)
 	@scripts/create-console-secrets.sh
 
-console-call: ## Call the console's API as your hub login: METHOD=..., BODY='JSON' or BODY_FILE=... (page 7)
+# The recipe reads METHOD, BODY and BODY_FILE from its environment (make exports
+# them from the command line), so quotes and newlines arrive as typed. Make still
+# expands a $ in a command-line BODY: use BODY_FILE for that.
+console-call: ## Call the console's API as your hub login: METHOD=..., BODY='JSON', or BODY_FILE=... for several lines or a $ (page 7)
 	@$(call need,METHOD,ai_grid.v1.Tenants/List)
 	@$(if $(and $(BODY),$(BODY_FILE)),$(error set BODY or BODY_FILE, not both))
-	@$(if $(BODY_FILE),test -f $(call shq,$(BODY_FILE)) || { echo "error: no file $(BODY_FILE)" >&2; exit 2; })
-	@scripts/console-call.sh $(call shq,$(METHOD)) $(if $(BODY_FILE),"$$(cat $(call shq,$(BODY_FILE)))",$(call shq,$(if $(BODY),$(BODY),{})))
+	@$(if $(BODY_FILE),test -r "$$BODY_FILE" && test -s "$$BODY_FILE" || { echo "error: can't read BODY_FILE $$BODY_FILE (missing or empty)" >&2; exit 2; })
+	@scripts/console-call.sh "$$METHOD" $(if $(BODY_FILE),"$$(cat "$$BODY_FILE")","$$BODY")
 
 test: ## Run the template's own tests (for maintainers)
 	@for t in tests/*-test.sh; do bash "$$t" || exit 1; done
