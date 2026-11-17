@@ -164,6 +164,17 @@ t "one site" 0 "^OK .*site-c" '! grep -q "^FAIL" <<<"$out"' \
   '! grep -q clusterissuers "$W/argv.log"' 'jqt ".sites == [{name: \"site-c\", api: \"https://api.site-c.example.com:6443\", appsDomain: \"apps.site-c.example.com\", acmName: \"site-c\"}]"'
 D="$T/repo"
 
+# An all-in-one: no site in clusters.yaml. The hub is the site, so outputs.json
+# names it as local-cluster, and deployment-root is still checked.
+D="$T/aio"; newrepo "$D" ' []'
+sed -i.bak 's/^sites:$/sites: []/; /^ \[\]$/d' "$D/clusters.yaml"; rm -f "$D/clusters.yaml.bak"
+W="$T/aio-w"; ready "$W"; printf 'apps.hub.example.com' > "$W/hub/domain"; run
+t "all-in-one: OK, and deployment-root checked with no site" 0 "^OK +deployment-root Synced" '! grep -q "^FAIL" <<<"$out"' \
+  'jqt ".sites == [{name: \"hub\", api: \"https://api.hub.example.com:6443\", appsDomain: \"apps.hub.example.com\", acmName: \"local-cluster\"}]"'
+printf '{"status":{"sync":{"status":"Synced","revision":"0000000"},"health":{"status":"Healthy"}}}' > "$W/hub/deployment-root.json"; run
+t "  ... a stale deployment-root: FAIL" 1 "^FAIL +deployment-root Synced"
+D="$T/repo"
+
 W="$T/org"; ready "$W"; echo '{"items":[{"id":"7c0e","name":"org1"}],"size":1}' > "$W/Tenants.json"; rm -f "$(OUT)"; run
 t "an organization exists: FAIL" 1 "^FAIL .*1 organization" '[ ! -f "$(OUT)" ]'
 D="$T/examples"; newrepo "$D"; printf 'keycloakOverlay=default\n' > "$D/root/inputs.env"

@@ -109,10 +109,13 @@ oc get pods -n ai-grid-provider-console -o json 2>/dev/null | jq -r '
 
 # Each site: its role from its ManagedCluster on the hub, then, through its own
 # login, OpenShift AI's DataScienceCluster phase and the site's GridSite
-# (Available or not).
-for s in $(site_names); do
+# (Available or not). With no site in clusters.yaml (an all-in-one), the hub,
+# whose ManagedCluster is local-cluster.
+targets=$(site_names); [ -n "$targets" ] || targets=$hub
+for s in $targets; do
   echo
-  if ! mc=$(oc get managedclusters.cluster.open-cluster-management.io "$s" -o json 2>/dev/null); then
+  if ! mc=$(oc get managedclusters.cluster.open-cluster-management.io "$(acm_name "$s")" -o json 2>/dev/null); then
+    [ "$s" != "$hub" ] || { echo "Hub as a site: no local-cluster ManagedCluster yet"; continue; }
     echo "Site $s: can't read its ManagedCluster on the hub"; continue
   fi
   role=$(jq -r '.metadata.labels // {} | if .["ai-grid/enabled"] == "true" then .["ai-grid/role"] // "" else "" end' <<<"$mc" 2>/dev/null)
