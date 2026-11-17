@@ -14,8 +14,8 @@
 # else its default. An install.env, which earlier versions read, stops it.
 # Secrets come from scripts/clusters.sh's deployment_load: the environment,
 # else the private .config/clusters.yaml, else the files of earlier versions.
-# Each reaches the scripts as a file passed by path (DEPLOYMENT_TOKEN_FILE to
-# scripts/git-push.sh, CATALOG_TOKEN_FILE to scripts/create-console-secrets.sh,
+# Each reaches the scripts as a file passed by path (DEPLOYMENT_TOKEN_FILE, which
+# is optional, to scripts/git-push.sh, CATALOG_TOKEN_FILE to scripts/create-console-secrets.sh,
 # QUAY_AUTH_FILE to scripts/bootstrap-hub.sh), never on a command line or in
 # the output. It only checks, before anything is pushed, that QUAY_AUTH_FILE holds
 # a quay.io/rhoai login, or that ALLOW_GENERIC_LOGIN=1 lets the general one stand in.
@@ -133,9 +133,12 @@ check_settings() { # the values the hub phase needs, and the files they name
     *) die "KEYCLOAK=${KEYCLOAK} is not supported yet: only KEYCLOAK=install is" ;;
   esac
   local var
-  for var in DEPLOYMENT_TOKEN_FILE CATALOG_TOKEN_FILE QUAY_AUTH_FILE; do
+  for var in CATALOG_TOKEN_FILE QUAY_AUTH_FILE; do
     [ -n "${!var}" ] && [ -s "${!var}" ] || die "no ${var%_FILE}: $(secret_missing "$var")"
   done
+  # The deployment token is optional: without one, git-push.sh uses your git login.
+  [ -z "$DEPLOYMENT_TOKEN_FILE" ] || [ -s "$DEPLOYMENT_TOKEN_FILE" ] ||
+    die "the deployment token file $DEPLOYMENT_TOKEN_FILE is empty: $(secret_missing DEPLOYMENT_TOKEN_FILE)"
   # bootstrap-hub.sh's own login check, made here so a missing login stops the
   # install before the inputs step pushes anything. It reads which logins the
   # file holds, never a token.

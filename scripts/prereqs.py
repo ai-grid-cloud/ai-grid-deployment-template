@@ -176,6 +176,23 @@ HINTS = {  # the fix when make install's file is missing (scripts/clusters.sh se
 }
 
 
+def check_deployment_push(deployment, resolved):
+    """How make install pushes this repository: with the optional deployment token, else with
+    your own git login, which is checked by reading origin with no prompt (nothing is written)."""
+    section("Deployment push")
+    path, source = resolved
+    if path and os.path.isfile(path) and os.path.getsize(path):
+        report("ok", "deployment push", "with the token from " + (from_value(source) or path))
+        return
+    os.environ["GIT_TERMINAL_PROMPT"] = "0"
+    rc, _, err = run(["git", "-C", deployment, "ls-remote", "origin", "HEAD"])
+    if rc == 0:
+        report("ok", "deployment push", "with your git login: it reads origin (pushing isn't tried)")
+    else:
+        report("FAIL", "deployment push", f"no token, and your git login can't read origin ({first_line(err)}); "
+               "log in to GitHub (such as gh auth login), or " + HINTS["DEPLOYMENT_TOKEN_FILE"])
+
+
 def check_registry(auth_file, from_settings=False, label=None):
     section("Registry logins (pre-release builds)")
     names = ["auth file", "quay.io/rhoai login", "registry.stage.redhat.io login", "pull the pinned catalog"]
@@ -473,12 +490,7 @@ def main():
     check_clusters(a.deployment)
     check_catalog_token(a.catalog_token_file, settings is not None, catalog_label)
     if settings is not None:
-        section("Deployment token")
-        path, source = resolved.get("DEPLOYMENT_TOKEN_FILE", ("", ""))
-        if path and os.path.isfile(path) and os.path.getsize(path):
-            report("ok", "deployment token", from_value(source) or path)
-        else:
-            report("MISSING", "deployment token", HINTS["DEPLOYMENT_TOKEN_FILE"])
+        check_deployment_push(a.deployment, resolved.get("DEPLOYMENT_TOKEN_FILE", ("", "")))
 
     counts = {s: results.count(s) for s in ("ok", "MISSING", "OLD", "FAIL", "skipped")}
     print("\n" + ", ".join(f"{n} {s.lower()}" for s, n in counts.items() if n))

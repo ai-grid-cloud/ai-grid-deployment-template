@@ -181,14 +181,17 @@ ED=$EP envt "private file: the quay.io/rhoai login from quay:" "^ok +auth file +
 ED=$EP envt "  ... has the quay.io/rhoai entry" "^ok +quay.io/rhoai login +quay.io/rhoai entry"
 ED=$EP envt "  ... pulls the catalog with it" "^ok +pull the pinned catalog"
 ED=$EP envt "  ... the catalog token from github.catalogToken" "^ok +catalog token +github.catalogToken in .config/clusters.yaml"
-ED=$EP envt "  ... the deployment token from github.deploymentToken" "^ok +deployment token +github.deploymentToken in .config/clusters.yaml"
+ED=$EP envt "  ... pushes with github.deploymentToken" "^ok +deployment push +with the token from github.deploymentToken in .config/clusters.yaml"
 ED=$EP envt "  ... AI_GRID_CATALOG_TOKEN wins" "^ok +catalog token +AI_GRID_CATALOG_TOKEN" AI_GRID_CATALOG_TOKEN=x
 ED=$EP envt "  ... no temporary auth file left" "." && { total=$((total+1)); if ls "${TMPDIR:-/tmp}" 2>/dev/null | grep -q '^prereqs-quay-'; then echo "   FAIL temp auth file left"; fails=$((fails+1)); else echo "   ok     ... (none in TMPDIR)"; fi; }
 EM="$T/private-missing"; mkdir -p "$EM/.config"
 printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\nrepositories: {catalog: 'https://example.com/c.git'}\n" > "$EM/.config/clusters.yaml"; chmod 600 "$EM/.config/clusters.yaml"
 ED=$EM envt "private file without secrets: the auth file hint names quay:" "^MISSING +auth file +$EM/.config/quay-auth.json: not found; set quay.username and quay.password in .config/clusters.yaml \(make secrets NAME=quay\)"
 ED=$EM envt "  ... the token hint names github.catalogToken" "^MISSING +catalog token file +$EM/.config/catalog-token not found; set github.catalogToken in .config/clusters.yaml \(make secrets NAME=github\)"
-ED=$EM envt "  ... and the deployment token" "^MISSING +deployment token +set github.deploymentToken in .config/clusters.yaml \(make secrets NAME=github\)"
+ED=$EM envt "  ... no token, no origin: FAIL with how to log in or set the token" "^FAIL +deployment push +no token, and your git login can't read origin .*gh auth login.*make secrets NAME=github"
+ED=$EM envt "  ... never MISSING for the deployment token" "." && { total=$((total+1)); if env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$H1" STUB_DIR="$w" "$PY" "$SCRIPT" --deployment "$EM" 2>&1 | grep -q "^MISSING .*deployment"; then echo "   FAIL deployment token reported MISSING"; fails=$((fails+1)); else echo "   ok     ... (not MISSING)"; fi; }
+git init -q --bare "$T/em-origin.git"; git -C "$EM" init -q; git -C "$EM" remote add origin "$T/em-origin.git"
+ED=$EM envt "  ... no token, origin readable: ok with your git login" "^ok +deployment push +with your git login"
 # A catalog and no secrets: the legacy files under .config/, not the home directory's.
 E2="$T/env-defaults"; settings_dep "$E2" ""
 cp "$A" "$E2/.config/quay-auth.json"; printf 'x' > "$E2/.config/catalog-token"; chmod 600 "$E2/.config/catalog-token"

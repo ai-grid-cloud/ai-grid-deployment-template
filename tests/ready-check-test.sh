@@ -70,6 +70,7 @@ STUB
 REAL_GIT=$(command -v git)
 cat > "$T/bin/git" <<STUB
 #!/bin/bash
+[ -z "\${STUB_DIR:-}" ] || printf '%s\n' "\$*" >> "\$STUB_DIR/git-argv.log"
 if [[ " \$* " == *" ls-remote "* ]] && [ -n "\${GIT_ASKPASS:-}" ]; then
   "\$GIT_ASKPASS" "Password for 'https://x-access-token@github.com': " > "\$STUB_DIR/askpass.out"
 fi
@@ -229,7 +230,15 @@ D="$T/deftoken"; newrepo "$D"; printf 'SENTINEL-default-token\n' > "$D/.config/d
 W="$T/deftoken-w"; ready "$W"
 out=$(env -u DEPLOYMENT_TOKEN_FILE -u GIT_ASKPASS PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?
 t "no DEPLOYMENT_TOKEN_FILE: origin read with .config/deployment-token" 0 "^OK .*deployment-root Synced" \
-  '[ "$(cat "$W/askpass.out" 2>/dev/null)" = SENTINEL-default-token ]' '! grep -q SENTINEL-default-token <<<"$out"'
+  '[ "$(cat "$W/askpass.out" 2>/dev/null)" = SENTINEL-default-token ]' '! grep -q SENTINEL-default-token <<<"$out"' \
+  'grep -qF -- "-c credential.helper= ls-remote" "$W/git-argv.log"'
+
+# No deployment token at all: origin is read with your own git login.
+D="$T/notoken"; newrepo "$D"; rm -f "$D/.config/deployment-token"
+W="$T/notoken-w"; ready "$W"
+out=$(env -u DEPLOYMENT_TOKEN_FILE -u AI_GRID_DEPLOYMENT_TOKEN -u GIT_ASKPASS PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?
+t "no token: origin read with your git login" 0 "^OK .*deployment-root Synced" \
+  '[ ! -e "$W/askpass.out" ]' '! grep -qF "credential.helper=" "$W/git-argv.log"'
 
 # deploymentRevision in root/inputs.env names the branch the hub syncs.
 D="$T/rev"; newrepo "$D"

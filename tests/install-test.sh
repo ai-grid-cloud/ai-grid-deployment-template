@@ -215,10 +215,14 @@ AI_GRID_DEPLOYMENT_TOKEN="$SENTINEL-env" run
 t "AI_GRID_DEPLOYMENT_TOKEN beats the file" grep -qx "$SENTINEL-env" "$W/deployment-token-seen"
 
 setup privatemissing; private
-sed -i.bak '/^github:/d' "$D/.config/clusters.yaml"; rm "$D/.config/clusters.yaml.bak"
+sed -i.bak 's/^github:.*/github: {catalogToken: "'"$SENTINEL"'-catalog"}/' "$D/.config/clusters.yaml"; rm "$D/.config/clusters.yaml.bak"
 run
-t "no deployment token anywhere: stops before any cluster call, naming the key" eval '[ "$rc" = 1 ] && [ ! -s "$W/calls.log" ] &&
-  grep -q "github.deploymentToken in .config/clusters.yaml" <<<"$out"'
+t "no deployment token: installs, git-push uses your git login" eval '[ "$rc" = 0 ] && [ -z "$(cat "$W/deployment-token-path")" ]'
+setup privatenocatalog; private
+sed -i.bak 's/^github:.*/github: {deploymentToken: "'"$SENTINEL"'-deploy"}/' "$D/.config/clusters.yaml"; rm "$D/.config/clusters.yaml.bak"
+run
+t "no catalog token: stops before any cluster call, naming the key" eval '[ "$rc" = 1 ] && [ ! -s "$W/calls.log" ] &&
+  grep -q "github.catalogToken in .config/clusters.yaml" <<<"$out"'
 
 setup droppedoption; opt DEPLOYMENT_TOKEN_FILE .config/deployment-token
 run

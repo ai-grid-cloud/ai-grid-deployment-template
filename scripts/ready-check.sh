@@ -9,7 +9,8 @@
 # names as deploymentRevision (default main) on origin, read with git ls-remote
 # and git fetch, with no prompt (when DEPLOYMENT_TOKEN_FILE, default
 # .config/deployment-token, names a readable file, git reads the token from it
-# through a temporary GIT_ASKPASS helper), and .config/provider-admin-token
+# through a temporary GIT_ASKPASS helper; else with your own git login for
+# origin), and .config/provider-admin-token
 # (scripts/provider-admin.sh) when it exists.
 #
 # It prints one line per assertion, OK, FAIL or WARN, and exits 1 on any FAIL:
@@ -81,9 +82,11 @@ service_ready() { # NAMESPACE NAME: the Service has at least one ready endpoint
 # origin's deploymentRevision, read from the remote, never from a local ref that
 # may be old.
 export GIT_TERMINAL_PROMPT=0
-gitc() { git -C "$dir" -c credential.helper= "$@"; }
 token_file=${DEPLOYMENT_TOKEN_FILE:-.config/deployment-token}
 case "$token_file" in /*) ;; *) token_file="$dir/$token_file" ;; esac
+# With a token, only the token; without one, your own git login for origin.
+if [ -r "$token_file" ]; then gitc() { git -C "$dir" -c credential.helper= "$@"; }
+else gitc() { git -C "$dir" "$@"; }; fi
 branch=$( { [ -f "$dir/root/inputs.env" ] && sed -n 's/^deploymentRevision=//p' "$dir/root/inputs.env" | tail -n1; } || true)
 branch=${branch:-main}
 main_sha="" main_err="" main_read=""

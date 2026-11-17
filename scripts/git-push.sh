@@ -2,13 +2,15 @@
 # Commit the given paths of this deployment repository, when they changed, and
 # push HEAD to origin, with no prompt.
 #
-# The token, a GitHub token that can write this repository, comes from
-# scripts/clusters.sh's deployment_load: github.deploymentToken in
+# The token, a GitHub token that can write this repository, is optional. It
+# comes from scripts/clusters.sh's deployment_load: github.deploymentToken in
 # .config/clusters.yaml, the environment winning, else the file named by
 # $DEPLOYMENT_TOKEN_FILE, else .config/deployment-token. git reads it through a temporary GIT_ASKPASS
 # helper (mode 700) that reads the file when git asks, so the token is never
 # on a command line, in the helper, or in the output. The helper is removed on
 # exit. Credential helpers you have configured are skipped for this push.
+# With no token, git pushes with your own login for origin (a credential
+# helper, gh or SSH), still with no prompt.
 #
 # Prints "nothing to push" when the paths have no changes and origin already
 # has HEAD. On a rejected push (origin moved, or the token can't write) it
@@ -27,19 +29,29 @@ export GIT_TERMINAL_PROMPT=0
 
 if [ -f "$dir/.config/clusters.yaml" ] || [ -f "$dir/clusters.yaml" ]; then
   . "$here/clusters.sh"; deployment_load "$dir" || exit 1
-  [ -n "$DEPLOYMENT_TOKEN_FILE" ] || { echo "error: no deployment token: $(secret_missing DEPLOYMENT_TOKEN_FILE)" >&2; exit 1; }
+  token_file=$DEPLOYMENT_TOKEN_FILE
+else
+  token_file=${DEPLOYMENT_TOKEN_FILE:-}
+  [ -n "$token_file" ] || [ ! -s "$dir/.config/deployment-token" ] || token_file=.config/deployment-token
 fi
-token_file=${DEPLOYMENT_TOKEN_FILE:-.config/deployment-token}
-case "$token_file" in /*) ;; *) token_file="$dir/$token_file" ;; esac
-[ -r "$token_file" ] || { echo "error: no token file $token_file: put a token that can push to origin there" >&2; exit 1; }
+if [ -n "$token_file" ]; then
+  case "$token_file" in /*) ;; *) token_file="$dir/$token_file" ;; esac
+  [ -r "$token_file" ] || { echo "error: no token file $token_file: put a token that can push to origin there" >&2; exit 1; }
+fi
 branch=$(git symbolic-ref --quiet --short HEAD) || { echo "error: HEAD isn't on a branch" >&2; exit 1; }
 
-askpass=$(mktemp "${TMPDIR:-/tmp}/git-askpass.XXXXXX"); trap 'rm -f "$askpass"' EXIT
-chmod 700 "$askpass"
-# The helper holds the file's path, never its contents.
-printf '#!/bin/bash\ncase "$1" in Username*) echo x-access-token ;; *) head -n1 %q ;; esac\n' "$token_file" > "$askpass"
-export GIT_ASKPASS=$askpass
-gitc() { git -c credential.helper= "$@"; }
+if [ -n "$token_file" ]; then
+  askpass=$(mktemp "${TMPDIR:-/tmp}/git-askpass.XXXXXX"); trap 'rm -f "$askpass"' EXIT
+  chmod 700 "$askpass"
+  # The helper holds the file's path, never its contents.
+  printf '#!/bin/bash\ncase "$1" in Username*) echo x-access-token ;; *) head -n1 %q ;; esac\n' "$token_file" > "$askpass"
+  export GIT_ASKPASS=$askpass
+  gitc() { git -c credential.helper= "$@"; }
+  login_hint=""
+else
+  gitc() { git "$@"; }
+  login_hint="next: log in to GitHub so git can push to origin without a prompt (such as gh auth login), or set github.deploymentToken with make secrets NAME=github"
+fi
 
 # Only the paths that exist or are tracked: a site directory that doesn't
 # exist yet would make git add fail on the rest.
@@ -57,12 +69,14 @@ if [ ${#paths[@]} -gt 0 ] && [ -n "$(git status --porcelain -- "${paths[@]}")" ]
 fi
 
 remote=$(gitc ls-remote origin "refs/heads/$branch" 2>&1) ||
-  { echo "error: can't read origin ($(git remote get-url origin | sed -E 's#://[^@/]+@#://#')): $remote" >&2; exit 1; }
+  { echo "error: can't read origin ($(git remote get-url origin | sed -E 's#://[^@/]+@#://#')): $remote" >&2
+    [ -z "$login_hint" ] || echo "$login_hint" >&2; exit 1; }
 if [ "${remote%%[[:space:]]*}" = "$(git rev-parse HEAD)" ]; then echo "nothing to push"; exit 0; fi
 
 if ! out=$(gitc push --porcelain origin "HEAD:refs/heads/$branch" 2>&1); then
   echo "$out" >&2
   echo "error: push to origin ($branch) was rejected; git's reason is above. Nothing was retried." >&2
+  [ -z "$login_hint" ] || echo "$login_hint" >&2
   echo "next: git pull --rebase origin $branch, then run make install again" >&2
   exit 1
 fi

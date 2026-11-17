@@ -95,4 +95,24 @@ out=$(cd "$D" && env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAM
 t "no git identity: commits as AI Grid install and pushes" \
   eval '[ "$rc" = 0 ] && [ "$(g -C "$T/origin.git" log -1 --format="%s|%an|%ae" main)" = "no identity|AI Grid install|ai-grid-install@localhost" ]'
 
+t "  ... with a token, credential helpers are skipped" grep -qF -- "-c credential.helper= push" "$T/argv.log"
+
+# No deployment token: push with the user's own git login (credential helper,
+# gh or SSH), still with no prompt.
+D="$T/nologin"; g clone -q "$T/origin.git" "$D"; g -C "$D" config core.hooksPath /dev/null
+mkdir -p "$D/.config"; chmod 700 "$D/.config"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\nrepositories: {catalog: "https://github.com/o/c.git"}\n' > "$D/.config/clusters.yaml"
+chmod 600 "$D/.config/clusters.yaml"; echo own > "$D/site.yaml"; : > "$T/argv.log"; rm -f "$T/askpass.out"
+nopush() { out=$(cd "$D" && env -u DEPLOYMENT_TOKEN_FILE -u AI_GRID_DEPLOYMENT_TOKEN -u GIT_ASKPASS PATH="$T/bin:$PATH" \
+  scripts/git-push.sh "$@" 2>&1) && rc=0 || rc=$?; }
+nopush "own login" site.yaml
+t "no token: pushes with your git login" \
+  eval '[ "$rc" = 0 ] && [ "$(g -C "$T/origin.git" log -1 --format=%s main)" = "own login" ]'
+t "  ... keeps your credential helpers and sets no GIT_ASKPASS" \
+  eval '! grep -qF "credential.helper=" "$T/argv.log" && [ ! -e "$T/askpass.out" ]'
+g -C "$D" remote set-url origin "$T/no-such-origin.git"; echo own2 > "$D/site.yaml"
+nopush "unreadable" site.yaml
+t "no token, origin unreadable: says to log in to GitHub or set the token" \
+  eval '[ "$rc" = 1 ] && grep -qF "gh auth login" <<<"$out" && grep -qF "make secrets NAME=github" <<<"$out"'
+
 echo "git-push tests: $((total-fails)) ok, $fails failed"; exit "$fails"
