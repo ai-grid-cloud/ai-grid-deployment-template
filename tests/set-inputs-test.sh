@@ -67,8 +67,13 @@ check "deploymentRevision main" grep -qx 'deploymentRevision=main' "$k"
 check "catalogRepoURL from the argument, as https" grep -qx 'catalogRepoURL=https://github.com/acme/catalog.git' "$k"
 check "catalogRevision main" grep -qx 'catalogRevision=main' "$k"
 check "idpIssuerURL from the hub" grep -qx 'idpIssuerURL=https://keycloak-tenant-idp.apps.hub.example.com/realms/tenants' "$k"
-check "portalRedirectURI from the first combined or ingress site" \
-  grep -q 'portalRedirectURI: https://maas.apps.site-c.example.com/\*$' "$d/tenant-idp/manifests/settings.yaml"
+check "portalRedirectURI: a redirect for every site, space-separated" \
+  grep -qx '  portalRedirectURI: https://maas.apps.site-i.example.com/\* https://maas.apps.site-c.example.com/\*' "$d/tenant-idp/manifests/settings.yaml"
+check "  ... which the realm renders as one redirect URI each" bash -c '
+  KEYCLOAK_CLIENT_SECRET=x TENANT_PORTAL_REDIRECT_URI=$(sed -n "s/^  portalRedirectURI: //p" "$1") \
+    bash "$2/manifests/scripts/render-realm.sh" < "$2/manifests/realms/tenants-realm.json" |
+    jq -e ".clients[0].redirectUris == [\"https://maas.apps.site-i.example.com/*\", \"https://maas.apps.site-c.example.com/*\"]" >/dev/null' _ \
+  "$d/tenant-idp/manifests/settings.yaml" "$d/tenant-idp"
 check "kustomization.yaml untouched" cmp -s "$T/kustomization-before" "$d/root/kustomization.yaml"
 check "self.yaml untouched" cmp -s "$T/self-before" "$d/root/self.yaml"
 
@@ -109,17 +114,17 @@ d=$(repo https https://user@github.com/acme/deploy)
 t "https origin: credentials dropped, .git added" 0 "deploymentRepoURL = https://github.com/acme/deploy.git$" \
   env PATH="$T/bin:$PATH" "$d/scripts/set-inputs.sh" https://github.com/acme/catalog
 
-# With no argument, the catalog comes from clusters.yaml's repositories.catalog (make inputs).
+# With no argument, the catalog comes from clusters.yaml's catalog.url (make inputs).
 d2=$(repo noarg https://github.com/acme/deploy.git)
 t "no argument, page by page: names make inputs CATALOG=" 1 "run make inputs CATALOG=CATALOG_REPO_URL \(page 2\)" \
   env PATH="$T/bin:$PATH" "$d2/scripts/set-inputs.sh"
 printf 'catalog:\n  url: git@github.com:acme/catalog2.git\n' >> "$d2/clusters.yaml"
-t "no argument: reads repositories.catalog" 0 "every repository is an input" \
+t "no argument: reads catalog.url" 0 "every repository is an input" \
   env PATH="$T/bin:$PATH" "$d2/scripts/set-inputs.sh"
 check "  ... and writes it as https" grep -qx 'catalogRepoURL=https://github.com/acme/catalog2.git' "$d2/root/inputs.env"
-# With the private file, the error names its repositories.catalog.
+# With the private file, the error names its catalog.url.
 d3=$(repo private https://github.com/acme/deploy.git); mv "$d3/clusters.yaml" "$d3/.config/clusters.yaml"; chmod 600 "$d3/.config/clusters.yaml"
-t "no argument, private file: says where to set it" 1 "set repositories.catalog in .config/clusters.yaml" \
+t "no argument, private file: says where to set it" 1 "set catalog.url in .config/clusters.yaml" \
   env PATH="$T/bin:$PATH" "$d3/scripts/set-inputs.sh"
 # Given a URL, set-inputs.sh doesn't read the settings, so a bad options: value can't stop it.
 d4=$(repo opts https://github.com/acme/deploy.git); printf 'options:\n  GATE_READY_SECONDS: soon\n' >> "$d4/clusters.yaml"

@@ -17,6 +17,12 @@ TENANT_PORTAL_REDIRECT_URI='https://maas.apps.example.invalid/*' \
   bash "$idp_dir/manifests/scripts/render-realm.sh" \
   < "$idp_dir/manifests/realms/tenants-realm.json" > "$work/tenants-realm.json"
 
+echo "render two sites' redirect URIs, space-separated"
+KEYCLOAK_CLIENT_SECRET=dummy-client-secret \
+TENANT_PORTAL_REDIRECT_URI='https://maas.apps.east.example.invalid/*  https://maas.apps.west.example.invalid/* ' \
+  bash "$idp_dir/manifests/scripts/render-realm.sh" \
+  < "$idp_dir/manifests/realms/tenants-realm.json" > "$work/two-sites.json"
+
 echo "a missing value fails the render"
 if env -u KEYCLOAK_CLIENT_SECRET TENANT_PORTAL_REDIRECT_URI=x \
   bash "$idp_dir/manifests/scripts/render-realm.sh" \
@@ -25,10 +31,18 @@ if env -u KEYCLOAK_CLIENT_SECRET TENANT_PORTAL_REDIRECT_URI=x \
   exit 1
 fi
 
-python3 -I - "$work/tenants-realm.json" "$work/idp.yaml" <<'PY'
+echo "a blank redirect list fails the render"
+if KEYCLOAK_CLIENT_SECRET=x TENANT_PORTAL_REDIRECT_URI=' ' \
+  bash "$idp_dir/manifests/scripts/render-realm.sh" \
+  < "$idp_dir/manifests/realms/tenants-realm.json" > /dev/null 2>&1; then
+  echo "FAIL: render succeeded with a blank TENANT_PORTAL_REDIRECT_URI" >&2
+  exit 1
+fi
+
+python3 -I - "$work/tenants-realm.json" "$work/idp.yaml" "$work/two-sites.json" <<'PY'
 import json, re, sys
 
-realm_path, manifests_path = sys.argv[1], sys.argv[2]
+realm_path, manifests_path, two_path = sys.argv[1], sys.argv[2], sys.argv[3]
 text = open(realm_path).read()
 failures = []
 
@@ -48,6 +62,9 @@ check(client.get("secret") == "dummy-client-secret", "client secret rendered")
 check(client.get("publicClient") is False, "client is confidential")
 check(client.get("directAccessGrantsEnabled") is True, "password grant on (prototype)")
 check(client.get("redirectUris") == ["https://maas.apps.example.invalid/*"], "redirect URI rendered")
+two = json.loads(open(two_path).read())["clients"][0].get("redirectUris")
+check(two == ["https://maas.apps.east.example.invalid/*", "https://maas.apps.west.example.invalid/*"],
+      "two space-separated redirect URIs render as two")
 mappers = {m["name"]: m for m in client.get("protocolMappers", [])}
 check(len(mappers) == 6, "six protocol mappers (found %d)" % len(mappers))
 claims = {m["config"].get("claim.name") for m in mappers.values()}
