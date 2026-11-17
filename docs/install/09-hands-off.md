@@ -14,7 +14,8 @@ worker nodes or the network.
   and a `cluster-admin` login for each: a token, or a username and password.
 - [ ] **A role in mind for each site:** `combined` (tenants enter and models run), `ingress` (tenants enter, no
   models) or `inference` (models only). At least one site is `ingress` or `combined`. You choose each site's role
-  and location after the install, when you add it to the grid in the provider console; `.config/clusters.yaml` has neither.
+  and location after the install, when you add it to the grid in the provider console; `.config/clusters.yaml` has
+  neither.
 - [ ] **A default StorageClass on each cluster.**
 - [ ] **Two worker nodes on each cluster** for Submariner's gateways. On a compact cluster or single-node OpenShift,
   you label the gateway nodes by hand, as [site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/networking.md) describes.
@@ -63,12 +64,12 @@ Tell the install which clusters and repositories to use, and give it the credent
      its `name` and `api`. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't
      change it once the site is imported. The hub's name is always `hub`. The file says only how to reach each
      cluster: no role and no location.
-   - **`repositories.catalog`:** the URL of the catalog repository you create in step 4, such as
+   - **`catalog.url`:** the URL of the catalog repository you create in step 4, such as
      `https://github.com/my-org/ai-grid-catalog.git`. Pick its owner and name now.
    - **The secrets:** in `hub:` and in each site's entry, give a `cluster-admin` `token`, or a `username` and
      `password`. A cluster token usually expires in about 24 hours; with a username and password, the scripts get a
-     fresh token on every run, so a rerun the next day works. Fill in `quay:` too. Leave `github:` commented until
-     step 5.
+     fresh token on every run, so a rerun the next day works. Fill in `quay:` too. You set `catalog.token` in
+     step 5, and leave `deployment:` commented.
 
    For example:
 
@@ -87,16 +88,16 @@ Tell the install which clusters and repositories to use, and give it the credent
        api: https://api.site-east-2.example.com:6443
        username: kubeadmin
        password: PASSWORD
-   repositories:
-     catalog: https://github.com/my-org/ai-grid-catalog.git
-     library: deployment-template
+   catalog:
+     url: https://github.com/my-org/ai-grid-catalog.git
+     token: REQUIRED-catalogToken   # set in step 5
    quay:
      username: rhoai+robot
      password: PASSWORD
    ```
 
-   A file in the old format, with `credentials:`, a `kubeconfig` key, `hub.name`, or a `role` or `location` on a site,
-   stops with a message that says what to change.
+   A file in the old format, with `credentials:`, `repositories:`, `github:`, a `kubeconfig` key, `hub.name`, or a
+   `role` or `location` on a site, stops with a message that says what to change.
 
    The install registers the tenant portal's sign-in redirect for every site in the file, `https://maas.APPS_DOMAIN/*`
    for each, whatever role you choose for it later.
@@ -108,7 +109,7 @@ Tell the install which clusters and repositories to use, and give it the credent
 The provider console writes your models and subscriptions to the catalog repository, with a token that can write
 that repository and no other.
 
-4. Create your catalog repository, with the owner and name you put in `repositories.catalog`:
+4. Create your catalog repository, with the owner and name you put in `catalog.url`:
 
    1. Open [Create a new repository](https://github.com/new).
    2. Fill in the form:
@@ -154,16 +155,16 @@ that repository and no other.
 
    3. Click **Generate token** at the bottom of the form.
    4. Copy the token from the page that follows. GitHub shows it only once.
-   5. In `.config/clusters.yaml`, uncomment `github:` and its `catalogToken` line, set `catalogToken` to the token,
-      and save the file. Leave `deploymentToken` commented: without it, `make install` pushes with your own git
-      login.
+   5. In `.config/clusters.yaml`, set `catalog.token` to the token, and save the file. Leave `deployment:`
+      commented: without it, `make install` pushes with your own git login.
 
       ```yaml
-      github:
-        catalogToken: github_pat_TOKEN
+      catalog:
+        url: https://github.com/my-org/ai-grid-catalog.git
+        token: github_pat_TOKEN
       ```
 
-      The token is in `github.catalogToken` in `.config/clusters.yaml`, and nowhere else.
+      The token is in `catalog.token` in `.config/clusters.yaml`, and nowhere else.
 
 ### Check the prerequisites
 
@@ -271,7 +272,7 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 
 1. `login`: writes `.config/NAME/kubeconfig` for each cluster from its credentials and the API URL in
    `.config/clusters.yaml`.
-2. `inputs`: pins the library at `repositories.library`, writes your names to `root/inputs.env`, and pushes.
+2. `inputs`: pins the library at `LIBRARY` under `options:`, writes your names to `root/inputs.env`, and pushes.
 3. `catalog`: checks that your catalog repository holds only its README.
 4. `bootstrap`: installs OpenShift GitOps and applies your root on the hub, then waits until Argo CD has synced it.
 5. `acm`: waits until ACM is running.
@@ -318,8 +319,8 @@ its role and location there. The hub then installs OpenShift AI, MaaS and the gr
   |---|---|
   | `AI_GRID_TOKEN_NAME` | The cluster's `token` |
   | `AI_GRID_USERNAME_NAME`, `AI_GRID_PASSWORD_NAME` | The cluster's `username` and `password` |
-  | `AI_GRID_DEPLOYMENT_TOKEN`, else the file that `DEPLOYMENT_TOKEN_FILE` names | `github.deploymentToken` |
-  | `AI_GRID_CATALOG_TOKEN`, else the file that `CATALOG_TOKEN_FILE` names | `github.catalogToken` |
+  | `AI_GRID_DEPLOYMENT_TOKEN`, else the file that `DEPLOYMENT_TOKEN_FILE` names | `deployment.token` |
+  | `AI_GRID_CATALOG_TOKEN`, else the file that `CATALOG_TOKEN_FILE` names | `catalog.token` |
   | `AI_GRID_QUAY_USERNAME`, `AI_GRID_QUAY_PASSWORD`, else the auth file that `QUAY_AUTH_FILE` names | `quay.username`, `quay.password` |
 
   For each GitHub token and the `quay.io` login, the scripts use the first that's set: the `AI_GRID_` variable, the
@@ -333,8 +334,8 @@ its role and location there. The hub then installs OpenShift AI, MaaS and the gr
   of the same name. To make `make login` fail instead of opening a browser for a cluster with no credentials, run
   `make login NONINTERACTIVE=1`; `make install` never opens a browser.
 - **A deployment token, for CI or an unattended run:** by default `make install` pushes your deployment repository
-  with your own git login. Where there's none, such as a CI job, set `github.deploymentToken` in
-  `.config/clusters.yaml`, or `AI_GRID_DEPLOYMENT_TOKEN`, to a fine-grained token with the same fields as the
+  with your own git login. Where there's none, such as a CI job, uncomment `deployment:` in `.config/clusters.yaml`
+  and set its `token`, or set `AI_GRID_DEPLOYMENT_TOKEN`, to a fine-grained token with the same fields as the
   catalog token in step 5, except **Token name** `ai-grid-deployment` and **Repository access** your deployment
   repository only. With a token, `make install` uses only the token and skips your git credential helpers.
 - **A login you already have:** copy a working kubeconfig, such as the installer's `auth/kubeconfig`, to
@@ -359,8 +360,8 @@ its role and location there. The hub then installs OpenShift AI, MaaS and the gr
   `api-ca.crt`. If the router serves a custom certificate, use the CA that issued it instead of `router-ca`.
 - **A general `quay.io` account:** put its name and password under `quay:`. The install uses it for `quay.io/rhoai`
   as it would a robot account, so it works only when that account can pull from `quay.io/rhoai`.
-- **Another library revision:** set `repositories.library` to a branch, tag or commit, or leave it empty to keep the
-  template's own commit pin.
+- **Another library revision:** set `LIBRARY` under `options:` to a branch, tag or commit, or set it empty to keep
+  the template's own commit pin. Left out, it's `deployment-template`.
 - **Another token lifetime:** set `PROVIDER_ADMIN_TOKEN_DURATION` under `options:` for `make install`, or in the
   environment for `make provider-admin`.
 - **Longer or shorter waits:** each `GATE_*_SECONDS` value under `options:` sets a readiness check's time limit, in
