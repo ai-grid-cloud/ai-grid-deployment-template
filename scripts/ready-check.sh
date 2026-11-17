@@ -30,7 +30,8 @@
 #     checked, without the provider-admin token).
 # With no FAIL it writes .install/outputs.json (git-ignored): the hub's name, API
 # and endpoint URLs, the token file's path (never the token), the library pin,
-# and each site's role, location, API, apps domain and ACM name. persesURL is
+# and each site's name, API, apps domain and ACM name (no role or location:
+# the provider console's Add to AI Grid sets those, after the install). persesURL is
 # the Service's in-cluster URL, not reachable from outside the hub.
 #
 # Perses is the Cluster Observability Operator's Service and the Thanos Route
@@ -138,7 +139,6 @@ else fail "LokiStack redhat-ods-monitoring/usage-logs Ready: ${loki:-not created
 # The sites: imported and waiting, not added to the grid.
 sites_json='[]' root_checked=""
 for name in $(site_names); do
-  role=$(cluster_field "$name" role)
   check "site $name: ManagedCluster available" managedcluster_available "$name"
   if ! mc=$(ready_read get managedclusters.cluster.open-cluster-management.io "$name" -o json); then
     fail "site $name: can't read its labels: $mc"
@@ -166,9 +166,8 @@ for name in $(site_names); do
     if [ -z "$main_err" ]; then check "deployment-root Synced at origin's $branch ($main_sha)" root_synced_to "$main_sha"
     else fail "deployment-root Synced at origin's $branch: $main_err"; fi
   fi
-  sites_json=$(jq -c --arg n "$name" --arg r "$role" --arg l "$(cluster_field "$name" location)" \
-    --arg a "$(cluster_field "$name" api)" --arg d "$domain" \
-    '. + [{name: $n, role: $r, location: $l, api: $a, appsDomain: $d, acmName: $n}]' <<<"$sites_json")
+  sites_json=$(jq -c --arg n "$name" --arg a "$(cluster_api "$name")" --arg d "$domain" \
+    '. + [{name: $n, api: $a, appsDomain: $d, acmName: $n}]' <<<"$sites_json")
 done
 
 # No test content: the console lists no organizations, models or subscriptions.
@@ -199,7 +198,7 @@ fi
 rev=$(sed -n -E 's/^[[:space:]]*libraryRevision:[[:space:]]*([^[:space:]#]+).*/\1/p' "$dir/root/kustomization.yaml" | head -n1)
 lib=$(sed -n -E 's/^[[:space:]]*libraryRepoURL:[[:space:]]*([^[:space:]#]+).*/\1/p' "$dir/root/kustomization.yaml" | head -n1)
 mkdir -p "$dir/.install"
-jq -n --arg hub "$hub" --arg api "$(cluster_field "$hub" api)" \
+jq -n --arg hub "$hub" --arg api "$(cluster_api "$hub")" \
   --arg console "$(url "$console_host")" \
   --arg keycloak "$(url "$(route_host tenant-idp keycloak)")" \
   --arg perses "https://${PERSES_SERVICE#*/}.${PERSES_SERVICE%%/*}.svc:8080" \
