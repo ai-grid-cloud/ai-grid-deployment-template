@@ -141,7 +141,7 @@ t "console-call BODY_FILE that's empty stops, not sends {}" 2 "can't read BODY_F
 mkdir -p "$T/q\"d"; printf '{}' > "$T/q\"d/x.json"
 t "console-call BODY_FILE with a double quote in its path is read" 0 '^\[\{\}\]$' make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/q\"d/x.json"
 t "console-call BODY_FILE missing, with a double quote in its path, names it" 2 'BODY_FILE .*/q"d/nope.json \(missing' make -s -C "$cc" console-call METHOD=m BODY_FILE="$T/q\"d/nope.json"
-t "make help: CATALOG for page 2, make install reads repositories.catalog" 0 "^inputs: .*CATALOG=URL \(page 2\); make install reads repositories.catalog$" make -s -C "$one" help
+t "make help: CATALOG for page 2, make install reads catalog.url" 0 "^inputs: .*CATALOG=URL \(page 2\); make install reads catalog.url$" make -s -C "$one" help
 
 # make config: only creates the private file from the example, never overwrites it.
 cfg="$T/config"; mkdir -p "$cfg"; cp "$SRC/Makefile" "$SRC/clusters-example.yaml" "$cfg/"

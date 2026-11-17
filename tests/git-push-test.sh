@@ -75,14 +75,14 @@ read -r helper mode < "$T/askpass.path" || true
 t "  ... GIT_ASKPASS gives the token from the file, mode 700, removed after" \
   eval '[ "$(cat "$T/askpass.out")" = "$SENTINEL" ] && [ "$mode" = 700 ] && [ ! -e "$helper" ] && ! grep -qF "$SENTINEL" "$helper" 2>/dev/null'
 
-# The private .config/clusters.yaml: github.deploymentToken, no token file.
+# The private .config/clusters.yaml: deployment.token, no token file.
 D="$T/private"; g clone -q "$T/origin.git" "$D"; g -C "$D" config core.hooksPath /dev/null
 mkdir -p "$D/.config"; chmod 700 "$D/.config"
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\ncatalog: {url: "https://github.com/o/c.git"}\ndeployment: {token: "%s-private"}\n' "$SENTINEL" > "$D/.config/clusters.yaml"
 chmod 600 "$D/.config/clusters.yaml"; echo private > "$D/site.yaml"
 out=$(cd "$D" && env -u DEPLOYMENT_TOKEN_FILE PATH="$T/bin:$PATH" scripts/git-push.sh "private" site.yaml 2>&1) && rc=0 || rc=$?
 all_out+="$out"$'\n'
-t "private file: pushes with github.deploymentToken" eval '[ "$rc" = 0 ] && [ "$(cat "$T/askpass.out")" = "$SENTINEL-private" ]'
+t "private file: pushes with deployment.token" eval '[ "$rc" = 0 ] && [ "$(cat "$T/askpass.out")" = "$SENTINEL-private" ]'
 t "  ... never in argv or output" eval '! grep -qF "$SENTINEL-private" "$T/argv.log" && ! grep -qF "$SENTINEL" <<<"$out"'
 
 # A fresh CI runner: no git identity at all (user.useConfigOnly stops git

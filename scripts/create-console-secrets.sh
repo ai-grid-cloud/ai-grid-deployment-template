@@ -3,7 +3,7 @@
 # from clusters.yaml (install guide, page 4; make console-secrets). Takes the
 # same environment variables (see that script), with this deployment's
 # defaults:
-#   the catalog token   from scripts/clusters.sh's deployment_load: github.catalogToken
+#   the catalog token   from scripts/clusters.sh's deployment_load: catalog.token
 #                       in .config/clusters.yaml, the environment winning, else
 #                       CATALOG_TOKEN_FILE, else (page by page) ~/.ai-grid/catalog-token
 #   KEYCLOAK_NAMESPACE  tenant-idp, the template's own Keycloak (tenant-idp/)

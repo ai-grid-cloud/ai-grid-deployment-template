@@ -3,7 +3,7 @@
 # push HEAD to origin, with no prompt.
 #
 # The token, a GitHub token that can write this repository, is optional. It
-# comes from scripts/clusters.sh's deployment_load: github.deploymentToken in
+# comes from scripts/clusters.sh's deployment_load: deployment.token in
 # .config/clusters.yaml, the environment winning, else the file named by
 # $DEPLOYMENT_TOKEN_FILE, else .config/deployment-token. git reads it through a temporary GIT_ASKPASS
 # helper (mode 700) that reads the file when git asks, so the token is never
