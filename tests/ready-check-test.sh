@@ -131,8 +131,8 @@ t "all ready: OK and outputs.json" 0 "^OK " \
   'jqt ".providerAdminTokenFile == \".config/provider-admin-token\""' \
   'jqt ".library.url == \"https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git\" and (.library.revision | test(\"^[0-9a-f]{40}$\"))"' \
   'jqt "(.sites | length) == 2"' \
-  'jqt ".sites[0] == {name: \"site-b\", role: \"combined\", location: \"us-east\", api: \"https://api.site-b.example.com:6443\", appsDomain: \"apps.site-b.example.com\", acmName: \"site-b\"}"' \
-  'jqt ".sites[1].name == \"site-c\" and .sites[1].role == \"inference\" and .sites[1].appsDomain == \"apps.site-c.example.com\""' \
+  'jqt ".sites[0] == {name: \"site-b\", api: \"https://api.site-b.example.com:6443\", appsDomain: \"apps.site-b.example.com\", acmName: \"site-b\"}"' \
+  'jqt ".sites[1] == {name: \"site-c\", api: \"https://api.site-c.example.com:6443\", appsDomain: \"apps.site-c.example.com\", acmName: \"site-c\"}"' \
   'jqt "(.hub | keys) == ([\"api\",\"consoleURL\",\"keycloakRealm\",\"keycloakURL\",\"lokiStack\",\"name\",\"persesURL\",\"thanosURL\"])"' \
   'jqt "(keys) == ([\"hub\",\"library\",\"providerAdminTokenFile\",\"sites\"])"' \
   'grep -q "Authorization: Bearer $SECRET" "$W/headers"' '! grep -q "$SECRET" "$W/curl.log"' \
@@ -158,10 +158,10 @@ W="$T/dsc"; ready "$W"; echo "datasciencecluster.datasciencecluster.opendatahub.
 t "a DataScienceCluster on a site: FAIL" 1 "^FAIL .*site-c.*DataScienceCluster" '[ ! -f "$(OUT)" ]'
 
 
-D="$T/inference"; newrepo "$D" '  - {name: site-c, api: "https://api.site-c.example.com:6443"}'
-W="$T/inference-w"; ready "$W"; run
-t "an inference site" 0 "^OK .*site-c" '! grep -q "^FAIL" <<<"$out"' \
-  '! grep -q clusterissuers "$W/argv.log"' 'jqt ".sites == [{name: \"site-c\", role: \"inference\", location: \"us-west\", api: \"https://api.site-c.example.com:6443\", appsDomain: \"apps.site-c.example.com\", acmName: \"site-c\"}]"'
+D="$T/one-site"; newrepo "$D" '  - {name: site-c, api: "https://api.site-c.example.com:6443"}'
+W="$T/one-site-w"; ready "$W"; run
+t "one site" 0 "^OK .*site-c" '! grep -q "^FAIL" <<<"$out"' \
+  '! grep -q clusterissuers "$W/argv.log"' 'jqt ".sites == [{name: \"site-c\", api: \"https://api.site-c.example.com:6443\", appsDomain: \"apps.site-c.example.com\", acmName: \"site-c\"}]"'
 D="$T/repo"
 
 W="$T/org"; ready "$W"; echo '{"items":[{"id":"7c0e","name":"org1"}],"size":1}' > "$W/Tenants.json"; rm -f "$(OUT)"; run
