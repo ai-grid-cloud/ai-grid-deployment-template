@@ -191,8 +191,8 @@ catalog: {url: REQUIRED-catalogRepoURL}")
 t "catalog placeholder: the file still loads" 0 "^site-b site" bash "$d/scripts/clusters.sh" --rows "$d"
 t "  ... and counts as no catalog" 0 "^CATALOG_REPO_URL=$" bash "$d/scripts/clusters.sh" --settings "$d"
 d2=$(repo privcatalog "$GOOD"); mkdir -p "$d2/.config"; chmod 700 "$d2/.config"
-{ cat "$d2/clusters.yaml"; echo "repositories: {catalog: REQUIRED-catalogRepoURL}"; } > "$d2/.config/clusters.yaml"; rm "$d2/clusters.yaml"; chmod 600 "$d2/.config/clusters.yaml"
-t "catalog placeholder in the private file: says to set it there" 1 "set repositories.catalog in .config/clusters.yaml" bash "$d2/scripts/clusters.sh" --rows "$d2"
+{ cat "$d2/clusters.yaml"; echo "catalog: {url: REQUIRED-catalogRepoURL}"; } > "$d2/.config/clusters.yaml"; rm "$d2/clusters.yaml"; chmod 600 "$d2/.config/clusters.yaml"
+t "catalog placeholder in the private file: says to set it there" 1 "set these in .config/clusters.yaml: REQUIRED-catalogRepoURL" bash "$d2/scripts/clusters.sh" --rows "$d2"
 t "  ... so the page-by-page path stays on" 0 "^pp$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && settings_apply && page_by_page && echo pp' "$d"
 d=$(repo typo "hub: {api: 'https://h:6443'}
 option: {GATE_ROOT_SECONDS: 1}")

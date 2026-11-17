@@ -92,7 +92,7 @@ if [ -n "$token_file" ]; then gitc() { git -C "$dir" -c credential.helper= "$@";
 else
   export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes"
   gitc() { git -C "$dir" "$@"; }
-  login_hint="; log in to GitHub so git can read origin without a prompt (such as gh auth login), or set github.deploymentToken with make secrets NAME=github"
+  login_hint="; log in to GitHub so git can read origin without a prompt (such as gh auth login), or set deployment.token in .config/clusters.yaml"
 fi
 branch=$( { [ -f "$dir/root/inputs.env" ] && sed -n 's/^deploymentRevision=//p' "$dir/root/inputs.env" | tail -n1; } || true)
 branch=${branch:-main}
