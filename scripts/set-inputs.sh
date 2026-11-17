@@ -13,7 +13,8 @@
 # it, with the apps domains read from the hub and each site through their
 # logins; both revisions are main. root/inputs.env is yours: the
 # template has none, and root/kustomization.yaml copies its values into the
-# root. A value that's already set, in either file, is left alone.
+# root. A value that's already set is left alone, except that portalRedirectURI
+# gains the redirect of a site added to clusters.yaml since (it removes none).
 #
 # CATALOG_REPO_URL defaults to clusters.yaml's catalog.url (make inputs).
 #
@@ -98,17 +99,34 @@ tmp = f + ".tmp"
 open(tmp, "w").write("\n".join(lines) + "\n")
 os.replace(tmp, f)
 
-# Placeholders in your other files.
-for path, name, value in [("tenant-idp/manifests/settings.yaml", "portalRedirectURI", redirect)]:
-    f = os.path.join(d, path)
-    text = open(f).read()
-    token = "REQUIRED-" + name
-    if token in text:
-        tmp = f + ".tmp"
-        open(tmp, "w").write(text.replace(token, value))
-        os.replace(tmp, f)
-        print(f"set      {path}: {name} = {value}")
+# The portal's redirects: the placeholder becomes every site's; once set, a
+# site added to clusters.yaml since gets its redirect added, and the
+# redirects already there (yours included) stay.
+import re
+path, name = "tenant-idp/manifests/settings.yaml", "portalRedirectURI"
+f = os.path.join(d, path)
+text = open(f).read()
+token = "REQUIRED-" + name
+m = re.search(r"^(\s*" + name + r":[ \t]*)(.*)$", text, re.M)
+if token in text:
+    new = text.replace(token, redirect)
+    print(f"set      {path}: {name} = {redirect}")
+elif m:
+    have = re.sub(r"\s+#.*$", "", m.group(2)).strip().strip("'\"")
+    uris = have.replace(",", " ").split()
+    missing = [u for u in redirect.split() if u not in uris]
+    if missing:
+        value = " ".join(uris + missing)
+        new = text[:m.start(2)] + value + re.search(r"(\s+#.*)?$", m.group(2)).group(0) + text[m.end(2):]
+        print(f"added    {path}: {name} += {' '.join(missing)}")
     else:
-        print(f"kept     {path}: {name} is already set")
+        new = text
+        print(f"kept     {path}: {name} has every site's redirect")
+else:
+    sys.exit(f"error: {path} has no {name}")
+if new != text:
+    tmp = f + ".tmp"
+    open(tmp, "w").write(new)
+    os.replace(tmp, f)
 PY
 "$here/check-deployment.sh" "$dir"

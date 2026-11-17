@@ -101,6 +101,20 @@ check "inputs.env renders byte for byte as values in the root's files" cmp -s <(
 t "a second run keeps the values" 0 "kept +root/inputs.env: catalogRepoURL is already set" \
   env PATH="$T/bin:$PATH" "$d/scripts/set-inputs.sh" https://github.com/acme/other.git
 check "a second run changes nothing" grep -qx 'catalogRepoURL=https://github.com/acme/catalog.git' "$k"
+# A site added to clusters.yaml after the first run gets its redirect; one of yours stays.
+s="$d/tenant-idp/manifests/settings.yaml"
+sed -i.bak 's#^  portalRedirectURI: \(.*\)$#  portalRedirectURI: \1 https://portal.example.com/*#' "$s"; rm "$s.bak"
+printf "  - {name: site-n, api: 'https://api.site-n.example.com:6443'}\n" >> "$d/clusters.yaml"; mkdir -p "$d/.config/site-n"; : > "$d/.config/site-n/kubeconfig"
+t "a new site's redirect is added" 0 "added +tenant-idp/manifests/settings.yaml: portalRedirectURI \+= https://maas.apps.site-n.example.com/\*$" \
+  env PATH="$T/bin:$PATH" "$d/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+check "  ... after the ones there, yours kept" grep -qx '  portalRedirectURI: https://maas.apps.site-i.example.com/\* https://maas.apps.site-c.example.com/\* https://portal.example.com/\* https://maas.apps.site-n.example.com/\*' "$s"
+sed -i.bak 's#^\(  portalRedirectURI: .*\)$#\1   \# every site#' "$s"; rm "$s.bak"
+printf "  - {name: site-m, api: 'https://api.site-m.example.com:6443'}\n" >> "$d/clusters.yaml"; mkdir -p "$d/.config/site-m"; : > "$d/.config/site-m/kubeconfig"
+t "a trailing comment: kept, and not taken for a redirect" 0 "added +tenant-idp/manifests/settings.yaml: portalRedirectURI \+= https://maas.apps.site-m.example.com/\*$" \
+  env PATH="$T/bin:$PATH" "$d/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+check "  ... after the redirects, before the comment" grep -qx '  portalRedirectURI: https://maas.apps.site-i.example.com/\* https://maas.apps.site-c.example.com/\* https://portal.example.com/\* https://maas.apps.site-n.example.com/\* https://maas.apps.site-m.example.com/\*   # every site' "$s"
+t "  ... once" 0 "kept +tenant-idp/manifests/settings.yaml: portalRedirectURI has every site's redirect" \
+  env PATH="$T/bin:$PATH" "$d/scripts/set-inputs.sh" https://github.com/acme/catalog.git
 sed -i.bak 's#^catalogRevision=.*#catalogRevision=release#' "$k"; rm "$k.bak"
 t "a third run keeps a revision you changed" 0 "kept +root/inputs.env: catalogRevision is already set" \
   env PATH="$T/bin:$PATH" "$d/scripts/set-inputs.sh" https://github.com/acme/catalog.git

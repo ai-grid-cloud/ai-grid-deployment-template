@@ -16,8 +16,8 @@ T=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$T"' EXIT
 total=0 fails=0
 SECRET=SENTINEL-provider-admin-token
 
-run() { # runs ready-check.sh in $D with the stubs reading $W; sets rc and out
-  out=$(env PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?
+run() { # [ARG...]: runs ready-check.sh in $D with the stubs reading $W; sets rc and out
+  out=$(env PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" "$@" 2>&1) && rc=0 || rc=$?
 }
 t() { # name want_rc expect_grep [check...]: each check is a command that must succeed
   local name=$1 want=$2 expect=$3; shift 3; local check ok=1
@@ -172,6 +172,25 @@ t "a model exists: FAIL" 1 "^FAIL .*1 model" '[ ! -f "$(OUT)" ]'
 
 W="$T/sub"; ready "$W"; echo '{"items":[{"id":"s1"},{"id":"s2"}]}' > "$W/Subscriptions.json"; rm -f "$(OUT)"; run
 t "a subscription exists: FAIL (no total: counts items)" 1 "^FAIL .*2 subscription" '[ ! -f "$(OUT)" ]'
+
+# --in-use (a rerun of make install on a hub in use): what a fresh install would FAIL is INFO.
+W="$T/inuse"; ready "$W"; mc site-b '{"ai-grid/enabled":"true","ai-grid/role":"combined"}' > "$W/hub/mc-site-b.json"
+echo "datasciencecluster.datasciencecluster.opendatahub.io/default-dsc" > "$W/site-c/dsc"
+echo '{"size":1,"total":1,"items":[{"id":"m1"}]}' > "$W/Models.json"; rm -f "$(OUT)"; run --in-use
+t "--in-use: a site in the grid, a DataScienceCluster and a model are INFO, not FAIL" 0 "^INFO site site-b: in the grid" \
+  '! grep -q "^FAIL" <<<"$out"' 'grep -q "^INFO site site-c: has a DataScienceCluster" <<<"$out"' \
+  'grep -q "^INFO the console lists 1 model" <<<"$out"' '[ -f "$(OUT)" ]'
+W="$T/inuse-apps"; ready "$W"
+jq '.items += [{"metadata":{"name":"acm-models-catalog-models-site-c"},"status":{"sync":{"status":"Synced"},"health":{"status":"Progressing"}}}]' "$W/hub/apps.json" > "$W/a" && mv "$W/a" "$W/hub/apps.json"
+rm -f "$(OUT)"; run --in-use
+t "--in-use: a console model Application not Healthy is INFO" 0 "^INFO the console's model Applications not Synced and Healthy: acm-models-catalog-models-site-c \(Synced Progressing\)" \
+  '! grep -q "^FAIL" <<<"$out"'
+run
+t "  ... and a FAIL without it" 1 "^FAIL hub Applications.*acm-models-catalog-models-site-c"
+W="$T/inuse-down"; ready "$W"; echo 'Error from server (Forbidden): x' > "$W/site-c/dsc.err"; rm -f "$(OUT)"; run --in-use
+t "--in-use: an error is still a FAIL" 1 "^FAIL .*site-c.*Forbidden"
+run --bogus
+t "an unknown argument: usage" 2 "usage: ready-check.sh \[--in-use\]"
 
 W="$T/forbidden"; ready "$W"
 echo 'Error from server (Forbidden): datascienceclusters.datasciencecluster.opendatahub.io is forbidden: User "x" cannot list resource "datascienceclusters"' > "$W/site-c/dsc.err"
