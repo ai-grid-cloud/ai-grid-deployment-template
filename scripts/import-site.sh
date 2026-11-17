@@ -14,7 +14,6 @@ here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/clusters.sh"
 clusters_load "$here/.."
 if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then name=$(site_name "$1"); shift; else name=$(site_name); fi
-[ "$(cluster_field "$name" role)" != hub ] || { echo "error: $name is the hub" >&2; exit 1; }
 hub=$(hub_name)
 cluster_login_ok "$hub"; cluster_login_ok "$name"
 # Already joined and available on this hub: nothing for the import to do.
