@@ -133,6 +133,11 @@ rm "$W/site-a-domain"
 run
 t "no apps domain stops it" eval '[ "$rc" = 1 ] && grep -q "can.t read site site-a.s apps domain" <<<"$out"'
 
+setup domain-odd
+echo 'x/g;s/a/b' > "$W/site-a-domain"
+run
+t "an apps domain that isn't a DNS name stops it" eval '[ "$rc" = 1 ] && grep -q "apps domain isn.t a DNS name" <<<"$out" && [ ! -e "$D/values" ]'
+
 echo "== the platform's cert-manager gone later"
 setup gone
 echo "cert-manager-operator-og" > "$W/site-a-ogs"
