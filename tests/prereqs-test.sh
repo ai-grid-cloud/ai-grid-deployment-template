@@ -193,11 +193,17 @@ EM="$T/private-missing"; mkdir -p "$EM/.config"
 printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\ncatalog: {url: 'https://example.com/c.git'}\n" > "$EM/.config/clusters.yaml"; chmod 600 "$EM/.config/clusters.yaml"
 ED=$EM envt "private file without secrets: the auth file hint names quay:" "^MISSING +auth file +$EM/.config/quay-auth.json: not found; set quay.username and quay.password in .config/clusters.yaml \(make config creates it\)"
 ED=$EM envt "  ... the token hint names catalog.token" "^MISSING +catalog token file +$EM/.config/catalog-token not found; set catalog.token in .config/clusters.yaml \(make config creates it\)"
-ED=$EM envt "  ... no token, no origin: FAIL with how to log in or set the token" "^FAIL +deployment push +no token, and your git login can't read origin .*gh auth login.*set deployment.token in .config/clusters.yaml"
+ED=$EM envt "  ... no token, no origin: FAIL with how to log in or set the token" "^FAIL +deployment push +no token, and your git login can't push to origin .*gh auth login.*set deployment.token in .config/clusters.yaml"
 ED=$EM envt "  ... never MISSING for the deployment token" "." && { total=$((total+1)); if env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$H1" STUB_DIR="$w" "$PY" "$SCRIPT" --deployment "$EM" 2>&1 | grep -q "^MISSING .*deployment"; then echo "   FAIL deployment token reported MISSING"; fails=$((fails+1)); else echo "   ok     ... (not MISSING)"; fi; }
 git init -q --bare "$T/em-origin.git"; git -C "$EM" init -q; git -C "$EM" remote add origin "$T/em-origin.git"
+git -C "$EM" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m init
 ED=$EM envt "  ... a DEPLOYMENT_TOKEN_FILE that doesn't exist: FAIL, not your git login" "^FAIL +deployment push +DEPLOYMENT_TOKEN_FILE names /no/such/token, which is missing or empty" DEPLOYMENT_TOKEN_FILE=/no/such/token
-ED=$EM envt "  ... no token, origin readable: ok with your git login" "^ok +deployment push +no token: your git login can read origin; whether it can push isn't checked"
+ED=$EM envt "  ... no token, origin writable: ok with your git login" "^ok +deployment push +no token: your git login can push to origin \(dry run\)"
+total=$((total+1)); if [ -z "$(git -C "$EM" ls-remote origin ai-grid-prereqs-push-check)" ]; then echo "   ok     ... and the dry run created no branch"; else echo "   FAIL the dry run created a branch"; fails=$((fails+1)); fi
+# Readable but not writable: the push URL refuses, the fetch URL works.
+git -C "$EM" config remote.origin.pushurl "$T/no-such-origin.git"
+ED=$EM envt "  ... origin readable but not writable: FAIL" "^FAIL +deployment push +no token, and your git login can't push to origin .*gh auth login"
+git -C "$EM" config --unset remote.origin.pushurl
 # A catalog and no secrets: the legacy files under .config/, not the home directory's.
 E2="$T/env-defaults"; settings_dep "$E2" ""
 cp "$A" "$E2/.config/quay-auth.json"; printf 'x' > "$E2/.config/catalog-token"; chmod 600 "$E2/.config/catalog-token"
