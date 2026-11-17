@@ -69,6 +69,6 @@ t "a refused login says why" 1 "the IdP gave no token for alice: Invalid user cr
 rm "$T/bad-login"
 t "missing arguments: usage" 2 "usage: tenant-call.sh" --user alice
 sed -i.bak 's#^idpIssuerURL=.*#idpIssuerURL=#' "$D/root/inputs.env"
-t "an unset issuer points to set-inputs.sh" 1 "idpIssuerURL isn't set in root/inputs.env" "${ARGS[@]}"
+t "an unset issuer points to make inputs" 1 "idpIssuerURL isn't set in root/inputs.env \(make inputs\)" "${ARGS[@]}"
 
 echo "tenant-call tests: $((total-fails)) ok, $fails failed"; exit "$fails"

@@ -47,7 +47,7 @@ if ! git merge -q --no-edit -m "Merge the template's main" template/main; then
     catalog=$(sed -nE 's/.*&catalogRepoURL[[:space:]]+([^[:space:]]+).*/\1/p' root/inputs.yaml | head -n1)
     case "$catalog" in ""|REQUIRED-*) catalog=CATALOG_REPO_URL ;; esac
     echo "The template replaced root/inputs.yaml with root/inputs.env. Write root/inputs.env from your values:" >&2
-    echo "  scripts/set-inputs.sh $catalog" >&2
+    echo "  make inputs CATALOG=$catalog" >&2
     echo "It sets both revisions to main; if root/inputs.yaml has another deploymentRevision or catalogRevision," >&2
     echo "copy it into root/inputs.env. Then remove the old file and finish the merge:" >&2
     echo "  git rm root/inputs.yaml" >&2

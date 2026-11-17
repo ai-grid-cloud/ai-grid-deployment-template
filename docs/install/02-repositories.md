@@ -28,9 +28,9 @@ again.
 
    In `clusters.yaml`, replace each `REQUIRED-` value: the hub's API URL, and the site's name, location and API URL.
    Keep the site's role, `combined`: the guide's commands use it. The guide calls the hub `hub`. Leave the
-   `repositories:` and `options:` sections as they are: only `make install` reads them. To find a cluster's
-   API URL, open its web console, click your user name > **Copy login command**, and read the `--server=` value, or
-   take it from the cluster installer's output. For example:
+   `repositories:` and `options:` sections as they are: they're for `make install`, and these pages name the catalog
+   with `make inputs CATALOG=` instead. To find a cluster's API URL, open its web console, click your user name >
+   **Copy login command**, and read the `--server=` value, or take it from the cluster installer's output. For example:
 
    ```yaml
    apiVersion: ai-grid.dev/v1alpha1
