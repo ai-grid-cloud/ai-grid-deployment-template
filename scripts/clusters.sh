@@ -4,8 +4,9 @@
 # else clusters.yaml at the root (copied from clusters-example.yaml). It says
 # only how to reach each cluster: the hub and each site with its API URL and,
 # in the private file only, its token or username and password; make
-# install's settings (repositories:, options:); and, in the private file only,
-# the github: and quay: secrets. Roles and locations aren't in it: the
+# the catalog repository (catalog.url; its token, catalog.token, in the private
+# file only); make install's settings (options:); and, in the private file
+# only, deployment.token and quay:. Roles and locations aren't in it: the
 # provider console's Add to AI Grid sets them. The hub's name is always "hub".
 # Each cluster's login is .config/NAME/kubeconfig (git-ignored; make login).
 # kubectl parses the YAML offline (--local), and jq reads the result. No error
@@ -15,7 +16,7 @@
 #   clusters_load DIR             reads and checks DIR/.config/clusters.yaml, else DIR/clusters.yaml
 #   CLUSTERS_FILE                 the file it read
 #   CLUSTERS_ROWS                 one line per cluster: NAME KIND API, KIND hub or site
-#   secret_get JQ_PATH            a secret's value, such as .github.catalogToken; empty when unset
+#   secret_get JQ_PATH            a secret's value, such as .catalog.token; empty when unset
 #   cluster_secret NAME KEY       the cluster's own token, username or password; empty when unset
 #   deployment_load DIR           clusters_load, then the settings and the secret files
 #                                 exported (see "settings and secrets" below)
@@ -54,6 +55,7 @@ clusters_load() {
   # The old format, first: say what to change. Keys only, never a value.
   left=$(jq -r '
       def entries: [(.hub | objects), ((.sites // []) | arrays | .[] | objects)];
+      (if has("repositories") or has("github") then "replace repositories.catalog with catalog.url, repositories.library with options.LIBRARY, github.catalogToken with catalog.token and github.deploymentToken with deployment.token" else empty end),
       (if has("credentials") then "move each credentials.NAME token, or username and password, into that cluster'"'"'s own hub: or sites: entry" else empty end),
       (if (.hub | objects | has("name")) then "remove hub.name (the hub is always hub)" else empty end),
       (if any(entries[]; has("role") or has("location")) then "remove role: and location: (choose them in the provider console'"'"'s Add to AI Grid)" else empty end),
@@ -66,7 +68,8 @@ clusters_load() {
         def secrets($p): objects | ["token", "username", "password"][] as $k | select(has($k)) | "\($p).\($k)";
         (.hub | secrets("hub")),
         ((.sites // []) | arrays | to_entries[] | .key as $i | .value | secrets("sites[\($i)]")),
-        (["credentials", "github", "quay"][] as $k | select(has($k)) | $k)' 2>/dev/null); then
+        (.catalog | objects | select(has("token")) | "catalog.token"),
+        (["credentials", "deployment", "quay"][] as $k | select(has($k)) | $k)' 2>/dev/null); then
       echo "error: clusters.yaml isn't valid YAML" >&2; return 1
     fi
     left=$(echo $left)
@@ -74,7 +77,7 @@ clusters_load() {
   fi
   # Each of these is a map; a value in its place is named by path only, never printed.
   left=$(jq -r '
-      ([["options"], ["repositories"], ["hub"], ["github"], ["quay"]][] as $p
+      ([["options"], ["catalog"], ["deployment"], ["hub"], ["quay"]][] as $p
         | select(getpath($p) | . != null and type != "object") | $p | join(".")),
       ((.sites // []) | if type == "array" then to_entries[] | select((.value | type) != "object") | "sites[\(.key)]" else "sites must be a list" end)
       ' <<<"$json" 2>/dev/null | head -n 1) ||
@@ -88,36 +91,36 @@ clusters_load() {
   left=$(jq -r '(.options // {}) | keys[] | select(. == "DEPLOYMENT_TOKEN_FILE" or . == "CATALOG_TOKEN_FILE" or . == "QUAY_AUTH_FILE")' <<<"$json" | head -n 1)
   case "$left" in
     "") ;;
-    DEPLOYMENT_TOKEN_FILE) echo "error: options.$left is no longer read: put the token in github.deploymentToken in .config/clusters.yaml (make secrets), and delete the option" >&2; return 1 ;;
-    CATALOG_TOKEN_FILE) echo "error: options.$left is no longer read: put the token in github.catalogToken in .config/clusters.yaml (make secrets), and delete the option" >&2; return 1 ;;
-    *) echo "error: options.$left is no longer read: put the quay.io/rhoai robot account in quay.username and quay.password in .config/clusters.yaml (make secrets), and delete the option" >&2; return 1 ;;
+    DEPLOYMENT_TOKEN_FILE) echo "error: options.$left is no longer read: put the token in deployment.token in .config/clusters.yaml, and delete the option" >&2; return 1 ;;
+    CATALOG_TOKEN_FILE) echo "error: options.$left is no longer read: put the token in catalog.token in .config/clusters.yaml, and delete the option" >&2; return 1 ;;
+    *) echo "error: options.$left is no longer read: put the quay.io/rhoai robot account in quay.username and quay.password in .config/clusters.yaml, and delete the option" >&2; return 1 ;;
   esac
   # A key the scripts don't read is a typo, most likely: name it.
-  left=$(jq -r --arg opts "\\A($SETTINGS_OPTIONS_RE)\\z" '
+  left=$(jq -r --arg opts "\\A(LIBRARY|$SETTINGS_OPTIONS_RE)\\z" '
       def count($p): if length == 0 then [] else ["\($p) (\(length) unknown key\(if length > 1 then "s" else "" end))"] end;
       # Beside a secret, a key may itself be a pasted secret: name only a short word, else count.
       def word: test("\\A[A-Za-z][A-Za-z0-9_-]{0,31}\\z");
       def beside($p): (map(select(word)) | map("\($p).\(.)")) + (map(select(word | not)) | count($p));
-      (keys - ["apiVersion", "kind", "metadata", "hub", "sites", "repositories", "options", "github", "quay"] | map(.)),
-      ((.github // {}) | keys - ["deploymentToken", "catalogToken"] | count("github")),
+      (keys - ["apiVersion", "kind", "metadata", "hub", "sites", "catalog", "deployment", "options", "quay"] | map(.)),
+      ((.catalog // {}) | keys - ["url", "token"] | beside("catalog")),
+      ((.deployment // {}) | keys - ["token"] | count("deployment")),
       ((.quay // {}) | keys - ["username", "password"] | count("quay")),
       ((.hub // {}) | keys - ["api", "token", "username", "password"] | beside("hub")),
       ((.sites // []) | to_entries[] | .key as $i | (.value // {}) | keys
         - ["name", "api", "token", "username", "password"] | beside("sites[\($i)]")),
-      ((.repositories // {}) | keys - ["catalog", "library"] | map("repositories." + .)),
       ((.options // {}) | keys | map(select(test($opts) | not)) | map("options." + .))
       | .[]' <<<"$json" | tr '\n' ' ')
   [ -z "$left" ] || { echo "error: clusters.yaml: unknown keys (typos?): ${left% }" >&2; return 1; }
   # Placeholders, before the checks on names and URLs: a setting's own text; a
-  # secret's path, never its value. The catalog's is allowed: it means no
-  # catalog yet (settings_lines).
+  # secret's path, never its value. In the committed file the catalog URL's
+  # is allowed: it means no catalog yet (settings_lines).
   left=$(jq -r '
       def path_text: map(if type == "number" then "[\(.)]" else ".\(.)" end) | join("") | ltrimstr(".") | gsub("\\.\\["; "[");
-      def secret_paths: paths(strings) | select(.[0] == "github" or .[0] == "quay"
+      def secret_paths: paths(strings) | select(.[0] == "deployment" or .[0] == "quay" or . == ["catalog", "token"]
         or ((.[0] == "hub" or .[0] == "sites") and (.[-1] | IN("token", "username", "password"))));
-      ([secret_paths] as $s | reduce $s[] as $p (.; delpaths([$p]))
-        | del(.repositories.catalog) | .. | strings | select(test("REQUIRED-")) | match("REQUIRED-[A-Za-z]+").string),
-      (secret_paths as $p | select(getpath($p) | test("REQUIRED-")) | $p | path_text)' <<<"$json" | awk '!seen[$0]++' | tr '\n' ' ')
+      ([secret_paths] as $s | (if $private then . else del(.catalog.url) end) | reduce $s[] as $p (.; delpaths([$p]))
+        | .. | strings | select(test("REQUIRED-")) | match("REQUIRED-[A-Za-z]+").string),
+      (secret_paths as $p | select(getpath($p) | test("REQUIRED-")) | $p | path_text)' --argjson private "$([ -n "$private" ] && echo true || echo false)" <<<"$json" | awk '!seen[$0]++' | tr '\n' ' ')
   [ -z "$left" ] || { echo "error: set these in $rel: ${left% }" >&2; return 1; }
   # One tab-separated row per cluster: what (hub or site N), name, kind, api.
   while IFS=$'\t' read -r what name kind api; do
@@ -131,8 +134,8 @@ clusters_load() {
       ((.sites // []) | to_entries[] | ["site \(.key + 1)", .value.name, "site", .value.api])
       | map(. // "" | tostring) | @tsv' <<<"$json")
   # The private file is for make install, which needs the catalog: say so now, not later.
-  [ -z "$private" ] || [ -n "$(jq -r '.repositories.catalog // "" | select(startswith("REQUIRED-") | not)' <<<"$json")" ] ||
-    { echo "error: set repositories.catalog in .config/clusters.yaml" >&2; return 1; }
+  [ -z "$private" ] || [ -n "$(jq -r '.catalog.url // "" | select(startswith("REQUIRED-") | not)' <<<"$json")" ] ||
+    { echo "error: set catalog.url in .config/clusters.yaml" >&2; return 1; }
   CLUSTERS_ROWS=$rows CLUSTERS_JSON=$json
 }
 
@@ -151,8 +154,9 @@ cluster_secret() { # NAME KEY: the hub's, or the site entry's, own token, userna
 
 # The install settings clusters.yaml holds, as KEY=VALUE lines, one for each
 # key the file sets (an empty value too, so it wins over the environment):
-# repositories.catalog is CATALOG_REPO_URL, repositories.library is
-# LIBRARY_REVISION, and each options key is itself. true is 1, false and null
+# catalog.url is CATALOG_REPO_URL, options.LIBRARY is LIBRARY_REVISION (not
+# LIBRARY, which names the library checkout), and each other options key is
+# itself. true is 1, false and null
 # are empty.
 settings_lines() {
   # A value spread over lines would come out as more than one setting: refuse it.
@@ -160,10 +164,10 @@ settings_lines() {
     def v: if . == true then "1" elif . == false or . == null then ""
       else tostring | if test("[\\n\\r]") then error("a setting'"'"'s value spans lines") else . end end;
     # REQUIRED-catalogRepoURL (the example) means no catalog yet, as "" does.
-    (if (.repositories // {}) | has("catalog") then
-      "CATALOG_REPO_URL=\(.repositories.catalog | v | if startswith("REQUIRED-") then "" else . end)" else empty end),
-    (if (.repositories // {}) | has("library") then "LIBRARY_REVISION=\(.repositories.library | v)" else empty end),
-    ((.options // {}) | to_entries[] | "\(.key)=\(.value | v)")' <<<"$CLUSTERS_JSON" 2>/dev/null ||
+    (if (.catalog // {}) | has("url") then
+      "CATALOG_REPO_URL=\(.catalog.url | v | if startswith("REQUIRED-") then "" else . end)" else empty end),
+    (if (.options // {}) | has("LIBRARY") then "LIBRARY_REVISION=\(.options.LIBRARY | v)" else empty end),
+    ((.options // {}) | to_entries[] | select(.key != "LIBRARY") | "\(.key)=\(.value | v)")' <<<"$CLUSTERS_JSON" 2>/dev/null ||
     { echo "error: clusters.yaml: a setting's value spans lines" >&2; return 1; }
 }
 
@@ -222,9 +226,9 @@ merge_kubeconfigs() { # HUB SITE OUT: renames each cluster, user and context, so
 #
 # Secrets: each becomes a file the scripts pass on by path, never a command line:
 #   DEPLOYMENT_TOKEN_FILE   AI_GRID_DEPLOYMENT_TOKEN, else DEPLOYMENT_TOKEN_FILE,
-#                           else github.deploymentToken, else .config/deployment-token
+#                           else deployment.token, else .config/deployment-token
 #   CATALOG_TOKEN_FILE      AI_GRID_CATALOG_TOKEN, else CATALOG_TOKEN_FILE, else
-#                           github.catalogToken, else .config/catalog-token, else
+#                           catalog.token, else .config/catalog-token, else
 #                           (page by page) ~/.ai-grid/catalog-token
 #   QUAY_AUTH_FILE          AI_GRID_QUAY_USERNAME and AI_GRID_QUAY_PASSWORD, else
 #                           QUAY_AUTH_FILE, else quay:, else .config/quay-auth.json,
@@ -320,18 +324,18 @@ _quay_auth() {
 }
 
 secrets_apply() {
-  _secret_file DEPLOYMENT_TOKEN_FILE AI_GRID_DEPLOYMENT_TOKEN .github.deploymentToken deployment-token || return 1
-  _secret_file CATALOG_TOKEN_FILE AI_GRID_CATALOG_TOKEN .github.catalogToken catalog-token "$HOME/.ai-grid/catalog-token" || return 1
+  _secret_file DEPLOYMENT_TOKEN_FILE AI_GRID_DEPLOYMENT_TOKEN .deployment.token deployment-token || return 1
+  _secret_file CATALOG_TOKEN_FILE AI_GRID_CATALOG_TOKEN .catalog.token catalog-token "$HOME/.ai-grid/catalog-token" || return 1
   _quay_auth
 }
 
 secret_missing() { # VAR: how to supply it
   case "$1:$(page_by_page && echo pp)" in
-    DEPLOYMENT_TOKEN_FILE:*) echo "set github.deploymentToken in .config/clusters.yaml (make secrets NAME=github), or AI_GRID_DEPLOYMENT_TOKEN" ;;
+    DEPLOYMENT_TOKEN_FILE:*) echo "set deployment.token in .config/clusters.yaml, or AI_GRID_DEPLOYMENT_TOKEN" ;;
     CATALOG_TOKEN_FILE:pp) echo "save it in ~/.ai-grid/catalog-token, or set CATALOG_TOKEN_FILE (install guide, page 2)" ;;
-    CATALOG_TOKEN_FILE:*) echo "set github.catalogToken in .config/clusters.yaml (make secrets NAME=github), or AI_GRID_CATALOG_TOKEN" ;;
+    CATALOG_TOKEN_FILE:*) echo "set catalog.token in .config/clusters.yaml, or AI_GRID_CATALOG_TOKEN" ;;
     QUAY_AUTH_FILE:pp) echo "set QUAY_AUTH_FILE to a container auth file with a quay.io/rhoai login" ;;
-    QUAY_AUTH_FILE:*) echo "set quay.username and quay.password in .config/clusters.yaml (make secrets NAME=quay), or AI_GRID_QUAY_USERNAME and AI_GRID_QUAY_PASSWORD" ;;
+    QUAY_AUTH_FILE:*) echo "set quay.username and quay.password in .config/clusters.yaml, or AI_GRID_QUAY_USERNAME and AI_GRID_QUAY_PASSWORD" ;;
   esac
 }
 
