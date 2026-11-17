@@ -65,7 +65,7 @@ console-call: ## Call the console's API as your hub login: METHOD=..., BODY='JSO
 	@scripts/console-call.sh "$$METHOD" $(if $(BODY_FILE),"$$(cat "$$BODY_FILE")","$$BODY")
 
 test: ## Run the template's own tests (for maintainers)
-	@for t in tests/*-test.sh; do bash "$$t" || exit 1; done
+	@for t in tests/*-test.sh tenant-idp/tests/*-test.sh; do bash "$$t" || exit 1; done
 
 update: ## Merge the template's latest main into this repository; never pushes
 	@scripts/update-from-template.sh
