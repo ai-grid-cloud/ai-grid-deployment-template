@@ -154,6 +154,8 @@ D="$T/repo-sites"; mkdir -p "$D/.config/hub" "$D/.config/site-b"; cp -R "$SRC/sc
 : > "$D/.config/hub/kubeconfig"; : > "$D/.config/site-b/kubeconfig"
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n  - {name: site-c, api: "https://api.site-c.example.com:6443"}\n' > "$D/clusters.yaml"
 W="$T/sites"; mkdir -p "$W"
+t "a site whose ManagedCluster can't be read: says so" "^Site site-b: can't read its ManagedCluster on the hub$" "OpenShift AI|GridSite"
+echo '{"metadata":{}}' > "$W/mc-site-b.json"
 t "a site not added to the grid (no ManagedCluster labels)" "^Site site-b: not added to the grid yet$" "OpenShift AI|GridSite"
 echo '{"metadata":{"labels":{"ai-grid/role":"combined"}}}' > "$W/mc-site-b.json"
 t "  ... nor with a role but no ai-grid/enabled" "^Site site-b: not added to the grid yet$"

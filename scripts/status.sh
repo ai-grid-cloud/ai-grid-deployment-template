@@ -112,8 +112,10 @@ oc get pods -n ai-grid-provider-console -o json 2>/dev/null | jq -r '
 # (Available or not).
 for s in $(site_names); do
   echo
-  role=$(oc get managedclusters.cluster.open-cluster-management.io "$s" -o json 2>/dev/null |
-    jq -r '.metadata.labels // {} | if .["ai-grid/enabled"] == "true" then .["ai-grid/role"] // "" else "" end' 2>/dev/null)
+  if ! mc=$(oc get managedclusters.cluster.open-cluster-management.io "$s" -o json 2>/dev/null); then
+    echo "Site $s: can't read its ManagedCluster on the hub"; continue
+  fi
+  role=$(jq -r '.metadata.labels // {} | if .["ai-grid/enabled"] == "true" then .["ai-grid/role"] // "" else "" end' <<<"$mc" 2>/dev/null)
   if [ -z "$role" ]; then echo "Site $s: not added to the grid yet"; continue; fi
   if ! cluster_login_ok "$s" 2>/dev/null; then echo "Site $s ($role): no working login (make login NAME=$s)"; continue; fi
   sk=$(cluster_kubeconfig "$s")

@@ -33,7 +33,9 @@ else
 fi
 # The role the provider console's Add to AI Grid gave the site; empty until then.
 role=$(jq -r '.metadata.labels // {} | if .["ai-grid/enabled"] == "true" then .["ai-grid/role"] // "" else "" end' <<<"${mc:-{\}}" 2>/dev/null || true)
-if [ -n "$role" ]; then echo "AI Grid: added as $role"; else echo "AI Grid: not added to the grid yet"; fi
+if [ -n "$role" ]; then echo "AI Grid: added as $role"
+elif [ -n "$mc" ]; then echo "AI Grid: not added to the grid yet"
+else echo "AI Grid: can't read its ManagedCluster on the hub"; fi
 apps=$(h get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null |
   jq -r --arg n "$name" '.items[] | select(.spec.destination.name == $n or (.metadata.name | test("(^|-)" + $n + "(-|$)")))
     | [.metadata.name, (.status.sync.status // "Unknown"), (.status.health.status // "Unknown")] | @tsv' || true)
