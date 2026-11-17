@@ -52,9 +52,11 @@ which `check-deployment.sh` reports until you set it.
 
 The realm is imported only when it doesn't exist (`kc.sh import --override
 false`), so editing the ConfigMap after Keycloak's first start doesn't change the
-client. Change the redirect URI in the Keycloak admin console as well, or set the
-ConfigMap before the first sync. The same holds for a site you add to
-`clusters.yaml` later: add its redirect URI in the Keycloak admin console.
+client. For a site you add to `clusters.yaml` later, `make inputs` (or `make
+install`) adds its redirect URI to `portalRedirectURI`, and `make
+tenant-redirects` (which `make install` runs) adds every URI there that the live
+client lacks. It never removes one: remove a redirect URI in the Keycloak admin
+console.
 
 ## How it fits together
 

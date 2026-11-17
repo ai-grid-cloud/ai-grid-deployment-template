@@ -270,9 +270,14 @@ make install stopped at hub-apps. Fix the cause, then run make install again.
 
 Fix the cause, then run `make install` again. Every step first checks whether its work is done and skips it if so,
 so the install picks up where it stopped. On a finished install, a second run changes nothing on the clusters except
-a fresh provider-admin token, and passes the ready check again, but only before your tests start. Once a test adds a
-site to the grid or creates an organization, model or subscription, the `catalog` step and the ready check's label
-and content checks fail by design.
+a fresh provider-admin token, and passes the ready check again. A rerun on a hub that already uses your catalog, such
+as one that [imports a new site](#import-a-new-site-after-the-install), doesn't check that the catalog is empty, and
+its ready check reports sites in the grid, OpenShift AI on a site, and the console's organizations, models and
+subscriptions as `INFO`, not `FAIL`, and so are the console's model Applications that aren't `Healthy`, such as a
+model still starting on a site. Run on its own, `make ready-check` still fails on them, because it checks the state
+before your tests start; `make ready-check IN_USE=1` checks as the rerun does. A rerun after a first install that
+stopped after `bootstrap` also counts as one on a hub in use: the catalog was checked empty before the hub first used
+it.
 
 ## What the install does
 
@@ -283,19 +288,22 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 1. `login`: writes `.config/NAME/kubeconfig` for each cluster from its credentials and the API URL in
    `.config/clusters.yaml`.
 2. `inputs`: pins the library at `LIBRARY` under `options:`, writes your names to `root/inputs.env`, and pushes.
-3. `catalog`: checks that your catalog repository holds only its README.
+3. `catalog`: checks that your catalog repository holds only its README, unless the hub already uses it.
 4. `bootstrap`: installs OpenShift GitOps and applies your root on the hub, then waits until Argo CD has synced it.
 5. `acm`: waits until ACM is running.
 6. `console-secrets`: creates the provider console's Secrets from your catalog token.
 7. `hub-apps`: waits until every hub Application is `Synced` and `Healthy`, except those that wait for a site.
-8. `site NAME`: for each site, checks it, writes and pushes its own files, imports it into ACM, then waits until it's
+8. `tenant-redirects`: adds any site's portal redirect that the live tenant realm lacks, such as a site added after
+   the first install. The realm imports the redirects only on its first start.
+9. `site NAME`: for each site, checks it, writes and pushes its own files, imports it into ACM, then waits until it's
    available. The site's files come from `site-template/`. With `maasCertificate.issuer`, they are the MaaS
    certificate, its Application, and `values/clusters/NAME/rhoai.yaml` with the gateway's hostname and certificate.
    On a site that already runs the platform's cert-manager, the values file also turns off OpenShift AI's own copy,
    which would otherwise fail with `TooManyOperatorGroups`. With neither, the install writes no files. A file without
    the `# Written by scripts/site-files.sh` first line is yours, and the install leaves it alone.
-9. `provider-admin`: creates the provider-admin ServiceAccount and its token.
-10. `ready`: runs the ready check until it passes, which writes `.install/outputs.json`.
+10. `provider-admin`: creates the provider-admin ServiceAccount and its token.
+11. `ready`: runs the ready check until it passes, which writes `.install/outputs.json`. On a rerun on a hub that
+    already uses your catalog, it runs it with `--in-use`.
 
 ## Outputs and the provider-admin token
 
@@ -325,6 +333,19 @@ command line. It lasts 168 hours. To get a new one, run `make provider-admin`.
 its role and location there. The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it, run
 `make site-status SITE=SITE_NAME`. If the Org UI then fails on every page, see
 [troubleshooting](troubleshooting.md#the-org-ui-fails-on-every-page-on-a-new-site).
+
+## Import a new site after the install
+
+To bring another cluster into the hub after the install, even after the console has written models and
+subscriptions:
+
+1. Add the site's entry under `sites:` in `.config/clusters.yaml`, with its `name`, `api` and credentials, and its
+   `maasCertificate.issuer` if it has one.
+2. Run `make install` again.
+
+The rerun adds the site's portal redirect to `tenant-idp/manifests/settings.yaml` and to the live tenant realm, writes
+and pushes the site's own files, and imports it. The sites already there are left as they are. Then add the site to
+the grid in the console, as in [Add a site to the grid](#add-a-site-to-the-grid).
 
 ## Other options
 
@@ -390,9 +411,6 @@ its role and location there. The hub then installs OpenShift AI, MaaS and the gr
 
 ## Known limits
 
-- The tenant Keycloak imports its realm only once, on its first start (`--override false`). A site you add to
-  `.config/clusters.yaml` after the first install doesn't get its portal redirect, `https://maas.APPS_DOMAIN/*`,
-  automatically. To add it, see [A tenant can't sign in to the portal on a site added after the install](troubleshooting.md#a-tenant-cant-sign-in-to-the-portal-on-a-site-added-after-the-install).
 - Without `maasCertificate.issuer`, the site's MaaS gateway uses the cluster's internal certificate, so tenants'
   clients don't trust it. Such a site can also need its Org UI restarted once after it's added
   ([troubleshooting](troubleshooting.md#the-org-ui-fails-on-every-page-on-a-new-site)).
