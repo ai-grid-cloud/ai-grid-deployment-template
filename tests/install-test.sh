@@ -66,7 +66,7 @@ setup() { # NAME: a deployment repository $D and a stub directory $W, for one ca
   D="$T/$1/repo" W="$T/$1/stub"; mkdir -p "$W" "$D/.config"
   cp -R "$SRC/scripts" "$D/"
   for s in login.sh set-library.sh set-inputs.sh check-deployment.sh empty-catalog.sh \
-      install-report.sh provider-admin.sh; do fake "$s"; done
+      install-report.sh provider-admin.sh site-files.sh; do fake "$s"; done
   fake ready-check.sh '[ ! -f "$STUB_DIR/ready-check.sh.rc" ] || { echo "OK   hub Applications"; echo "FAIL site site-a: not available"; echo "Not ready: see FAIL above."; }'
   fake create-console-secrets.sh '[ -z "${CATALOG_TOKEN_FILE:-}" ] || cat "$CATALOG_TOKEN_FILE" > "$STUB_DIR/catalog-token-seen"'
   fake git-push.sh 'cat "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-seen"; echo "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-path"
@@ -112,7 +112,7 @@ all_out=""
 
 setup fresh; run
 t "fresh: runs every hub step in order" eval '[ "$rc" = 0 ] &&
-  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;site-check.sh site-a;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
+  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;site-check.sh site-a;site-files.sh site-a;git-push.sh install: site site-a files values/clusters/site-a/rhoai.yaml sites/site-a/maas-tls/certificate.yaml sites/site-a/maas-tls/kustomization.yaml apps/site-a-maas-tls.yaml;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
 
 t "end: provider-admin then ready-check, then the outputs line" eval '[ "$rc" = 0 ] &&
   [ "$(grep -E "^(== (provider-admin|ready)|gate (hub-apps-final|ready))" <<<"$out" | sed -E "s/ after .*//" | tr "\n" ";")" = "gate hub-apps-final: passed;== provider-admin;== ready;gate ready: passed;" ] &&
@@ -129,7 +129,7 @@ t "ready check fails: its FAIL lines, the report, exit 1" eval '[ "$rc" = 1 ] &&
 
 setup hubonly; run --hub-only
 t "--hub-only: no sites, no provider-admin, no ready check" eval '[ "$rc" = 0 ] &&
-  ! grep -qE "^(site-check|import-site|provider-admin|ready-check)" "$W/calls.log" &&
+  ! grep -qE "^(site-check|site-files|import-site|provider-admin|ready-check)" "$W/calls.log" &&
   ! grep -q "^Installed" <<<"$out" && grep -q "hub only" <<<"$out"'
 
 setup rerun
@@ -286,7 +286,7 @@ two_sites() { # adds site-b, an inference site, to clusters.yaml
 
 setup twosites; two_sites; run
 t "two sites: check, import and gate each, in order" eval '[ "$rc" = 0 ] &&
-  [ "$(grep -E "^(site-check|import-site)" "$W/calls.log" | sed "s/ *\$//" | tr "\n" ";")" = "site-check.sh site-a;import-site.sh site-a --yes;site-check.sh site-b;import-site.sh site-b --yes;" ] &&
+  [ "$(grep -E "^(site-check|site-files|import-site)" "$W/calls.log" | sed "s/ *\$//" | tr "\n" ";")" = "site-check.sh site-a;site-files.sh site-a;import-site.sh site-a --yes;site-check.sh site-b;site-files.sh site-b;import-site.sh site-b --yes;" ] &&
   [ "$(grep -E "^(== site |gate (site-|hub-apps-final))" <<<"$out" | sed -E "s/ after .*//" | tr "\n" ";")" = "== site site-a;gate site-site-a-import: passed;== site site-b;gate site-site-b-import: passed;gate hub-apps-final: passed;" ] &&
   grep -qx "Installed. Outputs: .install/outputs.json" <<<"$out"'
 
@@ -306,6 +306,14 @@ t "site-check fails: stops and names the site" eval '[ "$rc" = 1 ] && grep -q "F
   grep -qx "make install stopped at site site-b. Fix the cause, then run make install again." <<<"$out" &&
   grep -q "^import-site.sh site-a --yes" "$W/calls.log" && ! grep -q "^import-site.sh site-b" "$W/calls.log" &&
   ! grep -q "hub-apps-final" <<<"$out"'
+
+setup sitefiles
+echo 1 > "$W/site-files.sh.rc"
+echo "error: sites[site-a].maasCertificate.issuer: site site-a has no ClusterIssuer le-dns" > "$W/site-files.sh.out"
+run
+t "site-files fails: stops before it pushes or imports the site" eval '[ "$rc" = 1 ] && grep -q "has no ClusterIssuer le-dns" <<<"$out" &&
+  grep -qx "make install stopped at site site-a. Fix the cause, then run make install again." <<<"$out" &&
+  ! grep -q "^git-push.sh install: site" "$W/calls.log" && ! grep -q "^import-site.sh" "$W/calls.log"'
 
 setup issuerkey
 sed -i.bak 's/name: site-a,/name: site-a, issuer: acme-prod,/' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"

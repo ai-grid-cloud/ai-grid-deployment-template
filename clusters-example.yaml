@@ -39,6 +39,11 @@ sites:
     # username: kubeadmin
     # password: PASSWORD
     # token: sha256~TOKEN
+    # Optional, for an ingress or combined site: a cert-manager ClusterIssuer
+    # on the site that issues publicly trusted certificates by DNS-01. make
+    # install then gives the MaaS gateway its own certificate (page 9).
+    # maasCertificate:
+    #   issuer: letsencrypt-dns01
   # Another site: copy the lines above, from "- name:".
 
 # The catalog repository the provider console writes models and subscriptions to.

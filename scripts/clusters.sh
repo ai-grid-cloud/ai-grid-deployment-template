@@ -26,6 +26,7 @@
 #                                 with several sites, asks you to name one
 #   cluster_api NAME              the cluster's API URL
 #   cluster_kubeconfig NAME       the path of NAME's kubeconfig
+#   site_maas_issuer NAME         the site's maasCertificate.issuer, empty when unset
 #   merge_kubeconfigs HUB SITE OUT  one kubeconfig with contexts hub and site
 #   INSTALL_NS_RE                 an extended regex matching the namespaces an
 #                                 install creates on a hub or a site
@@ -119,7 +120,8 @@ clusters_load() {
       ((.hub // {}) | keys - ["api", "token", "username", "password"] | beside("hub")),
       ((.sites // []) | to_entries[] | .key as $i | (.value // {})
         | (.name | if type == "string" and test("\\A[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\z") then . else $i end) as $ref
-        | keys - ["name", "api", "token", "username", "password"] | beside("sites[\($ref)]")),
+        | (keys - ["name", "api", "token", "username", "password", "maasCertificate"] | beside("sites[\($ref)]")),
+          ((.maasCertificate | objects) // {} | keys - ["issuer"] | map("sites[\($ref)].maasCertificate.\(.)"))),
       ((.options // {}) | keys | map(select(test($opts) | not)) | map("options." + .))
       | .[]' <<<"$json" | tr '\n' ' ')
   [ -z "$left" ] || { echo "error: clusters.yaml: unknown keys (typos?): ${left% }" >&2; return 1; }
@@ -149,6 +151,12 @@ clusters_load() {
   done < <(jq -r '(["hub", "hub", "hub", .hub.api]),
       ((.sites // []) | to_entries[] | ["site \(.key + 1)", .value.name, "site", .value.api])
       | map(. // "" | tostring) | @tsv' <<<"$json")
+  # A site's maasCertificate, when set, names a ClusterIssuer (scripts/site-files.sh).
+  left=$(jq -r '(.sites // [])[] | select(has("maasCertificate")) | .name as $n | .maasCertificate
+      | if type != "object" then "sites[\($n)].maasCertificate must be a map"
+        elif (.issuer | type == "string" and test("\\A[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?\\z")) | not
+        then "sites[\($n)].maasCertificate.issuer must name a ClusterIssuer" else empty end' <<<"$json" | head -n 1)
+  [ -z "$left" ] || { echo "error: $rel: $left" >&2; return 1; }
   # The private file is for make install, which needs the catalog: say so now, not later.
   [ -z "$private" ] || [ -n "$(jq -r '.catalog.url // "" | select(startswith("REQUIRED-") | not)' <<<"$json")" ] ||
     { echo "error: set catalog.url in .config/clusters.yaml" >&2; return 1; }
@@ -215,6 +223,9 @@ cluster_api() { # NAME
   echo "$v"
 }
 
+site_maas_issuer() { # NAME: the site's maasCertificate.issuer, empty when unset
+  jq -r --arg n "$1" '(.sites // [])[] | select(.name == $n) | .maasCertificate.issuer // empty' <<<"$CLUSTERS_JSON"
+}
 cluster_kubeconfig() { cluster_api "$1" >/dev/null && echo "$CLUSTERS_DIR/.config/$1/kubeconfig"; }
 
 cluster_login_ok() { # NAME: exits non-zero, with the fix, when there's no working login
