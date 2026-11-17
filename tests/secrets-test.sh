@@ -215,4 +215,12 @@ run ""
 t "no clusters.yaml: creates .config/clusters.yaml from the example and stops, exit 0" bash -c '[ "$0" = 0 ] && grep -q "edit it, then run make secrets again" <<<"$1" && cmp -s "$2/clusters-example.yaml" "$2/.config/clusters.yaml"' "$rc" "$out" "$D"
 t "  ... file 600, directory 700" bash -c '[ "$(stat -f %Lp "$0/.config/clusters.yaml" 2>/dev/null || stat -c %a "$0/.config/clusters.yaml")$(stat -f %Lp "$0/.config" 2>/dev/null || stat -c %a "$0/.config")" = 600700 ]' "$D"
 
+# make config: only creates the private file from the example, never overwrites it.
+D="$T/config"; mkdir -p "$D"; cp -R "$SRC/scripts" "$SRC/Makefile" "$SRC/clusters-example.yaml" "$D/"
+out=$(make -s -C "$D" config 2>&1) && rc=0 || rc=$?
+t "make config: creates .config/clusters.yaml from the example" bash -c '[ "$0" = 0 ] && grep -q "Created .config/clusters.yaml.*edit it" <<<"$1" && cmp -s "$2/clusters-example.yaml" "$2/.config/clusters.yaml"' "$rc" "$out" "$D"
+t "  ... .config mode 700, the file mode 600" bash -c '[ "$(stat -f %Lp "$0/.config" 2>/dev/null || stat -c %a "$0/.config")$(stat -f %Lp "$0/.config/clusters.yaml" 2>/dev/null || stat -c %a "$0/.config/clusters.yaml")" = 700600 ]' "$D"
+echo "mine" >> "$D/.config/clusters.yaml"
+out=$(make -s -C "$D" config 2>&1) && rc=0 || rc=$?
+t "make config again: refuses, the file kept" bash -c '[ "$0" != 0 ] && grep -q "already exists" <<<"$1" && tail -n1 "$2/.config/clusters.yaml" | grep -qx mine' "$rc" "$out" "$D"
 echo "secrets tests: $((total-fails)) ok, $fails failed"; exit "$fails"

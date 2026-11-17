@@ -142,8 +142,8 @@ t "rerun: every step already done; console-secrets always reruns" eval '[ "$rc" 
 setup required
 sed -i.bak 's#^  catalog: .*#  catalog: REQUIRED-catalogRepoURL#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
 run
-t "REQUIRED- left in clusters.yaml: stops before any cluster call" eval '[ "$rc" = 1 ] &&
-  grep -q "REQUIRED-catalogRepoURL" <<<"$out" && [ ! -s "$W/calls.log" ] && [ ! -s "$W/argv.log" ]'
+t "catalog placeholder left in clusters.yaml: stops before any cluster call" eval '[ "$rc" = 1 ] &&
+  grep -q "set repositories.catalog" <<<"$out" && [ ! -s "$W/calls.log" ] && [ ! -s "$W/argv.log" ]'
 
 setup gatefail
 echo '{"items":[{"status":{"phase":"Installing"}}]}' > "$W/mch.json"

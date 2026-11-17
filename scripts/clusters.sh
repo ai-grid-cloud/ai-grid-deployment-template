@@ -92,9 +92,10 @@ clusters_load() {
       ((.options // {}) | keys | map(select(test($opts) | not)) | map("options." + .))
       | .[]' <<<"$json" | tr '\n' ' ')
   [ -z "$left" ] || { echo "error: clusters.yaml: unknown keys (typos?): ${left% }" >&2; return 1; }
-  # Placeholders: a setting's own text; a secret's key, never its value.
+  # Placeholders: a setting's own text; a secret's key, never its value. The
+  # catalog's is allowed: it means no catalog yet (settings_lines).
   left=$(jq -r '
-      (del(.credentials, .github, .quay) | .. | strings | select(test("REQUIRED-")) | match("REQUIRED-[A-Za-z]+").string),
+      (del(.credentials, .github, .quay, .repositories.catalog) | .. | strings | select(test("REQUIRED-")) | match("REQUIRED-[A-Za-z]+").string),
       ({credentials, github, quay} | paths(strings) as $p | select(getpath($p) | test("REQUIRED-"))
         | $p | map(tostring) | join("."))' <<<"$json" | sort -u | tr '\n' ' ')
   [ -z "$left" ] || { echo "error: set these in ${f#"$CLUSTERS_DIR/"}: ${left% }" >&2; return 1; }
@@ -140,7 +141,9 @@ settings_lines() {
   jq -r '
     def v: if . == true then "1" elif . == false or . == null then ""
       else tostring | if test("[\\n\\r]") then error("a setting'"'"'s value spans lines") else . end end;
-    (if (.repositories // {}) | has("catalog") then "CATALOG_REPO_URL=\(.repositories.catalog | v)" else empty end),
+    # REQUIRED-catalogRepoURL (the example) means no catalog yet, as "" does.
+    (if (.repositories // {}) | has("catalog") then
+      "CATALOG_REPO_URL=\(.repositories.catalog | v | if startswith("REQUIRED-") then "" else . end)" else empty end),
     (if (.repositories // {}) | has("library") then "LIBRARY_REVISION=\(.repositories.library | v)" else empty end),
     ((.options // {}) | to_entries[] | "\(.key)=\(.value | v)")' <<<"$CLUSTERS_JSON" 2>/dev/null ||
     { echo "error: clusters.yaml: a setting's value spans lines" >&2; return 1; }

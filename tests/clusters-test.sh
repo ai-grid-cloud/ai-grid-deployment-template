@@ -183,6 +183,11 @@ t "settings: true is 1" 0 "^ALLOW_GENERIC_LOGIN=1$" bash "$d/scripts/clusters.sh
 t "settings: an empty value is kept" 0 "^PROVIDER_ADMIN_TOKEN_DURATION=$" bash "$d/scripts/clusters.sh" --settings "$d"
 d=$(repo nosettings "hub: {name: hub, api: 'https://h:6443'}")
 t "settings: none when the file sets none" 0 "^$" bash "$d/scripts/clusters.sh" --settings "$d"
+d=$(repo catalogplaceholder "$GOOD
+repositories: {catalog: REQUIRED-catalogRepoURL}")
+t "catalog placeholder: the file still loads" 0 "^site-b combined" bash "$d/scripts/clusters.sh" --rows "$d"
+t "  ... and counts as no catalog" 0 "^CATALOG_REPO_URL=$" bash "$d/scripts/clusters.sh" --settings "$d"
+t "  ... so the page-by-page path stays on" 0 "^pp$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && settings_apply && page_by_page && echo pp' "$d"
 d=$(repo typo "hub: {name: hub, api: 'https://h:6443'}
 option: {GATE_ROOT_SECONDS: 1}")
 t "an unknown top-level key" 1 "unknown keys \(typos\?\): option$" bash "$d/scripts/clusters.sh" --hub
