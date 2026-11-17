@@ -61,11 +61,16 @@ authfile() { # name, keys...: an auth file with these registries, each holding t
 }
 
 mkbin "$T/bin"
+# prereqs.py's --deployment defaults to the checkout it runs from, which in a deployment
+# repository has its own clusters.yaml, .config/ and pin. Every run starts from this bare
+# deployment (root at the pin, nothing else, like the template) unless a case passes its own.
+BARE="$T/bare"; mkdir -p "$BARE/root"
+printf '        libraryRevision: %s\n' "$("$GIT" -C "$LIBD" rev-parse HEAD)" > "$BARE/root/kustomization.yaml"
 fails=0; total=0
 t() { # name expect_regex bin world [args...]; also checks rc 0 and no secret in the output
   local name=$1 expect=$2 bin=$3 w=$4; shift 4; local rc out
   total=$((total+1))
-  out=$(env -i LIBRARY="$LIBD" PATH="$bin" HOME="$T" STUB_DIR="$w" "$PY" "$SCRIPT" "$@" 2>&1) && rc=0 || rc=$?
+  out=$(env -i LIBRARY="$LIBD" PATH="$bin" HOME="$T" STUB_DIR="$w" "$PY" "$SCRIPT" --deployment "$BARE" "$@" 2>&1) && rc=0 || rc=$?
   if [ "$rc" -eq 0 ] && grep -qE -- "$expect" <<<"$out" && ! grep -qE "$TOKEN|$PASSWORD" <<<"$out"; then
     printf '   ok   %s\n' "$name"
   else
@@ -141,13 +146,13 @@ printf 'x' > "$T/loose"; chmod 644 "$T/loose"; : > "$T/empty"; chmod 600 "$T/emp
 t "token file too open" '^FAIL +catalog token file +.* mode 644' "$T/bin" "$w" --catalog-token-file "$T/loose"
 t "token file empty" '^FAIL +catalog token file +.* empty' "$T/bin" "$w" --catalog-token-file "$T/empty"
 t "token file missing" '^MISSING +catalog token file' "$T/bin" "$w" --catalog-token-file "$T/none"
-out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$T" STUB_DIR="$w" CATALOG_TOKEN_FILE="$TOK" "$PY" "$SCRIPT" 2>&1) || true
+out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$T" STUB_DIR="$w" CATALOG_TOKEN_FILE="$TOK" "$PY" "$SCRIPT" --deployment "$BARE" 2>&1) || true
 total=$((total+1)); if grep -qE '^ok +catalog token file' <<<"$out"; then echo "   ok   env vars work like options"; else echo "   FAIL env vars work like options"; fails=$((fails+1)); fi
 
 # Defaults: the usual auth file and token file, when they exist and nothing is set.
 dflt() { # name expect_regex home [VAR=value ...]: runs with no options from that home
   local name=$1 expect=$2 h=$3; shift 3; total=$((total+1))
-  local out; out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$h" STUB_DIR="$w" "$@" "$PY" "$SCRIPT" 2>&1) || true
+  local out; out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$h" STUB_DIR="$w" "$@" "$PY" "$SCRIPT" --deployment "$BARE" 2>&1) || true
   if grep -qE -- "$expect" <<<"$out"; then echo "   ok   $name"; else echo "   FAIL $name; output:"; echo "$out"; fails=$((fails+1)); fi
 }
 H1="$T/home1"; mkdir -p "$H1/.config/containers" "$H1/.ai-grid" "$T/run1/containers"
