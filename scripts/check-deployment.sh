@@ -17,13 +17,14 @@ deployment_render "$dir"
 out=$DEPLOYMENT_ROOT
 left="$(printf '%s\n' "$out" | grep -v 'regexFind "REQUIRED-' | grep -oE 'REQUIRED-[a-zA-Z]+' | sed 's/^REQUIRED-//' | sort -u | tr '\n' ' ' || true)"
 # Placeholders in the repository's own files outside root/, such as a tenant
-# IdP's hostnames: path:line:REQUIRED-<name>.
+# IdP's hostnames: path:line:REQUIRED-<name>. The template's tests/ hold
+# placeholders on purpose (fixtures), so they're skipped.
 placeholders="$(cd "$dir" && grep -rnoE --include='*.yaml' --include='*.yml' --include='*.json' --exclude=clusters-example.yaml \
-  --exclude-dir=.git --exclude-dir=.library --exclude-dir=root 'REQUIRED-[a-zA-Z]+' . | sed 's#^\./##' || true)"
+  --exclude-dir=.git --exclude-dir=.library --exclude-dir=root --exclude-dir=tests 'REQUIRED-[a-zA-Z]+' . | sed 's#^\./##' || true)"
 [ -z "$left" ] || echo "unset inputs: ${left% }"
 [ -z "$placeholders" ] || { echo "placeholders left in your files:"; echo "$placeholders"; }
 [ -z "$left$placeholders" ] || exit 1
-# clusters.yaml, when there is one: a hub, and sites with known roles.
+# clusters.yaml, when there is one: it loads (a hub, and each site's name and API).
 if [ -f "$dir/.config/clusters.yaml" ] || [ -f "$dir/clusters.yaml" ]; then . "$(dirname "$0")/clusters.sh"; clusters_load "$dir" || exit 1; fi
 # Every input the library declares (its bootstrap/hub generator values) must
 # be set: replacing the values map can drop one without leaving a marker.
