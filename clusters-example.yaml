@@ -1,99 +1,78 @@
-# Your AI Grid deployment: its clusters, its repositories and the install's
-# options. It's the one file you edit. Copy it to one of two places:
+# Your AI Grid deployment: how to reach each cluster, its repositories and the
+# install's options. Roles and locations aren't set here: you choose them in
+# the provider console when you add a site to the grid (Add to AI Grid).
 #
-# - .config/clusters.yaml, for the one-command install (install guide, page 9).
-#   It's private: git ignores .config/, and the file also holds your secrets
-#   (the credentials:, github: and quay: sections at the end). make config
-#   creates it from this file, readable only by you. The scripts stop if the
-#   file is readable by anyone but you.
+# Copy this file to one of two places, then replace every REQUIRED- value:
 #
-# - clusters.yaml at the root of your repository, for the page-by-page guide
-#   (pages 1 to 8). You commit it, so it records which clusters make up your
-#   grid, and it can't hold secrets: the scripts refuse credentials:, github:
-#   and quay: in it. Copy it with:
+# - .config/clusters.yaml, for the one-command install (install guide, page 9;
+#   make config copies it). Git ignores .config/, the file must be readable
+#   only by you (chmod 600), and it's where your secrets go: uncomment the
+#   token or username and password lines, and the github: and quay: sections.
 #
-#     cp clusters-example.yaml clusters.yaml
+# - clusters.yaml at the root, for the page-by-page guide (pages 1 to 8):
+#   cp clusters-example.yaml clusters.yaml. You commit it, so it holds no
+#   secrets: the scripts refuse token:, username:, password:, github: and quay:
+#   in it. Leave those lines commented out.
 #
-# Replace each REQUIRED- value. When .config/clusters.yaml exists, the scripts
-# read it and ignore clusters.yaml.
-apiVersion: ai-grid.dev/v1alpha1
+# When .config/clusters.yaml exists, the scripts read it and ignore clusters.yaml.
+apiVersion: ai-grid.dev/v1alpha1   # required header: the scripts parse this file with kubectl
 kind: Clusters
 
 # The ACM hub: runs Argo CD, ACM and the shared services, and no models. The
 # scripts and the guide call it "hub".
 hub:
-  # The hub's API URL, from oc whoami --show-server, such as
-  # https://api.hub.example.com:6443
-  api: REQUIRED-hubAPIURL
+  api: REQUIRED-hubAPIURL          # from oc whoami --show-server, e.g. https://api.hub.example.com:6443
+  # Private file only: a cluster-admin login. Either a username and password
+  # (the scripts get a fresh token on every run, so a rerun works the next day):
+  # username: kubeadmin
+  # password: PASSWORD
+  # or a token (from oc whoami -t; it expires in about 24 h):
+  # token: sha256~TOKEN
 
-# Each site: an OpenShift cluster the hub makes part of the grid.
+# The clusters the hub imports into ACM. You add each one to the grid, and
+# choose its role and location, in the provider console.
 sites:
-  # The site's name: a DNS label, such as site-east-1. It becomes its ACM
-  # cluster name, and you can't change it once the site is imported.
-  - name: REQUIRED-siteName
-    # combined (tenants enter here and models run here), ingress (tenants enter
-    # here, no models) or inference (models only). The guide installs combined.
-    role: combined
-    # Where the site is, such as us-east. The provider console shows it.
-    location: REQUIRED-location
-    # The site's API URL, such as https://api.site-east-1.example.com:6443
-    api: REQUIRED-siteAPIURL
-
-  # Add a site: copy the first site's lines, starting at "- name:".
+  - name: REQUIRED-siteName        # its ACM name, a DNS label, e.g. site-1; fixed once imported
+    api: REQUIRED-siteAPIURL       # e.g. https://api.site-1.example.com:6443
+    # Private file only: a cluster-admin login, as for the hub.
+    # username: kubeadmin
+    # password: PASSWORD
+    # token: sha256~TOKEN
+  # Another site: copy the lines above, from "- name:".
 
 repositories:
   # The catalog repository the provider console writes models and
-  # subscriptions to, such as https://github.com/OWNER/CATALOG.git. Page by
-  # page, leave it as it is.
+  # subscriptions to, e.g. https://github.com/OWNER/ai-grid-catalog.git.
+  # Page by page, leave it as it is: REQUIRED- here means no catalog yet.
   catalog: REQUIRED-catalogRepoURL
   # The library revision make install pins: a branch, a tag or a full commit
   # SHA, resolved to its current commit on each run. Empty keeps the
   # template's own pin in root/kustomization.yaml.
   library: deployment-template
 
-# Optional: make install's settings. Uncomment a line to change it; each shows
-# its default. A setting left out here comes from the environment variable of
-# the same name, else the default.
-options:
-  # Use an existing component instead of installing one. Only "install" is
-  # supported in this version.
-  # KEYCLOAK: install
-
-  # 1 lets bootstrap use the general quay.io entry of an auth file that the
-  # QUAY_AUTH_FILE environment variable names, when the file has no
-  # quay.io/rhoai entry. Not needed for quay:.
-  # ALLOW_GENERIC_LOGIN: 1
-
-  # The lifetime of the provider-admin token make install writes to
-  # .config/provider-admin-token.
-  # PROVIDER_ADMIN_TOKEN_DURATION: 168h
-
-  # Gate time limits, in whole seconds (scripts/gates.sh).
-  # GATE_ROOT_SECONDS: 600         # deployment-root Synced at the pushed commit
-  # GATE_MCH_SECONDS: 1800         # the MultiClusterHub Running
-  # GATE_HUB_APPS_SECONDS: 5400    # every hub Application Synced and Healthy
-  # GATE_SITE_IMPORT_SECONDS: 900  # each site's import
-  # GATE_READY_SECONDS: 600        # scripts/ready-check.sh passes
-  # GATE_INTERVAL: 15              # seconds between a gate's checks
-  # GATE_ERROR_LIMIT: 4            # consecutive oc errors before a gate fails
-
-# Secrets: only in .config/clusters.yaml, never in the committed clusters.yaml.
-# make secrets asks for each one, without showing what you paste, and writes it
-# here. To fill them in by hand instead, uncomment these lines and replace each
-# value. Environment variables override them (install guide, page 9).
-#
-# credentials:                 # one entry for each cluster: hub, and each site's name
-#   hub:
-#     token: sha256~TOKEN        # a cluster-admin token, from oc whoami -t; or
-#   site-east-1:
-#     username: kubeadmin        # a cluster-admin username and password: the scripts
-#     password: PASSWORD         # get a fresh token on every run, so a rerun works the
-#                                # next day; or
-#     # kubeconfig: /path/to/kubeconfig   # a working kubeconfig to copy
+# Private file only. Environment variables override these (install guide, page 9).
 # github:
-#   catalogToken: github_pat_TOKEN      # can write the catalog repository
-#   # deploymentToken: github_pat_TOKEN # optional, for CI: can push to this repository;
-#                                       # without it, make install uses your own git login
-# quay:                          # your quay.io/rhoai robot account
+#   # Fine-grained token: Contents, Read and write, on the catalog repository only.
+#   catalogToken: github_pat_TOKEN
+#   # Optional: a token that can push to this repository. Without it, make
+#   # install pushes with your own git login (gh or a credential helper).
+#   deploymentToken: github_pat_TOKEN
+# quay:
+#   # Your quay.io/rhoai robot account.
 #   username: rhoai+robot
 #   password: PASSWORD
+
+# Optional: make install's settings, shown with their defaults. Uncomment a
+# line to change it. A setting left out comes from the environment variable of
+# the same name, else the default.
+options:
+  # KEYCLOAK: install                    # only "install" is supported
+  # ALLOW_GENERIC_LOGIN: 1               # let bootstrap use a general quay.io login from QUAY_AUTH_FILE
+  # PROVIDER_ADMIN_TOKEN_DURATION: 168h  # lifetime of .config/provider-admin-token
+  # GATE_ROOT_SECONDS: 600               # deployment-root Synced at the pushed commit
+  # GATE_MCH_SECONDS: 1800               # the MultiClusterHub Running
+  # GATE_HUB_APPS_SECONDS: 5400          # every hub Application Synced and Healthy
+  # GATE_SITE_IMPORT_SECONDS: 900        # each site's import
+  # GATE_READY_SECONDS: 600              # ready-check passes
+  # GATE_INTERVAL: 15                    # seconds between a gate's checks
+  # GATE_ERROR_LIMIT: 4                  # consecutive oc errors before a gate fails

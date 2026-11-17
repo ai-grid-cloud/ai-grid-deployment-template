@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests for scripts/clusters.sh (clusters.yaml), with-cluster.sh,
-# join-site.sh and import-site.sh's merged kubeconfig, against a stub oc.
+# Tests for scripts/clusters.sh (clusters.yaml), with-cluster.sh and
+# import-site.sh's merged kubeconfig, against a stub oc.
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 SRC=$(pwd -P)
@@ -19,24 +19,28 @@ repo() { # name, clusters.yaml body after the header -> a repository copy with t
   local d="$T/$1"; mkdir -p "$d"; cp -R "$SRC/scripts" "$d/"
   printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\n%s\n' "$2" > "$d/clusters.yaml"; echo "$d"
 }
-site() { printf '  - {name: %s, role: %s, location: %s, api: "%s"}\n' "$@"; }
+site() { printf '  - {name: %s, api: "%s"}\n' "$@"; }
 
-GOOD="hub: {name: hub, api: 'https://api.hub.example.com:6443'}
+GOOD="hub: {api: 'https://api.hub.example.com:6443'}
 sites:
-$(site site-b combined us-east https://api.site-b.example.com:6443)
-$(site site-c inference us-west https://api.site-c.example.com:6443)"
+$(site site-b https://api.site-b.example.com:6443)
+$(site site-c https://api.site-c.example.com:6443)"
 
 d=$(repo good "$GOOD")
 t "hub found" 0 "^hub$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && hub_name' "$d"
 t "sites listed" 0 "^site-b site-c$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && echo $(site_names)' "$d"
-t "a site's role" 0 "^inference$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_field site-c role' "$d"
+t "rows: name, kind and api" 0 "^hub hub https://api.hub.example.com:6443 site-b site https://api.site-b.example.com:6443 site-c site https://api.site-c.example.com:6443$" \
+  bash -c 'echo $(bash "$0/scripts/clusters.sh" --rows "$0")' "$d"
+t "cluster_api: a site's" 0 "^https://api.site-c.example.com:6443$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_api site-c' "$d"
+t "cluster_api: the hub's" 0 "^https://api.hub.example.com:6443$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_api hub' "$d"
 t "kubeconfig path" 0 "/good/.config/site-b/kubeconfig$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_kubeconfig site-b' "$d"
-t "unknown cluster" 1 "no cluster nope in" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_field nope role' "$d"
+t "cluster_api: an unknown cluster" 1 "no cluster nope in" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_api nope' "$d"
+t "cluster_kubeconfig: an unknown cluster" 1 "no cluster nope in" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_kubeconfig nope' "$d"
 t "site_name with several sites asks for one" 1 "name a site: site-b, site-c" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name' "$d"
 t "site_name keeps a given name" 0 "^site-c$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name site-c' "$d"
-d1=$(repo one "hub: {name: hub, api: 'https://api.hub.example.com:6443'}
+d1=$(repo one "hub: {api: 'https://api.hub.example.com:6443'}
 sites:
-$(site site-b combined us-east https://api.site-b.example.com:6443)")
+$(site site-b https://api.site-b.example.com:6443)")
 t "site_name defaults to the only site" 0 "^site-b$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name' "$d1"
 t "clusters.sh --site prints the only site" 0 "^site-b$" bash "$d1/scripts/clusters.sh" --site
 t "clusters.sh --site with several sites" 1 "name a site" bash "$d/scripts/clusters.sh" --site
@@ -44,30 +48,35 @@ t "site_name: the word site is no longer special" 1 "site isn't a site in cluste
 t "site_name refuses a name that isn't a site" 1 "hub isn't a site in clusters.yaml: site-b, site-c" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name hub' "$d"
 t "clusters.sh --hub prints the hub" 0 "^hub$" bash "$d1/scripts/clusters.sh" --hub
 
-d=$(repo placeholder 'hub: {name: hub, api: REQUIRED-hubAPIURL}')
+d=$(repo placeholder 'hub: {api: REQUIRED-hubAPIURL}')
 t "placeholder named" 1 "set these in clusters.yaml: REQUIRED-hubAPIURL" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
-d=$(repo badrole "hub: {name: hub, api: 'https://h:6443'}
+d=$(repo twice "hub: {api: 'https://h:6443'}
 sites:
-$(site s1 edge us https://s:6443)")
-t "unknown role" 1 "site 1 role edge isn't combined, ingress or inference" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
-d=$(repo hubrole "hub: {name: hub, api: 'https://h:6443'}
+$(site hub https://s:6443)")
+t "a site named hub" 1 "the name hub is used twice" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
+d=$(repo twice2 "hub: {api: 'https://h:6443'}
 sites:
-$(site s1 hub us https://s:6443)")
-t "a site can't be a hub" 1 "site 1 role hub" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
-d=$(repo twice "hub: {name: hub, api: 'https://h:6443'}
+$(site s1 https://s:6443)
+$(site s1 https://t:6443)")
+t "two sites with one name" 1 "the name s1 is used twice" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
+d=$(repo badname "hub: {api: 'https://h:6443'}
 sites:
-$(site hub combined us https://s:6443)")
-t "a name used twice" 1 "the name hub is used twice" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
-d=$(repo badname "hub: {name: hub, api: 'https://h:6443'}
-sites:
-$(site Site_B combined us https://s:6443)")
+$(site Site_B https://s:6443)")
 t "name not a DNS label" 1 "site 1 name Site_B isn't a DNS label" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
-d=$(repo short "hub: {name: hub, api: 'https://h:6443'}
+d=$(repo short "hub: {api: 'https://h:6443'}
 sites:
-  - {name: s1, role: combined}")
-t "a missing field" 1 "site 1 needs name, role, location and api" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
+  - {name: s1}")
+t "a site without an api" 1 "site 1 needs name and api" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
+d=$(repo noname "hub: {api: 'https://h:6443'}
+sites:
+  - {api: 'https://s:6443'}")
+t "a site without a name" 1 "site 1 needs name and api" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
+d=$(repo http "hub: {api: 'https://h:6443'}
+sites:
+$(site s1 http://s:6443)")
+t "an api that isn't https" 1 "site 1 api http://s:6443 isn't an https URL" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
 d=$(repo nohub 'sites: []')
-t "no hub" 1 "hub needs name and api" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
+t "no hub" 1 "hub needs api" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
 d="$T/broken"; mkdir -p "$d"; cp -R "$SRC/scripts" "$d/"; printf 'apiVersion: v1\nkind: Clusters\nhub: [unclosed\n' > "$d/clusters.yaml"
 t "invalid YAML" 1 "clusters.yaml isn't valid" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
 d="$T/none"; mkdir -p "$d"; cp -R "$SRC/scripts" "$d/"
@@ -98,12 +107,7 @@ t "login with no name logs in only where needed" 0 "oc login --server https://ap
 t "login skips working logins" 0 "hub: already logged in" bash -c 'PATH="$1:$PATH" "$0/scripts/login.sh"' "$d" "$T/bin"
 t "login leaves a working hub login alone" 1 "^0$" grep -c "login --server https://api.hub" "$STUB_LOG"
 : > "$STUB_LOG"
-t "join-site labels from the file" 0 "oc label managedcluster site-c ai-grid/enabled=true ai-grid/role=inference location=us-west --overwrite" \
-  bash -c 'PATH="$1:$PATH" JOIN_SITE_NO_WAIT=1 "$0/scripts/join-site.sh" site-c; cat "$STUB_LOG"' "$d" "$T/bin"
-t "join-site with several sites needs a name" 1 "name a site: site-b, site-c" env PATH="$T/bin:$PATH" JOIN_SITE_NO_WAIT=1 "$d/scripts/join-site.sh"
 mkdir -p "$d1/.config/hub" "$d1/.config/site-b"; : > "$d1/.config/hub/kubeconfig"; : > "$d1/.config/site-b/kubeconfig"; : > "$STUB_LOG"
-t "join-site with one site needs no name" 0 "oc label managedcluster site-b ai-grid/enabled=true ai-grid/role=combined location=us-east" \
-  bash -c 'PATH="$1:$PATH" JOIN_SITE_NO_WAIT=1 "$0/scripts/join-site.sh"; cat "$STUB_LOG"' "$d1" "$T/bin"
 t "with-cluster takes a site's name" 0 "KUBECONFIG=$d1/.config/site-b/kubeconfig oc get nodes" \
   bash -c 'PATH="$1:$PATH" "$0/scripts/with-cluster.sh" site-b oc get nodes; cat "$STUB_LOG"' "$d1" "$T/bin"
 t "with-cluster has no word site" 1 "no cluster site in" env PATH="$T/bin:$PATH" "$d1/scripts/with-cluster.sh" site oc get nodes
@@ -113,7 +117,6 @@ t "site check with one site needs no name" 0 "KUBECONFIG=$d1/.config/site-b/kube
   bash -c 'PATH="$1:$PATH" "$0/scripts/check-prerequisites.sh" --step spoke; cat "$STUB_LOG"' "$d1" "$T/bin"
 t "check-revisions without a hub login" 1 "no login for hub|login expired" env PATH="$T/bin:$PATH" LIBRARY=/nonexistent bash -c 'rm -f "$0/.config/hub/kubeconfig"; "$0/scripts/check-revisions.sh"' "$d"
 : > "$d/.config/hub/kubeconfig"
-t "join-site refuses the hub" 1 "hub is the hub" env PATH="$T/bin:$PATH" JOIN_SITE_NO_WAIT=1 "$d/scripts/join-site.sh" hub
 
 # import-site.sh merges two kubeconfigs whose names collide (both "admin")
 # into contexts hub and site, each keeping its own server and credentials.
@@ -169,102 +172,101 @@ rm "$T/no-token"
 # Install settings in clusters.yaml (repositories:, options:).
 d=$(repo settings "hub: {api: 'https://h:6443'}
 sites:
-  - {name: site-b, role: combined, location: us, api: 'https://s:6443'}
+  - {name: site-b, api: 'https://s:6443'}
 repositories: {catalog: 'https://github.com/acme/catalog.git', library: deployment-template}
 options: {GATE_ROOT_SECONDS: 900, ALLOW_GENERIC_LOGIN: true, KEYCLOAK: install, PROVIDER_ADMIN_TOKEN_DURATION: ''}")
-t "the hub's name defaults to hub" 0 "^hub$" bash "$d/scripts/clusters.sh" --hub
+t "the hub is always named hub" 0 "^hub$" bash "$d/scripts/clusters.sh" --hub
 t "settings: the catalog" 0 "^CATALOG_REPO_URL=https://github.com/acme/catalog.git$" bash "$d/scripts/clusters.sh" --settings "$d"
 t "settings: the library" 0 "^LIBRARY_REVISION=deployment-template$" bash "$d/scripts/clusters.sh" --settings "$d"
-t "an issuer: on a site is an unknown key" 1 "sites\[0\].issuer" bash "$(repo siteissuer "hub: {name: hub, api: 'https://h:6443'}
+t "an issuer: on a site is an unknown key" 1 "sites\[0\].issuer" bash "$(repo siteissuer "hub: {api: 'https://h:6443'}
 sites:
-  - {name: s1, role: combined, location: us, api: 'https://s:6443', issuer: x}")/scripts/clusters.sh" --hub
+  - {name: s1, api: 'https://s:6443', issuer: x}")/scripts/clusters.sh" --hub
 t "settings: a number" 0 "^GATE_ROOT_SECONDS=900$" bash "$d/scripts/clusters.sh" --settings "$d"
 t "settings: true is 1" 0 "^ALLOW_GENERIC_LOGIN=1$" bash "$d/scripts/clusters.sh" --settings "$d"
 t "settings: an empty value is kept" 0 "^PROVIDER_ADMIN_TOKEN_DURATION=$" bash "$d/scripts/clusters.sh" --settings "$d"
-d=$(repo nosettings "hub: {name: hub, api: 'https://h:6443'}")
+d=$(repo nosettings "hub: {api: 'https://h:6443'}")
 t "settings: none when the file sets none" 0 "^$" bash "$d/scripts/clusters.sh" --settings "$d"
 d=$(repo catalogplaceholder "$GOOD
 repositories: {catalog: REQUIRED-catalogRepoURL}")
-t "catalog placeholder: the file still loads" 0 "^site-b combined" bash "$d/scripts/clusters.sh" --rows "$d"
+t "catalog placeholder: the file still loads" 0 "^site-b site" bash "$d/scripts/clusters.sh" --rows "$d"
 t "  ... and counts as no catalog" 0 "^CATALOG_REPO_URL=$" bash "$d/scripts/clusters.sh" --settings "$d"
 d2=$(repo privcatalog "$GOOD"); mkdir -p "$d2/.config"; chmod 700 "$d2/.config"
 { cat "$d2/clusters.yaml"; echo "repositories: {catalog: REQUIRED-catalogRepoURL}"; } > "$d2/.config/clusters.yaml"; rm "$d2/clusters.yaml"; chmod 600 "$d2/.config/clusters.yaml"
 t "catalog placeholder in the private file: says to set it there" 1 "set repositories.catalog in .config/clusters.yaml" bash "$d2/scripts/clusters.sh" --rows "$d2"
 t "  ... so the page-by-page path stays on" 0 "^pp$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && settings_apply && page_by_page && echo pp' "$d"
-d=$(repo typo "hub: {name: hub, api: 'https://h:6443'}
+d=$(repo typo "hub: {api: 'https://h:6443'}
 option: {GATE_ROOT_SECONDS: 1}")
 t "an unknown top-level key" 1 "unknown keys \(typos\?\): option$" bash "$d/scripts/clusters.sh" --hub
-d=$(repo typo2 "hub: {name: hub, api: 'https://h:6443'}
+d=$(repo typo2 "hub: {api: 'https://h:6443'}
 repositories: {catalogue: x}
 options: {GATE_ROOT_SECOND: 1, KEYCLOAK: install}")
 t "unknown repositories and options keys" 1 "repositories.catalogue options.GATE_ROOT_SECOND|options.GATE_ROOT_SECOND repositories.catalogue|unknown keys" bash "$d/scripts/clusters.sh" --hub
-d=$(repo typo3 "hub: {name: hub, api: 'https://h:6443'}
+d=$(repo typo3 "hub: {api: 'https://h:6443'}
 sites:
-  - {name: s1, role: combined, location: us, api: 'https://s:6443', isuer: x}")
+  - {name: s1, api: 'https://s:6443', isuer: x}")
 t "an unknown site key" 1 "sites\[0\].isuer" bash "$d/scripts/clusters.sh" --hub
-d=$(repo multiline "hub: {name: hub, api: 'https://h:6443'}
+d=$(repo multiline "hub: {api: 'https://h:6443'}
 options: {KEYCLOAK: \"a\\nb\"}")
 t "a value spanning lines is refused" 1 "spans lines" bash "$d/scripts/clusters.sh" --settings "$d"
-d=$(repo smuggle "hub: {name: hub, api: 'https://h:6443'}
+d=$(repo smuggle "hub: {api: 'https://h:6443'}
 options: {KEYCLOAK: \"a\\nPATH=/evil\"}")
 t "a second line that looks like a setting is refused" 1 "spans lines" bash "$d/scripts/clusters.sh" --settings "$d"
 t "  ... and prints no setting" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --settings "$0" 2>/dev/null | grep -c PATH= || true' "$d"
-d=$(repo keysmuggle "hub: {name: hub, api: 'https://h:6443'}
+d=$(repo keysmuggle "hub: {api: 'https://h:6443'}
 options: {\"KEYCLOAK\\nPATH\": /evil}")
 t "a key with a line break is refused" 1 "unknown keys" bash "$d/scripts/clusters.sh" --settings "$d"
-d=$(repo gatetypo "hub: {name: hub, api: 'https://h:6443'}
+d=$(repo gatetypo "hub: {api: 'https://h:6443'}
 options: {GATE_ROOT_SECOND: 1}")
 t "a misspelled GATE_ option" 1 "unknown keys \(typos\?\): options.GATE_ROOT_SECOND$" bash "$d/scripts/clusters.sh" --hub
 
 # The private file: .config/clusters.yaml, read first, the only place for secrets.
 SECRET='sha256~SECRET_do_not_print_4242'
 priv() { # name body: a repository whose .config/clusters.yaml (mode 600) has that body
-  local d; d=$(repo "$1" "hub: {name: hub, api: 'https://public:6443'}"); mkdir -p "$d/.config"
+  local d; d=$(repo "$1" "hub: {api: 'https://public:6443'}"); mkdir -p "$d/.config"
   printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\n%s\n' "$2" > "$d/.config/clusters.yaml"; chmod 600 "$d/.config/clusters.yaml"
   # make install's catalog, which the private file needs, unless the body sets repositories: or opts out
   case "$2" in *repositories:*|*"# no catalog"*) ;; *) echo "repositories: {catalog: 'https://github.com/o/c.git'}" >> "$d/.config/clusters.yaml" ;; esac
   echo "$d"
 }
-PRIV="hub: {api: 'https://private:6443'}
+PRIV="hub: {api: 'https://private:6443', token: '$SECRET'}
 sites:
-  - {name: site-b, role: combined, location: us, api: 'https://s:6443'}
-credentials:
-  hub: {token: '$SECRET'}
-  site-b: {username: admin, password: '$SECRET-pw', kubeconfig: /k}
+  - {name: site-b, api: 'https://s:6443', username: admin, password: '$SECRET-pw'}
 github: {deploymentToken: '$SECRET-d', catalogToken: '$SECRET-c'}
 quay: {username: 'rhoai+robot', password: '$SECRET-q'}"
 d=$(priv private "$PRIV")
-t ".config/clusters.yaml wins over clusters.yaml" 0 "^hub hub - https://private:6443" bash "$d/scripts/clusters.sh" --rows "$d"
+t ".config/clusters.yaml wins over clusters.yaml" 0 "^hub hub https://private:6443" bash "$d/scripts/clusters.sh" --rows "$d"
 t "secret_get: a token" 0 "^$SECRET-c$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && secret_get .github.catalogToken' "$d"
-t "cluster_secret: a cluster's password" 0 "^$SECRET-pw$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret site-b password' "$d"
+t "cluster_secret: a site's inline password" 0 "^$SECRET-pw$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret site-b password' "$d"
+t "cluster_secret: a site's inline username" 0 "^admin$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret site-b username' "$d"
+t "cluster_secret: the hub's inline token" 0 "^$SECRET$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret hub token' "$d"
 t "cluster_secret: unset is empty" 0 "^$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret hub password' "$d"
+t "cluster_secret: an unknown cluster" 1 "no cluster nope in" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret nope token' "$d"
 t "--rows and --settings print no secret" 0 "^0$" bash -c '{ bash "$0/scripts/clusters.sh" --rows "$0"; bash "$0/scripts/clusters.sh" --settings "$0"; } 2>&1 | grep -c SECRET_do_not_print || true' "$d"
 chmod 644 "$d/.config/clusters.yaml"
 t "a readable private file stops" 1 "mode 644: run chmod 600 .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
-d=$(repo publicsecret "hub: {name: hub, api: 'https://h:6443'}
+d=$(repo publicsecret "hub: {api: 'https://h:6443'}
 github: {catalogToken: x}")
-t "secrets in the committed clusters.yaml stop" 1 "move the secrets to .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
+t "secrets in the committed clusters.yaml stop" 1 "can't hold secrets: github: move them to .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
 d=$(priv nocatalog "hub: {api: 'https://h:6443'} # no catalog")
 t "private file without a catalog: stops early" 1 "set repositories.catalog in .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
 d=$(priv scalargithub "hub: {api: 'https://h:6443'}
 github: '$SECRET-scalar'")
 t "github: as a value, not a map: named by path" 1 "github must be a map" bash "$d/scripts/clusters.sh" --rows "$d"
 t "  ... the value never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
-d=$(priv scalarcred "hub: {api: 'https://h:6443'}
-credentials: {hub: '$SECRET-scalar'}")
-t "credentials.hub as a value: named by path" 1 "credentials.hub must be a map" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(priv scalarsite "hub: {api: 'https://h:6443'}
+sites: ['$SECRET-scalar']")
+t "a site as a value: named by path" 1 "sites\[0\] must be a map" bash "$d/scripts/clusters.sh" --rows "$d"
 t "  ... the value never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
 d=$(priv rootsecret "hub: {api: 'https://h:6443'}")
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\ngithub: {catalogToken: x}\n' > "$d/clusters.yaml"
 t "secrets in the committed clusters.yaml stop, even beside a private one" 1 "clusters.yaml is committed, so it can't hold" bash "$d/scripts/clusters.sh" --rows "$d"
-d=$(priv unknowncred "hub: {api: 'https://h:6443'}
-credentials:
-  site-z: {token: x}")
-t "credentials for an unknown cluster" 1 "credentials for clusters it doesn't name: site-z" bash "$d/scripts/clusters.sh" --rows "$d"
-d=$(priv credtypo "hub: {api: 'https://h:6443'}
-credentials:
-  hub: {tokn: x}")
-t "an unknown credential key: the section and a count, never the key" 1 "unknown keys \(typos\?\): credentials.hub \(1 unknown key\)$" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(priv credtypo "hub: {api: 'https://h:6443', tokn: x}")
+t "a misspelled hub key is named" 1 "unknown keys \(typos\?\): hub.tokn$" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(priv pastedkey "hub: {api: 'https://h:6443'}
+sites:
+  - {name: s1, api: 'https://s:6443', '$SECRET-as-a-key': x}")
+t "a key that may be a pasted secret: counted, never named" 1 "unknown keys \(typos\?\): sites\[0\] \(1 unknown key\)$" bash "$d/scripts/clusters.sh" --rows "$d"
+t "  ... the key never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
 d=$(priv githubkeys "hub: {api: 'https://h:6443'}
 github: {'$SECRET-as-a-key': x, other: y}")
 t "unknown github keys: counted, never named" 1 "github \(2 unknown keys\)$" bash "$d/scripts/clusters.sh" --rows "$d"
@@ -304,17 +306,127 @@ t "  ... a secret moved to a *_FILE variable: the generated copy goes" 0 "^gone$
 printf 'legacy\n' > "$d/.config/catalog-token"
 t "  ... else the legacy .config/catalog-token" 0 "^legacy$" load "$d" -- 'cat "$CATALOG_TOKEN_FILE"'
 t "  ... the missing hint names the key" 0 "github.deploymentToken in .config/clusters.yaml \(make secrets NAME=github\)" load "$d" -- 'secret_missing DEPLOYMENT_TOKEN_FILE'
-d=$(repo pagebypage "hub: {name: hub, api: 'https://h:6443'}")
+d=$(repo pagebypage "hub: {api: 'https://h:6443'}")
 t "page by page: ~/.ai-grid/catalog-token" 0 "^home-token$" load "$d" -- 'cat "$CATALOG_TOKEN_FILE"'
-d=$(repo withcatalog "hub: {name: hub, api: 'https://h:6443'}
+d=$(repo withcatalog "hub: {api: 'https://h:6443'}
 repositories: {catalog: 'https://github.com/o/c.git'}")
 t "with a catalog: no home default" 0 "^none$" load "$d" -- '[ -z "$CATALOG_TOKEN_FILE" ] && echo none'
-t "settings exported, GATE_O11Y_SECONDS allowed" 0 "^99$" load "$(repo o11y "hub: {name: hub, api: 'https://h:6443'}
+t "settings exported, GATE_O11Y_SECONDS allowed" 0 "^99$" load "$(repo o11y "hub: {api: 'https://h:6443'}
 options: {GATE_O11Y_SECONDS: 99}")" -- 'echo "$GATE_O11Y_SECONDS"'
-t "WIPE_PROTECT_ isn't an option (nothing reads it)" 1 "options.WIPE_PROTECT_NAMESPACES" bash "$(repo wipe "hub: {name: hub, api: 'https://h:6443'}
+t "WIPE_PROTECT_ isn't an option (nothing reads it)" 1 "options.WIPE_PROTECT_NAMESPACES" bash "$(repo wipe "hub: {api: 'https://h:6443'}
 options: {WIPE_PROTECT_NAMESPACES: 'a,b'}")/scripts/clusters.sh" --hub
 d=$(priv halfquay "hub: {api: 'https://h:6443'}
 quay: {username: u}")
 t "quay username without password: stops" 1 "needs both a username and a password" load "$d" -- 'true'
+
+# The old format (role:, location:, credentials:, kubeconfig:, hub.name) stops
+# first, with what to change, and never prints a value.
+old() { # name body want: the old-format message for a private file with that body
+  local d; d=$(priv "old-$1" "$2")
+  t "old format: $1" 1 "uses the old format.*$3" bash "$d/scripts/clusters.sh" --rows "$d"
+  t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+}
+old role "hub: {api: 'https://h:6443'}
+sites:
+  - {name: s1, role: combined, api: 'https://s:6443'}" "remove role: and location:.*Add to AI Grid"
+old location "hub: {api: 'https://h:6443'}
+sites:
+  - {name: s1, location: us-east, api: 'https://s:6443'}" "remove role: and location:"
+old credentials "hub: {api: 'https://h:6443'}
+credentials:
+  hub: {token: '$SECRET'}" "move each credentials.NAME"
+old kubeconfig "hub: {api: 'https://h:6443', kubeconfig: '/k/$SECRET'}" "remove kubeconfig:.*\.config/NAME/kubeconfig"
+old site-kubeconfig "hub: {api: 'https://h:6443'}
+sites:
+  - {name: s1, api: 'https://s:6443', kubeconfig: /k}" "remove kubeconfig:"
+old hub-name "hub: {name: hub, api: 'https://h:6443'}" "remove hub.name"
+d=$(priv old-first "hub: {name: hub, api: REQUIRED-hubAPIURL}
+sites:
+  - {name: Bad_Name, role: combined, location: us, api: 'https://s:6443', typo: 1}")
+t "old format: reported before placeholders, names and unknown keys" 1 "^error: .config/clusters.yaml uses the old format" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(repo old-committed "hub: {api: 'https://h:6443'}
+sites:
+  - {name: s1, role: combined, location: us, api: 'https://s:6443'}")
+t "old format: the committed file too" 1 "clusters.yaml uses the old format" bash "$d/scripts/clusters.sh" --rows "$d"
+d=$(repo spokeskey "hub: {api: 'https://h:6443'}
+spokes: []")
+t "a top-level spokes: is an unknown key" 1 "unknown keys \(typos\?\): spokes$" bash "$d/scripts/clusters.sh" --rows "$d"
+
+# The committed clusters.yaml holds no secret: not inline on the hub or a site,
+# not github: or quay:. The path is named, never the value.
+pub() { # name body path
+  local d; d=$(repo "pub-$1" "$2")
+  t "committed file refuses $3" 1 "clusters.yaml is committed, so it can't hold secrets: $3.*\.config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
+  t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+}
+pub hub-token "hub: {api: 'https://h:6443', token: '$SECRET'}" "hub.token"
+pub hub-password "hub: {api: 'https://h:6443', password: '$SECRET'}" "hub.password"
+pub hub-username "hub: {api: 'https://h:6443', username: admin}" "hub.username"
+pub site-token "hub: {api: 'https://h:6443'}
+sites:
+  - {name: s1, api: 'https://s:6443', token: '$SECRET'}" "sites\[0\].token"
+pub site-password "hub: {api: 'https://h:6443'}
+sites:
+  - {name: s1, api: 'https://s:6443', username: admin, password: '$SECRET'}" "sites\[0\].username sites\[0\].password"
+pub github "hub: {api: 'https://h:6443'}
+github: {catalogToken: '$SECRET'}" "github"
+pub quay "hub: {api: 'https://h:6443'}
+quay: {username: u, password: '$SECRET'}" "quay"
+d=$(priv pub-beside "hub: {api: 'https://h:6443'}")
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\nsites:\n  - {name: s1, api: "https://s:6443", password: "%s"}\n' "$SECRET" > "$d/clusters.yaml"
+t "committed file refuses an inline password, even beside a private one" 1 "can't hold secrets: sites\[0\].password" bash "$d/scripts/clusters.sh" --rows "$d"
+t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+
+# options: with every line commented out is null.
+d=$(repo nulloptions "hub: {api: 'https://h:6443'}
+options:
+  # GATE_ROOT_SECONDS: 600")
+t "null options: loads" 0 "^hub hub https://h:6443$" bash "$d/scripts/clusters.sh" --rows "$d"
+t "  ... and sets no option" 0 "^$" bash "$d/scripts/clusters.sh" --settings "$d"
+t "  ... deployment_load passes" 0 "^ok$" bash -c '. "$0/scripts/clusters.sh"; deployment_load "$0" && echo ok' "$d"
+
+# github.deploymentToken is optional.
+d=$(priv nodeploytoken "hub: {api: 'https://h:6443', token: x}
+github: {catalogToken: '$SECRET-c'}")
+t "no deploymentToken: loads, the deployment token file is empty" 0 "^DEPLOYMENT_TOKEN_FILE=	$" \
+  bash -c 'HOME="$1" bash "$0/scripts/clusters.sh" --resolve "$0" 2>&1 | grep ^DEPLOYMENT_TOKEN_FILE=' "$d" "$T/home"
+
+# The acceptance file: as shipped (placeholders), then filled in.
+acc() { # name sed-script...: a repository whose .config/clusters.yaml is the acceptance file, filled by perl
+  local d; d=$(repo "$1" "hub: {api: 'https://public:6443'}"); rm "$d/clusters.yaml"; mkdir -p "$d/.config"; shift
+  perl -pe "$*" "$SRC/tests/fixtures/clusters-acceptance.yaml" > "$d/.config/clusters.yaml"; chmod 600 "$d/.config/clusters.yaml"; echo "$d"
+}
+d=$(acc accept-placeholders '')
+t "acceptance file as shipped: the placeholders, nothing else" 1 "^error: set these in .config/clusters.yaml: .*REQUIRED-hubAPIURL" bash "$d/scripts/clusters.sh" --rows "$d"
+for p in REQUIRED-siteName REQUIRED-siteAPIURL hub.username hub.password 'sites\[0\].password' 'sites\[1\].username' github.catalogToken quay.username quay.password; do
+  t "  ... names $p" 1 "$p" bash "$d/scripts/clusters.sh" --rows "$d"
+done
+t "  ... secrets by path only, never their text" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -cE "REQUIRED-(username|password|catalogToken|quay)" || true' "$d"
+t "  ... one error line" 0 "^1$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c . || true' "$d"
+FILL='if (/REQUIRED-siteName/) { $n++; s/REQUIRED-siteName/site-$n/ } if (/REQUIRED-siteAPIURL/) { $m++; s|REQUIRED-siteAPIURL|https://api.site-$m.example.com:6443| }
+  s|REQUIRED-hubAPIURL|https://api.hub.example.com:6443|; s|REQUIRED-catalogRepoURL|https://github.com/o/c.git|;
+  s/REQUIRED-username/admin/; s/REQUIRED-password/fixture-pw/; s/REQUIRED-catalogToken/fixture-catalog/;
+  s/REQUIRED-quayUsername/rhoai+robot/; s/REQUIRED-quayPassword/fixture-quay/;'
+d=$(acc accept-filled "$FILL")
+t "acceptance file filled in: loads, one row each" 0 "^hub hub https://api.hub.example.com:6443 site-1 site https://api.site-1.example.com:6443 site-2 site https://api.site-2.example.com:6443$" \
+  bash -c 'echo $(bash "$0/scripts/clusters.sh" --rows "$0")' "$d"
+t "  ... cluster_secret: the hub's username" 0 "^admin$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret hub username' "$d"
+t "  ... cluster_secret: site-2's password" 0 "^fixture-pw$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret site-2 password' "$d"
+t "  ... cluster_api: site-2" 0 "^https://api.site-2.example.com:6443$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_api site-2' "$d"
+t "  ... deployment_load: no deployment token, the rest resolved" 0 "^ok$" \
+  bash -c '. "$0/scripts/clusters.sh"; deployment_load "$0" && [ -z "$DEPLOYMENT_TOKEN_FILE" ] && [ -s "$CATALOG_TOKEN_FILE" ] && [ -s "$QUAY_AUTH_FILE" ] && echo ok' "$d"
+d=$(acc accept-token "$FILL"' s/^(\s*)username: admin\s*$// if $. < 16; s/^(\s*)password: fixture-pw\s*$// if $. < 16; s/^  # token: sha256~TOKEN.*/  token: sha256~fixture/;')
+t "acceptance file with a hub token instead: loads" 0 "^sha256~fixture$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret hub token' "$d"
+d=$(acc accept-committed "$FILL"); mv "$d/.config/clusters.yaml" "$d/clusters.yaml"; chmod 644 "$d/clusters.yaml"
+t "acceptance file filled in, committed: refused for its secrets" 1 "can't hold secrets: hub.username hub.password sites\[0\].username" bash "$d/scripts/clusters.sh" --rows "$d"
+
+# clusters-example.yaml: copied to the committed clusters.yaml (page 2), it
+# holds no secret, so filled in it loads page by page.
+d=$(repo example "hub: {api: x}"); cp "$SRC/clusters-example.yaml" "$d/clusters.yaml"
+t "example as copied: only the placeholder error" 1 "^error: set these in clusters.yaml: REQUIRED-" bash "$d/scripts/clusters.sh" --rows "$d"
+perl -i -pe "$FILL" "$d/clusters.yaml"
+t "example filled in: loads page by page" 0 "^hub hub https://api.hub.example.com:6443 site-1 site https://api.site-1.example.com:6443$" \
+  bash -c 'echo $(bash "$0/scripts/clusters.sh" --rows "$0")' "$d"
+t "  ... no secret uncommented" 0 "^0$" bash -c 'grep -cE "^\s*(token|username|password|catalogToken|deploymentToken|github|quay):" "$0" || true' "$SRC/clusters-example.yaml"
 
 echo "clusters tests: $((total-fails)) ok, $fails failed"; exit "$fails"
