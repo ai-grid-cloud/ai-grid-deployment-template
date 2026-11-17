@@ -35,9 +35,22 @@ CLUSTERS_DIR="" CLUSTERS_ROWS="" CLUSTERS_JSON="" CLUSTERS_FILE=""
 SETTINGS_OPTIONS_RE='KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_ROOT_SECONDS|GATE_MCH_SECONDS|GATE_HUB_APPS_SECONDS|GATE_SITE_IMPORT_SECONDS|GATE_READY_SECONDS|GATE_INTERVAL|GATE_ERROR_LIMIT|GATE_O11Y_SECONDS|GATE_TENANT_IDP_SECONDS'
 INSTALL_NS_RE='open-cluster-management|multicluster-engine|redhat-ods|redhat-ai-grid|maas|ai-grid|gitops|kuadrant|submariner'
 
+# The old format's keys on stdin's JSON, as what to change, "; "-separated.
+# Keys only, never a value.
+_old_format() {
+  jq -r '
+      def entries: [(.hub | objects), ((.sites // []) | arrays | .[] | objects)];
+      (if has("repositories") or has("github") then "replace repositories.catalog with catalog.url, repositories.library with options.LIBRARY, github.catalogToken with catalog.token and github.deploymentToken with deployment.token" else empty end),
+      (if has("credentials") then "move each credentials.NAME token, or username and password, into that cluster'"'"'s own hub: or sites: entry" else empty end),
+      (if (.hub | objects | has("name")) then "remove hub.name (the hub is always hub)" else empty end),
+      (if any(entries[]; has("role") or has("location")) then "remove role: and location: (choose them in the provider console'"'"'s Add to AI Grid)" else empty end),
+      (if any(entries[]; has("kubeconfig")) then "remove kubeconfig: (copy that kubeconfig to .config/NAME/kubeconfig instead)" else empty end)
+      ' 2>/dev/null | paste -sd ';' - | sed 's/;/; /g'
+}
+
 clusters_load() {
   CLUSTERS_DIR=$(cd "${1:-.}" && pwd)
-  local f json rows="" what name kind api left mode private="" rel
+  local f json cjson rows="" what name kind api left mode private="" rel
   if [ -f "$CLUSTERS_DIR/.config/clusters.yaml" ]; then f="$CLUSTERS_DIR/.config/clusters.yaml" private=1
   else f="$CLUSTERS_DIR/clusters.yaml"; fi
   CLUSTERS_FILE=$f rel=${f#"$CLUSTERS_DIR/"}
@@ -52,28 +65,25 @@ clusters_load() {
     echo "error: $rel isn't valid YAML${left:+ (at $left)}" >&2; return 1
   fi
   [ "$(jq -r .kind <<<"$json")" = Clusters ] || { echo "error: clusters.yaml needs kind: Clusters" >&2; return 1; }
-  # The old format, first: say what to change. Keys only, never a value.
-  left=$(jq -r '
-      def entries: [(.hub | objects), ((.sites // []) | arrays | .[] | objects)];
-      (if has("repositories") or has("github") then "replace repositories.catalog with catalog.url, repositories.library with options.LIBRARY, github.catalogToken with catalog.token and github.deploymentToken with deployment.token" else empty end),
-      (if has("credentials") then "move each credentials.NAME token, or username and password, into that cluster'"'"'s own hub: or sites: entry" else empty end),
-      (if (.hub | objects | has("name")) then "remove hub.name (the hub is always hub)" else empty end),
-      (if any(entries[]; has("role") or has("location")) then "remove role: and location: (choose them in the provider console'"'"'s Add to AI Grid)" else empty end),
-      (if any(entries[]; has("kubeconfig")) then "remove kubeconfig: (copy that kubeconfig to .config/NAME/kubeconfig instead)" else empty end)
-      ' <<<"$json" 2>/dev/null | paste -sd ';' - | sed 's/;/; /g')
+  # The old format, first: say what to change.
+  left=$(_old_format <<<"$json")
   [ -z "$left" ] || { echo "error: $rel uses the old format: $left (see clusters-example.yaml)" >&2; return 1; }
   # The committed clusters.yaml never holds secrets, whichever file is read.
   if [ -f "$CLUSTERS_DIR/clusters.yaml" ]; then
-    if ! left=$(KUBECONFIG=/dev/null kubectl label --local -f "$CLUSTERS_DIR/clusters.yaml" ai-grid.dev/read=true -o json 2>/dev/null | jq -r '
+    if ! cjson=$(KUBECONFIG=/dev/null kubectl label --local -f "$CLUSTERS_DIR/clusters.yaml" ai-grid.dev/read=true -o json 2>/dev/null) ||
+       ! left=$(jq -r '
         def secrets($p): objects | ["token", "username", "password"][] as $k | select(has($k)) | "\($p).\($k)";
         (.hub | secrets("hub")),
         ((.sites // []) | arrays | to_entries[] | .key as $i | .value | secrets("sites[\($i)]")),
         (.catalog | objects | select(has("token")) | "catalog.token"),
-        (["credentials", "deployment", "quay"][] as $k | select(has($k)) | $k)' 2>/dev/null); then
+        (["credentials", "github", "deployment", "quay"][] as $k | select(has($k)) | $k)' <<<"$cjson" 2>/dev/null); then
       echo "error: clusters.yaml isn't valid YAML" >&2; return 1
     fi
     left=$(echo $left)
     [ -z "$left" ] || { echo "error: clusters.yaml is committed, so it can't hold secrets: $left: move them to .config/clusters.yaml (chmod 600), which git ignores" >&2; return 1; }
+    # Beside the private file, an old committed file would otherwise go unnoticed.
+    left=$(_old_format <<<"$cjson")
+    [ -z "$left" ] || { echo "error: clusters.yaml uses the old format: $left (see clusters-example.yaml)" >&2; return 1; }
   fi
   # Each of these is a map; a value in its place is named by path only, never printed.
   left=$(jq -r '
