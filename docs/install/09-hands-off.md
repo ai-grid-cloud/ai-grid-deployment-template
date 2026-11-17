@@ -15,7 +15,6 @@ worker nodes or the network.
 - [ ] **A role in mind for each site:** `combined` (tenants enter and models run), `ingress` (tenants enter, no
   models) or `inference` (models only). At least one site is `ingress` or `combined`. You choose each site's role
   and location after the install, when you add it to the grid in the provider console; `.config/clusters.yaml` has neither.
-  <!-- TODO(D11): how the tenant portal's redirect (portalRedirectURI) picks its spoke; open decision. -->
 - [ ] **A default StorageClass on each cluster.**
 - [ ] **Two worker nodes on each cluster** for Submariner's gateways. On a compact cluster or single-node OpenShift,
   you label the gateway nodes by hand, as [site networking](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/b96c26578e893a5094b424b0ae55b15a8590c7b7/docs/install/spokes/networking.md) describes.
@@ -60,13 +59,13 @@ Tell the install which clusters and repositories to use, and give it the credent
 
 3. Open `.config/clusters.yaml` in an editor and fill it in. Each field has a comment that says what it is.
 
-   - **`hub` and `spokes`:** replace each `REQUIRED-` value, and add an entry under `spokes:` for each site, with
-     its `name` and `api`. A spoke's name is a DNS label; it becomes the site's ACM cluster name, and you can't
+   - **`hub` and `sites`:** replace each `REQUIRED-` value, and add an entry under `sites:` for each site, with
+     its `name` and `api`. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't
      change it once the site is imported. The hub's name is always `hub`. The file says only how to reach each
      cluster: no role and no location.
    - **`repositories.catalog`:** the URL of the catalog repository you create in step 4, such as
      `https://github.com/my-org/ai-grid-catalog.git`. Pick its owner and name now.
-   - **The secrets:** in `hub:` and in each spoke's entry, give a `cluster-admin` `token`, or a `username` and
+   - **The secrets:** in `hub:` and in each site's entry, give a `cluster-admin` `token`, or a `username` and
      `password`. A cluster token usually expires in about 24 hours; with a username and password, the scripts get a
      fresh token on every run, so a rerun the next day works. Fill in `quay:` too. Leave `github:` commented until
      step 5.
@@ -80,7 +79,7 @@ Tell the install which clusters and repositories to use, and give it the credent
      api: https://api.hub.example.com:6443
      username: kubeadmin
      password: PASSWORD
-   spokes:
+   sites:
      - name: site-east-1
        api: https://api.site-east-1.example.com:6443
        token: sha256~TOKEN
@@ -96,14 +95,13 @@ Tell the install which clusters and repositories to use, and give it the credent
      password: PASSWORD
    ```
 
-   A file in the old format, with `sites:`, `credentials:`, `role:` or `location:`, stops with a message that says
-   what to change.
+   A file in the old format, with `credentials:`, a `kubeconfig` key, `hub.name`, or a `role` or `location` on a site,
+   stops with a message that says what to change.
 
-   Never paste a secret into a chat, a command line or a file you commit. To enter the secrets at a prompt that
-   doesn't show what you paste, instead of editing them, run `make secrets` (`make secrets NAME=github` for the
-   GitHub tokens only).
+   The install registers the tenant portal's sign-in redirect for every site in the file, `https://maas.APPS_DOMAIN/*`
+   for each, whatever role you choose for it later.
 
-   <!-- TODO(D11): whether make secrets stays, and how it writes the hub's and each spoke's secrets; open decision. -->
+   Never paste a secret into a chat, a command line or a file you commit.
 
 ### Create the catalog repository and its token
 
@@ -165,8 +163,7 @@ that repository and no other.
         catalogToken: github_pat_TOKEN
       ```
 
-      Or run `make secrets NAME=github`, leave the deployment token empty, and paste the catalog token at its
-      prompt. Either way the token is in `github.catalogToken` in `.config/clusters.yaml`, and nowhere else.
+      The token is in `github.catalogToken` in `.config/clusters.yaml`, and nowhere else.
 
 ### Check the prerequisites
 
@@ -183,7 +180,7 @@ Confirm that every cluster and credential is ready before anything is installed.
    `.config/clusters.yaml`. It uses the first of these that it finds:
 
    1. A working `.config/NAME/kubeconfig`, which it keeps.
-   2. The cluster's `token`, in `hub:` or in its entry under `spokes:`.
+   2. The cluster's `token`, in `hub:` or in its entry under `sites:`.
    3. The cluster's `username` and `password`, in the same place.
 
    Only for a cluster with none of these does it open your browser to log in, with `oc login --web`. For each cluster
@@ -300,8 +297,6 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 | `library.url`, `library.revision` | The library and the commit you pin |
 | `sites[]` | For each site: `name`, `api`, `appsDomain`, and `acmName`, its ManagedCluster's name |
 
-<!-- TODO(D11): the name of the outputs.json key for the spokes (sites or spokes); open decision. -->
-
 The provider-admin token is in `.config/provider-admin-token`. It belongs to ServiceAccount
 `ai-grid-test/provider-admin`, which is bound to the console's ClusterRole `ai-grid-provider-admin`, so a test suite
 can call the console's API with no browser. Send it as an `Authorization: Bearer` header from a file, never on a
@@ -378,6 +373,9 @@ its role and location there. The hub then installs OpenShift AI, MaaS and the gr
 
 ## Known limits
 
+- The tenant Keycloak imports its realm only once, on its first start (`--override false`). A site you add to
+  `.config/clusters.yaml` after the first install doesn't get its portal redirect, `https://maas.APPS_DOMAIN/*`,
+  automatically.
 - The MaaS gateway uses the cluster's internal certificate, so tenants' clients don't trust it until you add your own
   certificate.
 - `make install` always installs its own Keycloak. Using an existing one, with `KEYCLOAK` under `options:`, comes
