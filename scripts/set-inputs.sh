@@ -35,9 +35,18 @@ https_url() { # a git remote URL -> https://HOST/OWNER/REPO.git, no credentials
 }
 
 . "$here/clusters.sh"
-clusters_load "$dir"; settings_apply
+clusters_load "$dir"
+# Only without an argument: the settings are make install's (the private file).
+[ $# -eq 1 ] || settings_apply
 want=${1:-${CATALOG_REPO_URL:-}}
-[ -n "$want" ] || { echo "error: set repositories.catalog in clusters.yaml to your catalog repository's URL, then run make inputs again" >&2; exit 1; }
+if [ -z "$want" ]; then
+  if clusters_private; then
+    echo "error: set repositories.catalog in ${CLUSTERS_FILE#"$dir/"} to your catalog repository's URL, then run make inputs again" >&2
+  else
+    echo "error: name your catalog repository: run make inputs CATALOG=CATALOG_REPO_URL (page 2)" >&2
+  fi
+  exit 1
+fi
 catalog=$(https_url "$want")
 origin=$(git -C "$dir" remote get-url origin 2>/dev/null) || { echo "error: this repository has no origin remote" >&2; exit 1; }
 deployment=$(https_url "$origin")

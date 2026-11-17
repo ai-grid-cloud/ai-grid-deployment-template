@@ -33,7 +33,7 @@ done
 [ -s "$pwfile" ] || die "no password in $pwfile"
 
 issuer=$(sed -n -E 's/^[[:space:]]*idpIssuerURL[[:space:]]*=[[:space:]]*([^[:space:]]+).*/\1/p' "$dir/root/inputs.env" 2>/dev/null | head -1)
-[ -n "$issuer" ] && [ "${issuer#REQUIRED-}" = "$issuer" ] || die "idpIssuerURL isn't set in root/inputs.env (scripts/set-inputs.sh)"
+[ -n "$issuer" ] && [ "${issuer#REQUIRED-}" = "$issuer" ] || die "idpIssuerURL isn't set in root/inputs.env (make inputs)"
 kv() { sed -n -E "s/^[[:space:]]*$1:[[:space:]]*([^[:space:]]+).*/\\1/p" "$dir/root/kustomization.yaml" | head -1; }
 client_id=$(kv idpClientID) secret_ns=$(kv idpClientSecretNamespace) secret_name=$(kv idpClientSecretName) secret_key=$(kv idpClientSecretKey)
 

@@ -57,7 +57,7 @@ YAML
 
 d=$(repo ssh git@github.com:acme/deploy.git)
 cp "$d/root/kustomization.yaml" "$T/kustomization-before"; cp "$d/root/self.yaml" "$T/self-before"
-t "without inputs.env the check names make inputs" 1 "root/inputs.env is missing: run make inputs" \
+t "without inputs.env the check names make inputs" 1 "root/inputs.env is missing: run make inputs CATALOG=CATALOG_REPO_URL" \
   env PATH="$T/bin:$PATH" "$d/scripts/check-deployment.sh"
 t "sets the values and checks" 0 "every repository is an input" \
   env PATH="$T/bin:$PATH" "$d/scripts/set-inputs.sh" git@github.com:acme/catalog.git
@@ -111,12 +111,20 @@ t "https origin: credentials dropped, .git added" 0 "deploymentRepoURL = https:/
 
 # With no argument, the catalog comes from clusters.yaml's repositories.catalog (make inputs).
 d2=$(repo noarg https://github.com/acme/deploy.git)
-t "no argument and no repositories.catalog: says where to set it" 1 "set repositories.catalog in clusters.yaml" \
+t "no argument, page by page: names make inputs CATALOG=" 1 "run make inputs CATALOG=CATALOG_REPO_URL \(page 2\)" \
   env PATH="$T/bin:$PATH" "$d2/scripts/set-inputs.sh"
 printf 'repositories:\n  catalog: git@github.com:acme/catalog2.git\n' >> "$d2/clusters.yaml"
 t "no argument: reads repositories.catalog" 0 "every repository is an input" \
   env PATH="$T/bin:$PATH" "$d2/scripts/set-inputs.sh"
 check "  ... and writes it as https" grep -qx 'catalogRepoURL=https://github.com/acme/catalog2.git' "$d2/root/inputs.env"
+# With the private file, the error names its repositories.catalog.
+d3=$(repo private https://github.com/acme/deploy.git); mv "$d3/clusters.yaml" "$d3/.config/clusters.yaml"; chmod 600 "$d3/.config/clusters.yaml"
+t "no argument, private file: says where to set it" 1 "set repositories.catalog in .config/clusters.yaml" \
+  env PATH="$T/bin:$PATH" "$d3/scripts/set-inputs.sh"
+# Given a URL, set-inputs.sh doesn't read the settings, so a bad options: value can't stop it.
+d4=$(repo opts https://github.com/acme/deploy.git); printf 'options:\n  GATE_READY_SECONDS: soon\n' >> "$d4/clusters.yaml"
+t "a URL argument ignores the options: section" 0 "every repository is an input" \
+  env PATH="$T/bin:$PATH" "$d4/scripts/set-inputs.sh" https://github.com/acme/catalog.git
 t "two arguments: usage" 2 "usage: set-inputs.sh \[CATALOG_REPO_URL\]" env PATH="$T/bin:$PATH" "$d2/scripts/set-inputs.sh" a b
 
 echo "set-inputs tests: $((total-fails)) ok, $fails failed"; exit "$fails"

@@ -104,7 +104,7 @@ rm -rf "$tpl/root"; cp -R "$SRC/root" "$tpl/"; rm -f "$tpl/root/inputs.env"; g -
 g -C "$tpl" commit -qm "inputs.env"
 t "an old inputs.yaml stops the merge" 1 "conflict in root/inputs.yaml" run
 cp "$T/last" "$T/out"
-t "  ... prints set-inputs.sh with your catalog URL" 0 "^  scripts/set-inputs.sh https://github.com/acme/catalog.git$" cat "$T/out"
+t "  ... prints make inputs with your catalog URL" 0 "^  make inputs CATALOG=https://github.com/acme/catalog.git$" cat "$T/out"
 t "  ... then git rm root/inputs.yaml" 0 "^  git rm root/inputs.yaml$" cat "$T/out"
 t "  ... then add inputs.env and commit" 0 "^  git add root/inputs.env && git commit$" cat "$T/out"
 # What set-inputs.sh writes (it reads the clusters, so the test writes it), then the printed steps.
