@@ -170,9 +170,9 @@ def pinned_catalog_image():
 
 
 HINTS = {  # the fix when make install's file is missing (scripts/clusters.sh secret_missing)
-    "QUAY_AUTH_FILE": "set quay.username and quay.password in .config/clusters.yaml (make secrets NAME=quay)",
-    "CATALOG_TOKEN_FILE": "set github.catalogToken in .config/clusters.yaml (make secrets NAME=github)",
-    "DEPLOYMENT_TOKEN_FILE": "set github.deploymentToken in .config/clusters.yaml (make secrets NAME=github)",
+    "QUAY_AUTH_FILE": "set quay.username and quay.password in .config/clusters.yaml (make config creates it)",
+    "CATALOG_TOKEN_FILE": "set catalog.token in .config/clusters.yaml (make config creates it)",
+    "DEPLOYMENT_TOKEN_FILE": "set deployment.token in .config/clusters.yaml (make config creates it)",
 }
 
 

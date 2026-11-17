@@ -113,6 +113,6 @@ t "  ... keeps your credential helpers and sets no GIT_ASKPASS" \
 g -C "$D" remote set-url origin "$T/no-such-origin.git"; echo own2 > "$D/site.yaml"
 nopush "unreadable" site.yaml
 t "no token, origin unreadable: says to log in to GitHub or set the token" \
-  eval '[ "$rc" = 1 ] && grep -qF "gh auth login" <<<"$out" && grep -qF "make secrets NAME=github" <<<"$out"'
+  eval '[ "$rc" = 1 ] && grep -qF "gh auth login" <<<"$out" && grep -qF "set deployment.token in .config/clusters.yaml" <<<"$out"'
 
 echo "git-push tests: $((total-fails)) ok, $fails failed"; exit "$fails"

@@ -52,7 +52,7 @@ else
   # No prompt from ssh either: a key passphrase it can't get fails instead.
   export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes"
   gitc() { git "$@"; }
-  login_hint="next: log in to GitHub so git can push to origin without a prompt (such as gh auth login), or set github.deploymentToken with make secrets NAME=github"
+  login_hint="next: log in to GitHub so git can push to origin without a prompt (such as gh auth login), or set deployment.token in .config/clusters.yaml (make config creates it)"
 fi
 
 # Only the paths that exist or are tracked: a site directory that doesn't

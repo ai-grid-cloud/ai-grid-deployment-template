@@ -186,9 +186,9 @@ ED=$EP envt "  ... AI_GRID_CATALOG_TOKEN wins" "^ok +catalog token +AI_GRID_CATA
 ED=$EP envt "  ... no temporary auth file left" "." && { total=$((total+1)); if ls "${TMPDIR:-/tmp}" 2>/dev/null | grep -q '^prereqs-quay-'; then echo "   FAIL temp auth file left"; fails=$((fails+1)); else echo "   ok     ... (none in TMPDIR)"; fi; }
 EM="$T/private-missing"; mkdir -p "$EM/.config"
 printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\ncatalog: {url: 'https://example.com/c.git'}\n" > "$EM/.config/clusters.yaml"; chmod 600 "$EM/.config/clusters.yaml"
-ED=$EM envt "private file without secrets: the auth file hint names quay:" "^MISSING +auth file +$EM/.config/quay-auth.json: not found; set quay.username and quay.password in .config/clusters.yaml \(make secrets NAME=quay\)"
-ED=$EM envt "  ... the token hint names github.catalogToken" "^MISSING +catalog token file +$EM/.config/catalog-token not found; set github.catalogToken in .config/clusters.yaml \(make secrets NAME=github\)"
-ED=$EM envt "  ... no token, no origin: FAIL with how to log in or set the token" "^FAIL +deployment push +no token, and your git login can't read origin .*gh auth login.*make secrets NAME=github"
+ED=$EM envt "private file without secrets: the auth file hint names quay:" "^MISSING +auth file +$EM/.config/quay-auth.json: not found; set quay.username and quay.password in .config/clusters.yaml \(make config creates it\)"
+ED=$EM envt "  ... the token hint names catalog.token" "^MISSING +catalog token file +$EM/.config/catalog-token not found; set catalog.token in .config/clusters.yaml \(make config creates it\)"
+ED=$EM envt "  ... no token, no origin: FAIL with how to log in or set the token" "^FAIL +deployment push +no token, and your git login can't read origin .*gh auth login.*set deployment.token in .config/clusters.yaml"
 ED=$EM envt "  ... never MISSING for the deployment token" "." && { total=$((total+1)); if env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$H1" STUB_DIR="$w" "$PY" "$SCRIPT" --deployment "$EM" 2>&1 | grep -q "^MISSING .*deployment"; then echo "   FAIL deployment token reported MISSING"; fails=$((fails+1)); else echo "   ok     ... (not MISSING)"; fi; }
 git init -q --bare "$T/em-origin.git"; git -C "$EM" init -q; git -C "$EM" remote add origin "$T/em-origin.git"
 ED=$EM envt "  ... a DEPLOYMENT_TOKEN_FILE that doesn't exist: FAIL, not your git login" "^FAIL +deployment push +DEPLOYMENT_TOKEN_FILE names /no/such/token, which is missing or empty" DEPLOYMENT_TOKEN_FILE=/no/such/token
