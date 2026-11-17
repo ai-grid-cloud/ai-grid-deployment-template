@@ -30,11 +30,23 @@ worker nodes or the network.
 
 ### Create the repositories and tokens
 
-The install writes to two GitHub repositories and needs a token for each.
+The install writes to two GitHub repositories, your catalog repository and your deployment repository, and needs a
+fine-grained token for each. Each token can write to its own repository and no other.
 
 1. Create your catalog repository. The provider console writes your models and subscriptions there.
-   [Create a new repository](https://github.com/new), name it, such as `ai-grid-catalog`, make it public, and turn
-   on **Add README**. With the GitHub CLI instead:
+
+   1. Open [Create a new repository](https://github.com/new).
+   2. Fill in the form:
+      - **Owner:** your account, or the organization that will own the repository
+      - **Repository name:** such as `ai-grid-catalog`
+      - **Choose visibility:** **Public**
+      - **Add README:** **On**
+      - **Everything else:** leave it as it is: no template, no `.gitignore` and no license
+   3. Click **Create repository**.
+
+   <img src="images/new-catalog-repository.png" width="420" alt="The new repository form with Add README on">
+
+   With the GitHub CLI instead:
 
    ```sh
    gh repo create OWNER/CATALOG_REPO --add-readme --public
@@ -42,18 +54,61 @@ The install writes to two GitHub repositories and needs a token for each.
 
    Leave it holding nothing but its README: `make install` stops if it holds anything else.
 
-2. Create the catalog token.
-   [Create a fine-grained token](https://github.com/settings/personal-access-tokens/new), named such as
-   `ai-grid-catalog`. If an organization owns the repository, set **Resource owner** to that organization. Under
-   **Repository access**, select **Only select repositories** and your catalog repository. Under **Permissions**,
-   click **Add permissions** > **Contents**, and set it to **Read and write**. Leave every other
-   permission off. Click **Generate token**, and keep the token for step 6.
+2. Create the catalog token. The provider console writes your models and subscriptions with it.
 
-   When this token expires, the console can't save models or subscriptions until you replace it.
+   1. Open [New fine-grained personal access token](https://github.com/settings/personal-access-tokens/new). You can
+      also reach it from your profile picture: **Settings** > **Developer settings** > **Personal access tokens** >
+      **Fine-grained tokens** > **Generate new token**.
+   2. Fill in the form:
+      - **Token name:** `ai-grid-catalog`
+      - **Expiration:** **90 days**, or a later **Custom** date if your organization allows one. When it expires,
+        the console can't save models or subscriptions until you replace it, so note the date.
+      - **Description:** optional, such as `AI Grid console writes the catalog`
+      - **Resource owner:** your account, or the organization that owns your catalog repository. If that
+        organization requires approval for fine-grained tokens, the token can only read until an organization owner
+        approves it.
+      - **Repository access:** **Only select repositories**, then open **Select repositories** and choose your
+        catalog repository, and only that one.
+      - **Permissions:** on the **Repositories** tab, click **Add permissions**, select **Contents**, and set it to
+        **Access: Read and write**. GitHub adds **Metadata: Read-only** itself.
+      - **Everything else:** no access. Add no other repository permission and no **Account** permission.
 
-3. Create the deployment token. Create a second fine-grained token the same way, named such as
-   `ai-grid-deployment`, with **Contents** set to **Read and write** on your deployment repository only. Keep it for
-   step 6. `make install` pushes your settings with it.
+      <img src="images/token-repository-access.png" width="480" alt="Repository access set to Only select repositories">
+
+      <img src="images/token-permissions.png" width="480" alt="Contents set to Read and write, and Metadata Read-only">
+
+   3. Click **Generate token** at the bottom of the form.
+   4. Copy the token from the page that follows. GitHub shows it only once.
+
+   Keep the token for step 6.
+
+3. Create the deployment token. `make install` pushes your settings to your deployment repository with it.
+
+   1. Open [New fine-grained personal access token](https://github.com/settings/personal-access-tokens/new). You can
+      also reach it from your profile picture: **Settings** > **Developer settings** > **Personal access tokens** >
+      **Fine-grained tokens** > **Generate new token**.
+   2. Fill in the form:
+      - **Token name:** `ai-grid-deployment`
+      - **Expiration:** **90 days**, or a later **Custom** date if your organization allows one. When it expires,
+        `make install` can't push your settings until you replace it, so note the date.
+      - **Description:** optional, such as `AI Grid install pushes the deployment`
+      - **Resource owner:** your account, or the organization that owns your deployment repository. If that
+        organization requires approval for fine-grained tokens, the token can only read until an organization owner
+        approves it.
+      - **Repository access:** **Only select repositories**, then open **Select repositories** and choose your
+        deployment repository, and only that one.
+      - **Permissions:** on the **Repositories** tab, click **Add permissions**, select **Contents**, and set it to
+        **Access: Read and write**. GitHub adds **Metadata: Read-only** itself.
+      - **Everything else:** no access. Add no other repository permission and no **Account** permission.
+
+      <img src="images/token-repository-access.png" width="480" alt="Repository access set to Only select repositories">
+
+      <img src="images/token-permissions.png" width="480" alt="Contents set to Read and write, and Metadata Read-only">
+
+   3. Click **Generate token** at the bottom of the form.
+   4. Copy the token from the page that follows. GitHub shows it only once.
+
+   Keep the token for step 6.
 
 ### Set up your deployment repository
 

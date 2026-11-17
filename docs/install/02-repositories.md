@@ -77,20 +77,31 @@ console writes them there with a token that can write only this repository.
    gh repo create OWNER/CATALOG_REPO --add-readme --public
    ```
 
-2. [Create a fine-grained token](https://github.com/settings/personal-access-tokens/new), named such as `ai-grid-catalog`:
+2. Create the catalog token. The provider console writes your models and subscriptions with it.
 
-   1. Under **Repository access**, select **Only select repositories**, and select your catalog repository.
+   1. Open [New fine-grained personal access token](https://github.com/settings/personal-access-tokens/new). You can
+      also reach it from your profile picture: **Settings** > **Developer settings** > **Personal access tokens** >
+      **Fine-grained tokens** > **Generate new token**.
+   2. Fill in the form:
+      - **Token name:** `ai-grid-catalog`
+      - **Expiration:** **90 days**, or a later **Custom** date if your organization allows one. When it expires,
+        the console can't save models or subscriptions until you replace it, so note the date.
+      - **Description:** optional, such as `AI Grid console writes the catalog`
+      - **Resource owner:** your account, or the organization that owns your catalog repository. If that
+        organization requires approval for fine-grained tokens, the token can only read until an organization owner
+        approves it.
+      - **Repository access:** **Only select repositories**, then open **Select repositories** and choose your
+        catalog repository, and only that one.
+      - **Permissions:** on the **Repositories** tab, click **Add permissions**, select **Contents**, and set it to
+        **Access: Read and write**. GitHub adds **Metadata: Read-only** itself.
+      - **Everything else:** no access. Add no other repository permission and no **Account** permission.
 
       <img src="images/token-repository-access.png" width="480" alt="Repository access set to Only select repositories">
 
-   2. Under **Permissions**, click **Add permissions** > **Contents**, then set it to **Read and write**. Leave every
-      other permission off; GitHub adds **Metadata: Read-only** itself.
+      <img src="images/token-permissions.png" width="480" alt="Contents set to Read and write, and Metadata Read-only">
 
-      <img src="images/token-permissions.png" width="480" alt="Contents set to Read and write">
-
-   3. Click **Generate token** and copy it.
-
-   Note its expiration date: when it expires, the console can't save models or subscriptions until you replace it.
+   3. Click **Generate token** at the bottom of the form.
+   4. Copy the token from the page that follows. GitHub shows it only once.
 
 3. Save the token to a file outside your repository that only you can read, and never commit it:
 
