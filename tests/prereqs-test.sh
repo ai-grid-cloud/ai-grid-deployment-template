@@ -82,7 +82,7 @@ w=$(world all-ok); A=$(authfile both quay.io/rhoai registry.stage.redhat.io)
 TOK="$T/token"; printf 'x' > "$TOK"; chmod 600 "$TOK"
 mkdep() { # name clusters-body: a deployment at the pin with that clusters.yaml and a login for each cluster
   local d="$T/$1"; mkdir -p "$d/root"
-  printf '        libraryRevision: %s\n' "$("$GIT" -C "$LIBD" rev-parse HEAD)" > "$d/root/kustomization.yaml"
+  printf '        libraryRevision: &libraryRevision %s\n' "$("$GIT" -C "$LIBD" rev-parse HEAD)" > "$d/root/applicationset.yaml"
   printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\n%b\n' "$2" > "$d/clusters.yaml"
   for n in hub $(grep -oE 'name: [a-z0-9-]+' "$d/clusters.yaml" | cut -d' ' -f2); do mkdir -p "$d/.config/$n"; : > "$d/.config/$n/kubeconfig"; done
   echo "$d"
@@ -100,7 +100,7 @@ if grep -qwE 'apply|create|delete|patch|edit|label|annotate|replace|scale' "$w/a
 total=$((total+2))
 
 t "library at the pin" '^ok +library at your pin' "$T/bin" "$w" "${ALL[@]}"
-mkdir -p "$T/other/root"; echo "  libraryRevision: 0123456789abcdef0123456789abcdef01234567" > "$T/other/root/kustomization.yaml"
+mkdir -p "$T/other/root"; echo "  libraryRevision: &libraryRevision 0123456789abcdef0123456789abcdef01234567" > "$T/other/root/applicationset.yaml"
 t "library not at the pin" '^FAIL +library at your pin +.* not 0123456789ab: git -C ' "$T/bin" "$w" --deployment "$T/other"
 keep=$LIBD; LIBD="$T/no-library"
 t "library not cloned" '^FAIL +library at your pin +no library checkout at .*no-library: run scripts/library.sh' "$T/bin" "$w" "${ALL[@]}"

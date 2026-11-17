@@ -42,7 +42,7 @@ quay:
 
 # Optional: make install's settings, shown with their defaults. Uncomment to change.
 options:
-  # LIBRARY: deployment-template         # the library revision make install pins: branch, tag or full SHA
+  # LIBRARY: main                        # repin the library at this revision: branch, tag or full SHA
   # KEYCLOAK: install                   # only "install" is supported
   # ALLOW_GENERIC_LOGIN: 1               # let bootstrap use a general quay.io login from QUAY_AUTH_FILE
   # PROVIDER_ADMIN_TOKEN_DURATION: 168h  # lifetime of .config/provider-admin-token

@@ -7,11 +7,11 @@
 # CATALOG_TOKEN_FILE name files that win over .config/clusters.yaml's secrets
 # (scripts/clusters.sh deployment_load); ALLOW_GENERIC_LOGIN=1 lets bootstrap
 # use a general quay.io login from such a file; KEYCLOAK_NAMESPACE and
-# KEYCLOAK_REALM default to the template's tenant-idp and tenants (console-secrets).
+# KEYCLOAK_REALM default to the library Keycloak's maas-db and saas (console-secrets).
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
 .PHONY: help config login prereqs inputs check bootstrap status console-secrets console-call test update \
-  site-check site-wipe site-import site-status tenant-redirects tenant-user tenant-call \
+  site-check site-wipe site-import site-status tenant-call \
   empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
 
 # The site targets work on the only site in clusters.yaml; with several, set
@@ -40,7 +40,7 @@ prereqs: ## Report what is installed and what isn't found; never blocks
 	-@scripts/library.sh >/dev/null
 	@python3 scripts/prereqs.py
 
-inputs: ## Set root/inputs.env and the portal redirect, then check; CATALOG=URL (page 2); make install reads catalog.url
+inputs: ## Set root/inputs.env, then check; CATALOG=URL (page 2); make install reads catalog.url
 	@scripts/set-inputs.sh $(if $(CATALOG),$(call shq,$(CATALOG)))
 
 check: ## Check this repository before you push it: renders, every input set; read-only (page 2)
@@ -65,7 +65,7 @@ console-call: ## Call the console's API as your hub login: METHOD=..., BODY='JSO
 	@scripts/console-call.sh "$$METHOD" $(if $(BODY_FILE),"$$(cat "$$BODY_FILE")","$$BODY")
 
 test: ## Run the template's own tests (for maintainers)
-	@for t in tests/*-test.sh tenant-idp/tests/*-test.sh; do bash "$$t" || exit 1; done
+	@for t in tests/*-test.sh; do bash "$$t" || exit 1; done
 
 update: ## Merge the template's latest main into this repository; never pushes
 	@scripts/update-from-template.sh
@@ -82,19 +82,9 @@ site-import: ## Preview importing a site into the hub's ACM; CONFIRM=1 imports i
 site-status: ## Show a site's ACM state, hub Applications, MaaS host and models; read-only
 	@scripts/site-status.sh $(SITE)
 
-tenant-redirects: ## Add every site's portal redirect to the live tenant realm (after make inputs; page 9)
-	@scripts/tenant-redirects.sh
-
-tenant-user: ## Create a test tenant user: ORG=... TENANT_USER=... PASSWORD_FILE=... (page 7)
-	@$(call need,ORG,ORG_NAME)$(call need,TENANT_USER,TENANT_USER)$(call need,PASSWORD_FILE,PASSWORD_FILE)
-	@scripts/create-test-tenant.sh --kubeconfig ".config/$$(scripts/clusters.sh --hub)/kubeconfig" --org "$(ORG)" \
-	  --user "$(TENANT_USER)" --password-file "$(PASSWORD_FILE)"
-
-tenant-call: ## Call a model as that user: TENANT_USER, PASSWORD_FILE, SUBSCRIPTION, MODEL (page 7)
-	@$(call need,TENANT_USER,TENANT_USER)$(call need,PASSWORD_FILE,PASSWORD_FILE)
-	@$(call need,SUBSCRIPTION,SUBSCRIPTION_ID)$(call need,MODEL,MODEL_NAME)
-	@scripts/tenant-call.sh --user "$(TENANT_USER)" --password-file "$(PASSWORD_FILE)" --subscription "$(SUBSCRIPTION)" \
-	  --model "$(MODEL)" $(if $(SITE),--site $(SITE))
+tenant-call: ## Call a model with a tenant's API key: KEY_FILE=... MODEL=... [SUBSCRIPTION=...] (page 7)
+	@$(call need,KEY_FILE,KEY_FILE)$(call need,MODEL,MODEL_NAME)
+	@scripts/tenant-call.sh --key-file "$(KEY_FILE)" --model "$(MODEL)" $(if $(SUBSCRIPTION),--subscription "$(SUBSCRIPTION)") $(if $(SITE),--site $(SITE))
 
 empty-catalog: ## Preview emptying your catalog repository; CONFIRM=1 commits and pushes (page 8)
 	@scripts/empty-catalog.sh $(if $(CONFIRM),--confirm)

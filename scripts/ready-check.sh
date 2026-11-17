@@ -9,7 +9,7 @@
 # DataScienceCluster and the console's content are reported (INFO), not FAILs.
 #
 # Inputs: clusters.yaml, each cluster's login (.config/NAME/kubeconfig, from make
-# login), root/kustomization.yaml (the library pin), the branch root/inputs.env
+# login), root/applicationset.yaml (the library pin), the branch root/inputs.env
 # names as deploymentRevision (default main) on origin, read with git ls-remote
 # and git fetch, with no prompt (when DEPLOYMENT_TOKEN_FILE, default
 # .config/deployment-token, names a readable file, git reads the token from it
@@ -31,7 +31,8 @@
 #     missing resource type counts as none; any other API error is a FAIL);
 #   - deployment-root is Synced at the head of origin's deploymentRevision;
 #   - the console lists no organizations, models or subscriptions (WARN, not
-#     checked, without the provider-admin token).
+#     checked, without the provider-admin token). With keycloakOverlay=default
+#     in root/inputs.env, the library's example organizations are INFO.
 # With --in-use, the last two site checks and the console's content are INFO,
 # and so are the console's model Applications (acm-models-catalog-*) that
 # aren't Synced and Healthy: a model failing on a site doesn't stop a rerun.
@@ -107,6 +108,8 @@ else
 fi
 branch=$( { [ -f "$dir/root/inputs.env" ] && sed -n 's/^deploymentRevision=//p' "$dir/root/inputs.env" | tail -n1; } || true)
 branch=${branch:-main}
+# keycloakOverlay=default brings the library Keycloak's example organizations.
+overlay=$( { [ -f "$dir/root/inputs.env" ] && sed -n 's/^keycloakOverlay=//p' "$dir/root/inputs.env" | tail -n1; } || true)
 main_sha="" main_err="" main_read=""
 read_main() { # sets main_sha, or main_err; reads origin once
   [ -z "$main_read" ] || return 0; main_read=1
@@ -148,7 +151,7 @@ check "MultiClusterHub Running" mch_running
 # never another Route someone added to the namespace.
 check "provider console answers" route_answers ai-grid-provider-console ai-grid-provider-console
 console_host=$(route_host ai-grid-provider-console ai-grid-provider-console)
-check "Keycloak answers" route_answers tenant-idp keycloak
+check "Keycloak answers" route_answers maas-db keycloak
 check "Perses Service ${PERSES_SERVICE} has a ready endpoint (in-cluster)" service_ready "${PERSES_SERVICE%%/*}" "${PERSES_SERVICE#*/}"
 check "Thanos query answers" route_answers "${THANOS_ROUTE%%/*}" "${THANOS_ROUTE#*/}"
 loki=$(oc get lokistack usage-logs -n redhat-ods-monitoring -o json 2>/dev/null |
@@ -202,6 +205,7 @@ none_listed() { # SERVICE NOUN: ai_grid.v1.SERVICE/List lists no NOUN
   if [ "$code" != 200 ] || [ -z "$n" ]; then fail "no ${2}s: ai_grid.v1.$1/List answered HTTP $code"
   elif [ "$n" = 0 ]; then ok "no ${2}s"
   elif [ -n "$in_use" ]; then info "the console lists $n $2(s)"
+  elif [ "$1" = Tenants ] && [ "$overlay" = default ]; then info "the console lists $n $2(s): keycloakOverlay=default's examples"
   else fail "no ${2}s: the console lists $n $2(s); the install creates none"; fi
 }
 if [ ! -f "$dir/$token_rel" ]; then
@@ -218,16 +222,17 @@ fi
 
 [ "$failed" = 0 ] || { echo "Not ready: see FAIL above."; exit 1; }
 
-rev=$(sed -n -E 's/^[[:space:]]*libraryRevision:[[:space:]]*([^[:space:]#]+).*/\1/p' "$dir/root/kustomization.yaml" | head -n1)
-lib=$(sed -n -E 's/^[[:space:]]*libraryRepoURL:[[:space:]]*([^[:space:]#]+).*/\1/p' "$dir/root/kustomization.yaml" | head -n1)
+. "$here/library.sh"
+rev=$(library_pin "$dir" libraryRevision)
+lib=$(library_pin "$dir" libraryRepoURL)
 mkdir -p "$dir/.install"
 jq -n --arg hub "$hub" --arg api "$(cluster_api "$hub")" \
   --arg console "$(url "$console_host")" \
-  --arg keycloak "$(url "$(route_host tenant-idp keycloak)")" \
+  --arg keycloak "$(url "$(route_host maas-db keycloak)")" \
   --arg perses "https://${PERSES_SERVICE#*/}.${PERSES_SERVICE%%/*}.svc:8080" \
   --arg thanos "$(url "$(route_host "${THANOS_ROUTE%%/*}" "${THANOS_ROUTE#*/}")")" \
   --arg token "$token_rel" --arg lib "$lib" --arg rev "$rev" --argjson sites "$sites_json" \
-  '{hub: {name: $hub, api: $api, consoleURL: $console, keycloakURL: $keycloak, keycloakRealm: "tenants",
+  '{hub: {name: $hub, api: $api, consoleURL: $console, keycloakURL: $keycloak, keycloakRealm: "saas",
           persesURL: $perses, thanosURL: $thanos, lokiStack: "redhat-ods-monitoring/usage-logs"},
     providerAdminTokenFile: $token, library: {url: $lib, revision: $rev}, sites: $sites}' \
   > "$dir/.install/outputs.json.tmp"

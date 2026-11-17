@@ -127,13 +127,13 @@ def check_library(deployment):
     if not deployment:
         report("skipped", "library at your pin", "pass --deployment DIR (make prereqs does)")
         return
-    k = os.path.join(deployment, "root", "kustomization.yaml")
+    k = os.path.join(deployment, "root", "applicationset.yaml")
     try:
         text = open(k).read()
     except OSError:
         report("FAIL", "library at your pin", f"can't read {k}")
         return
-    m = re.search(r"^\s*libraryRevision:\s*(\S+)", text, re.M)
+    m = re.search(r"^\s*libraryRevision:\s*(?:&[\w-]+\s+)?([0-9a-f]+)", text, re.M)
     if not m:
         report("FAIL", "library at your pin", f"no libraryRevision in {k}")
         return

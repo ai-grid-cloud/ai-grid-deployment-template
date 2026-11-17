@@ -312,8 +312,8 @@ t "page by page: ~/.ai-grid/catalog-token" 0 "^home-token$" load "$d" -- 'cat "$
 d=$(repo withcatalog "hub: {api: 'https://h:6443'}
 catalog: {url: 'https://github.com/o/c.git'}")
 t "with a catalog: no home default" 0 "^none$" load "$d" -- '[ -z "$CATALOG_TOKEN_FILE" ] && echo none'
-t "settings exported, GATE_O11Y_SECONDS allowed" 0 "^99$" load "$(repo o11y "hub: {api: 'https://h:6443'}
-options: {GATE_O11Y_SECONDS: 99}")" -- 'echo "$GATE_O11Y_SECONDS"'
+t "settings exported, GATE_ERROR_LIMIT allowed" 0 "^99$" load "$(repo o11y "hub: {api: 'https://h:6443'}
+options: {GATE_ERROR_LIMIT: 99}")" -- 'echo "$GATE_ERROR_LIMIT"'
 t "WIPE_PROTECT_ isn't an option (nothing reads it)" 1 "options.WIPE_PROTECT_NAMESPACES" bash "$(repo wipe "hub: {api: 'https://h:6443'}
 options: {WIPE_PROTECT_NAMESPACES: 'a,b'}")/scripts/clusters.sh" --hub
 d=$(priv halfquay "hub: {api: 'https://h:6443'}
@@ -444,10 +444,10 @@ t "  ... cluster_secret: site-2's password" 0 "^fixture-pw$" bash -c '. "$0/scri
 t "  ... cluster_api: site-2" 0 "^https://api.site-2.example.com:6443$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_api site-2' "$d"
 t "  ... deployment_load: no deployment token, the rest resolved" 0 "^ok$" \
   bash -c '. "$0/scripts/clusters.sh"; deployment_load "$0" && [ -z "$DEPLOYMENT_TOKEN_FILE" ] && [ -s "$CATALOG_TOKEN_FILE" ] && [ -s "$QUAY_AUTH_FILE" ] && echo ok' "$d"
-t "  ... settings: the library pin defaults to deployment-template" 0 "^LIBRARY_REVISION=deployment-template$" bash "$d/scripts/clusters.sh" --settings "$d"
-d=$(acc accept-library "$FILL"' s/^  # LIBRARY: deployment-template.*/  LIBRARY: main/;')
+t "  ... settings: no LIBRARY_REVISION by default (the root's pin stands)" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --settings "$0" | grep -c LIBRARY_REVISION || true' "$d"
+d=$(acc accept-library "$FILL"' s/^  # LIBRARY: main .*/  LIBRARY: main/;')
 t "  ... options.LIBRARY set: that revision" 0 "^LIBRARY_REVISION=main$" bash "$d/scripts/clusters.sh" --settings "$d"
-d=$(acc accept-library-empty "$FILL"' s/^  # LIBRARY: deployment-template.*/  LIBRARY: ""/;')
+d=$(acc accept-library-empty "$FILL"' s/^  # LIBRARY: main .*/  LIBRARY: ""/;')
 t "  ... options.LIBRARY empty: keeps the template's pin" 0 "^LIBRARY_REVISION=$" bash "$d/scripts/clusters.sh" --settings "$d"
 t "committed file without options.LIBRARY: no library setting" 0 "^none$" bash -c 'bash "$0/scripts/clusters.sh" --settings "$0" | grep -q LIBRARY_REVISION || echo none' "$(repo nolibrary "hub: {api: 'https://h:6443'}")"
 d=$(acc accept-token "$FILL"' s/^(\s*)username: admin\s*$// if $. < 16; s/^(\s*)password: fixture-pw\s*$// if $. < 16; s/^  # token: sha256~TOKEN.*/  token: sha256~fixture/;')

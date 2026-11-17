@@ -26,13 +26,14 @@
 #                                 with several sites, asks you to name one
 #   cluster_api NAME              the cluster's API URL
 #   cluster_kubeconfig NAME       the path of NAME's kubeconfig
-#   site_maas_issuer NAME         the site's maasCertificate.issuer, empty when unset
 #   merge_kubeconfigs HUB SITE OUT  one kubeconfig with contexts hub and site
 #   INSTALL_NS_RE                 an extended regex matching the namespaces an
 #                                 install creates on a hub or a site
 
 CLUSTERS_DIR="" CLUSTERS_ROWS="" CLUSTERS_JSON="" CLUSTERS_FILE=""
 # The keys clusters.yaml's options: may hold (make install's settings).
+# GATE_O11Y_SECONDS and GATE_TENANT_IDP_SECONDS are accepted and unused: earlier
+# versions read them, and a private file may still set them.
 SETTINGS_OPTIONS_RE='KEYCLOAK|ALLOW_GENERIC_LOGIN|PROVIDER_ADMIN_TOKEN_DURATION|GATE_ROOT_SECONDS|GATE_MCH_SECONDS|GATE_HUB_APPS_SECONDS|GATE_SITE_IMPORT_SECONDS|GATE_READY_SECONDS|GATE_INTERVAL|GATE_ERROR_LIMIT|GATE_O11Y_SECONDS|GATE_TENANT_IDP_SECONDS'
 INSTALL_NS_RE='open-cluster-management|multicluster-engine|redhat-ods|redhat-ai-grid|maas|ai-grid|gitops|kuadrant|submariner'
 
@@ -120,8 +121,7 @@ clusters_load() {
       ((.hub // {}) | keys - ["api", "token", "username", "password"] | beside("hub")),
       ((.sites // []) | to_entries[] | .key as $i | (.value // {})
         | (.name | if type == "string" and test("\\A[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\z") then . else $i end) as $ref
-        | (keys - ["name", "api", "token", "username", "password", "maasCertificate"] | beside("sites[\($ref)]")),
-          ((.maasCertificate | objects) // {} | keys - ["issuer"] | map("sites[\($ref)].maasCertificate.\(.)"))),
+        | (keys - ["name", "api", "token", "username", "password", "maasCertificate"] | beside("sites[\($ref)]"))),
       ((.options // {}) | keys | map(select(test($opts) | not)) | map("options." + .))
       | .[]' <<<"$json" | tr '\n' ' ')
   [ -z "$left" ] || { echo "error: clusters.yaml: unknown keys (typos?): ${left% }" >&2; return 1; }
@@ -151,12 +151,10 @@ clusters_load() {
   done < <(jq -r '(["hub", "hub", "hub", .hub.api]),
       ((.sites // []) | to_entries[] | ["site \(.key + 1)", .value.name, "site", .value.api])
       | map(. // "" | tostring) | @tsv' <<<"$json")
-  # A site's maasCertificate, when set, names a ClusterIssuer (scripts/site-files.sh).
-  left=$(jq -r '(.sites // [])[] | select(has("maasCertificate")) | .name as $n | .maasCertificate
-      | if type != "object" then "sites[\($n)].maasCertificate must be a map"
-        elif (.issuer | type == "string" and test("\\A[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?\\z")) | not
-        then "sites[\($n)].maasCertificate.issuer must name a ClusterIssuer" else empty end' <<<"$json" | head -n 1)
-  [ -z "$left" ] || { echo "error: $rel: $left" >&2; return 1; }
+  # maasCertificate was the template's per-site MaaS certificate, which the
+  # library's main branch can't attach (docs/upstream-main-limits.md).
+  left=$(jq -r '[(.sites // [])[] | select(has("maasCertificate")) | .name][0] // empty' <<<"$json")
+  [ -z "$left" ] || { echo "error: $rel: sites[$left].maasCertificate: remove it: on the library's main branch a site's MaaS gateway keeps the cluster's internal certificate (docs/upstream-main-limits.md)" >&2; return 1; }
   # The private file is for make install, which needs the catalog: say so now, not later.
   [ -z "$private" ] || [ -n "$(jq -r '.catalog.url // "" | select(startswith("REQUIRED-") | not)' <<<"$json")" ] ||
     { echo "error: set catalog.url in .config/clusters.yaml" >&2; return 1; }
@@ -179,8 +177,8 @@ cluster_secret() { # NAME KEY: the hub's, or the site entry's, own token, userna
 # The install settings clusters.yaml holds, as KEY=VALUE lines, one for each
 # key the file sets (an empty value too, so it wins over the environment):
 # catalog.url is CATALOG_REPO_URL, options.LIBRARY is LIBRARY_REVISION (not
-# LIBRARY, which names the library checkout; deployment-template when the
-# private file leaves it out), and each other options key is
+# LIBRARY, which names the library checkout; nothing when left out, so the
+# root's pin stands), and each other options key is
 # itself. true is 1, false and null
 # are empty.
 settings_lines() {
@@ -191,9 +189,8 @@ settings_lines() {
     # REQUIRED-catalogRepoURL (the example) means no catalog yet, as "" does.
     (if (.catalog // {}) | has("url") then
       "CATALOG_REPO_URL=\(.catalog.url | v | if startswith("REQUIRED-") then "" else . end)" else empty end),
-    # make install reads the private file, which pins the deployment-template branch unless it says otherwise.
-    (if (.options // {}) | has("LIBRARY") then "LIBRARY_REVISION=\(.options.LIBRARY | v)"
-     elif $private then "LIBRARY_REVISION=deployment-template" else empty end),
+    # options.LIBRARY repins the library; without it, the pin in root/applicationset.yaml stands.
+    (if (.options // {}) | has("LIBRARY") then "LIBRARY_REVISION=\(.options.LIBRARY | v)" else empty end),
     ((.options // {}) | to_entries[] | select(.key != "LIBRARY") | "\(.key)=\(.value | v)")' \
     --argjson private "$(clusters_private && echo true || echo false)" <<<"$CLUSTERS_JSON" 2>/dev/null ||
     { echo "error: clusters.yaml: a setting's value spans lines" >&2; return 1; }
@@ -223,9 +220,6 @@ cluster_api() { # NAME
   echo "$v"
 }
 
-site_maas_issuer() { # NAME: the site's maasCertificate.issuer, empty when unset
-  jq -r --arg n "$1" '(.sites // [])[] | select(.name == $n) | .maasCertificate.issuer // empty' <<<"$CLUSTERS_JSON"
-}
 cluster_kubeconfig() { cluster_api "$1" >/dev/null && echo "$CLUSTERS_DIR/.config/$1/kubeconfig"; }
 
 cluster_login_ok() { # NAME: exits non-zero, with the fix, when there's no working login

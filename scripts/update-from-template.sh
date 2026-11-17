@@ -8,7 +8,7 @@
 # When the template's copy of this script differs from yours, it runs the
 # template's instead, so a fix to the updater applies on the update that
 # brings it. It changes nothing until your working tree is clean, and never
-# pushes. After the merge it runs check-deployment.sh, and if the check fails
+# pushes. After the merge it runs check-deployment.sh, and if the check fails,
 # it says not to push. A repository that isn't installed yet (no
 # root/inputs.env, which make install or make inputs writes) skips the check.
 set -euo pipefail
@@ -29,7 +29,7 @@ fi
 if ! git merge-base HEAD template/main >/dev/null; then
   root=$(git rev-list --max-parents=0 HEAD | tail -n1)
   tree=$(git rev-parse "$root^{tree}")
-  start=$(git log --format='%H %T' template/main | awk -v t="$tree" '$2 == t {print $1; exit}')
+  start=$(git log --format='%H %T' template/main | awk -v t="$tree" '!f && $2 == t {print $1; f = 1}')
   if [ -n "$start" ]; then
     echo "Your repository started from the template at ${start:0:7}."
     git merge -q --allow-unrelated-histories -s ours -m "Record the template commit this repository started from" "$start"
@@ -54,7 +54,14 @@ if ! git merge -q --no-edit -m "Merge the template's main" template/main; then
     echo "  git rm root/inputs.yaml" >&2
     echo "  git add root/inputs.env && git commit" >&2
   fi
-  if grep -qvx root/inputs.yaml <<<"$conflicts"; then
+  if grep -q '^tenant-idp/' <<<"$conflicts"; then
+    # The template's own tenant Keycloak (tenant-idp/) gave way to the library's (apps/keycloak).
+    echo "The template removed its own tenant Keycloak (tenant-idp/): the hub now runs the library's Keycloak in" >&2
+    echo "maas-db. Remove the old files, finish the merge, then drop the old tenant IdP inputs:" >&2
+    echo "  git rm -rq tenant-idp && git commit --no-edit" >&2
+    echo "  make inputs" >&2
+  fi
+  if grep -qvx -e root/inputs.yaml -e 'tenant-idp/.*' <<<"$conflicts"; then
     echo "Edit each file to keep your values and the template's other changes, then: git add FILE ... && git commit" >&2
   fi
   echo "Or undo the merge: git merge --abort" >&2

@@ -53,7 +53,7 @@ m() { env PATH="$T/bin:$PATH" make -s -C "$@"; }
 one=$(repo one site-b:combined)
 two=$(repo two site-b:combined site-c:inference)
 
-t "make help lists every guide target" 0 "console-secrets.*site-check.*site-wipe.*site-import.*site-status.*tenant-user.*tenant-call.*uninstall-site.*uninstall-hub.*uninstall-check" \
+t "make help lists every guide target" 0 "console-secrets.*site-check.*site-wipe.*site-import.*site-status.*tenant-call.*uninstall-site.*uninstall-hub.*uninstall-check" \
   bash -c 'make -s -C "$0" help | tr "\n" " "' "$one"
 
 : > "$STUB_LOG"
@@ -101,12 +101,11 @@ t "site-join is gone (Add to AI Grid in the provider console)" 2 "No rule to mak
 t "join is gone too" 2 "No rule to make target" make -n -C "$one" join
 t "make help lists no join target" 0 "^ok$" bash -c '! make -s -C "$0" help | grep -q "join" && echo ok' "$one"
 t "site-add is gone (no certificate step)" 2 "No rule to make target" make -n -C "$one" site-add
-t "tenant-user needs ORG" 2 "set ORG, such as: make tenant-user ORG=ORG_NAME" make -s -C "$one" tenant-user
-t "tenant-call needs MODEL" 2 "set MODEL, such as: make tenant-call MODEL=MODEL_NAME" \
-  make -s -C "$one" tenant-call TENANT_USER=u PASSWORD_FILE=p SUBSCRIPTION=s
-t "tenant-call SITE= passes --site" 0 "--site site-c" make -n -C "$two" tenant-call TENANT_USER=u PASSWORD_FILE=p SUBSCRIPTION=s MODEL=m SITE=site-c
-t "tenant-user uses the hub's login" 0 'kubeconfig "\.config/\$\(scripts/clusters\.sh --hub\)/kubeconfig"' \
-  make -n -C "$one" tenant-user ORG=o TENANT_USER=u PASSWORD_FILE=p
+t "tenant-call needs KEY_FILE" 2 "set KEY_FILE, such as: make tenant-call KEY_FILE=KEY_FILE" make -s -C "$one" tenant-call MODEL=m
+t "tenant-call needs MODEL" 2 "set MODEL, such as: make tenant-call MODEL=MODEL_NAME" make -s -C "$one" tenant-call KEY_FILE=k
+t "tenant-call SITE= and SUBSCRIPTION= pass through" 0 "--key-file \"k\" --model \"m\" --subscription \"s\".*--site site-c" \
+  make -n -C "$two" tenant-call KEY_FILE=k MODEL=m SUBSCRIPTION=s SITE=site-c
+t "no tenant-user target: the library Keycloak's users are brokered" 2 "No rule to make target" make -s -C "$one" tenant-user
 
 t "make install runs scripts/install.sh" 0 "^scripts/install.sh *$" make -n -C "$one" install
 t "make provider-admin runs scripts/provider-admin.sh" 0 "^scripts/provider-admin.sh$" make -n -C "$one" provider-admin

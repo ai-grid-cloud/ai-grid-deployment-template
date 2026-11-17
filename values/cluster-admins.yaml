@@ -1,3 +1,0 @@
-# Cluster admins on every managed cluster (the library's cluster-config).
-cluster_admins:
-  - admin
