@@ -7,7 +7,7 @@ You came here from the README and already created your deployment repository fro
 
 ## Before you start
 
-You need the following. In step 7, `make prereqs` checks the clusters and logins for you; it doesn't check the
+You need the following. In step 6, `make prereqs` checks the clusters and logins for you; it doesn't check the
 worker nodes or the network.
 
 - [ ] **A hub and one or more sites on OpenShift 4.21 or later,** with nothing of AI Grid on them, and the API URL
@@ -28,12 +28,72 @@ worker nodes or the network.
 
 ## Install
 
-### Create the repositories and tokens
+### Set up your deployment repository
 
-The install writes to two GitHub repositories, your catalog repository and your deployment repository, and needs a
-fine-grained token for each. Each token can write to its own repository and no other.
+Tell the install which clusters and repositories to use, and give it the credentials, in one private file.
 
-1. Create your catalog repository. The provider console writes your models and subscriptions there.
+1. Clone your deployment repository, by its HTTPS or SSH URL:
+
+   ```sh
+   git clone https://github.com/OWNER/DEPLOYMENT_REPO.git deployment && cd deployment
+   ```
+
+   Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every later command from the `deployment`
+   directory, on branch `main`. `make install` pushes to this repository with your own git login, the one this
+   clone uses, so check that `git push` works here without a prompt.
+
+2. Create `.config/clusters.yaml`, the one file you edit:
+
+   ```sh
+   make config
+   ```
+
+   It copies `clusters-example.yaml` to `.config/clusters.yaml`, readable only by you, and prints `edit it`. Git
+   ignores `.config/`, so the file stays on your machine and can hold your secrets. It never overwrites a file that's
+   already there.
+
+3. Open `.config/clusters.yaml` in an editor and fill it in. Each field has a comment that says what it is.
+
+   - **`hub` and `sites`:** replace each `REQUIRED-` value, and add a block for each site. A site's name is a DNS
+     label; it becomes the site's ACM cluster name, and you can't change it once the site is imported.
+   - **`repositories.catalog`:** the URL of the catalog repository you create in step 4, such as
+     `https://github.com/my-org/ai-grid-catalog.git`. Pick its owner and name now.
+   - **The secrets:** uncomment `credentials:` and `quay:`, and fill them in. For each cluster, give a `cluster-admin`
+     token, a username and password, or a kubeconfig path. A cluster token usually expires in about 24 hours; with a
+     username and password, the scripts get a fresh token on every run, so a rerun the next day works. Leave
+     `github:` commented until step 5.
+
+   For example, before the secrets:
+
+   ```yaml
+   apiVersion: ai-grid.dev/v1alpha1
+   kind: Clusters
+   hub:
+     api: https://api.hub.example.com:6443
+   sites:
+     - name: site-east-1
+       role: combined
+       location: us-east
+       api: https://api.site-east-1.example.com:6443
+     - name: site-east-2
+       role: inference
+       location: us-east
+       api: https://api.site-east-2.example.com:6443
+   repositories:
+     catalog: https://github.com/my-org/ai-grid-catalog.git
+     library: deployment-template
+   ```
+
+   Never paste a secret into a chat, a command line or a file you commit. To enter the secrets at a prompt that
+   doesn't show what you paste, instead of editing them, run `make secrets` (`make secrets NAME=github` for the
+   GitHub tokens only).
+
+### Create the catalog repository and its token
+
+The provider console writes your models and subscriptions to the catalog repository, with a token that can write
+that repository and no other.
+
+4. Create your catalog repository, with the owner and name you put in `repositories.catalog`:
 
    1. Open [Create a new repository](https://github.com/new).
    2. Fill in the form:
@@ -54,7 +114,7 @@ fine-grained token for each. Each token can write to its own repository and no o
 
    Leave it holding nothing but its README: `make install` stops if it holds anything else.
 
-2. Create the catalog token. The provider console writes your models and subscriptions with it.
+5. Create the catalog token, and put it in `.config/clusters.yaml`:
 
    1. Open [New fine-grained personal access token](https://github.com/settings/personal-access-tokens/new). You can
       also reach it from your profile picture: **Settings** > **Developer settings** > **Personal access tokens** >
@@ -79,110 +139,23 @@ fine-grained token for each. Each token can write to its own repository and no o
 
    3. Click **Generate token** at the bottom of the form.
    4. Copy the token from the page that follows. GitHub shows it only once.
+   5. In `.config/clusters.yaml`, uncomment `github:` and its `catalogToken` line, set `catalogToken` to the token,
+      and save the file. Leave `deploymentToken` commented: without it, `make install` pushes with your own git
+      login.
 
-   Keep the token for step 6.
+      ```yaml
+      github:
+        catalogToken: github_pat_TOKEN
+      ```
 
-3. Create the deployment token. `make install` pushes your settings to your deployment repository with it.
-
-   1. Open [New fine-grained personal access token](https://github.com/settings/personal-access-tokens/new). You can
-      also reach it from your profile picture: **Settings** > **Developer settings** > **Personal access tokens** >
-      **Fine-grained tokens** > **Generate new token**.
-   2. Fill in the form:
-      - **Token name:** `ai-grid-deployment`
-      - **Expiration:** **90 days**, or a later **Custom** date if your organization allows one. When it expires,
-        `make install` can't push your settings until you replace it, so note the date.
-      - **Description:** optional, such as `AI Grid install pushes the deployment`
-      - **Resource owner:** your account, or the organization that owns your deployment repository. If that
-        organization requires approval for fine-grained tokens, the token can only read until an organization owner
-        approves it.
-      - **Repository access:** **Only select repositories**, then open **Select repositories** and choose your
-        deployment repository, and only that one.
-      - **Permissions:** on the **Repositories** tab, click **Add permissions**, select **Contents**, and set it to
-        **Access: Read and write**. GitHub adds **Metadata: Read-only** itself.
-      - **Everything else:** no access. Add no other repository permission and no **Account** permission.
-
-      <img src="images/token-repository-access.png" width="480" alt="Repository access set to Only select repositories">
-
-      <img src="images/token-permissions.png" width="480" alt="Contents set to Read and write, and Metadata Read-only">
-
-   3. Click **Generate token** at the bottom of the form.
-   4. Copy the token from the page that follows. GitHub shows it only once.
-
-   Keep the token for step 6.
-
-### Set up your deployment repository
-
-Tell the install which clusters and repositories to use, and give it the credentials, in one private file.
-
-4. Clone your deployment repository by its HTTPS URL, because `make install` pushes with the token, not with SSH:
-
-   ```sh
-   git clone https://github.com/OWNER/DEPLOYMENT_REPO.git deployment && cd deployment
-   ```
-
-   Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every later command from the `deployment`
-   directory, on branch `main`.
-
-5. Create `.config/clusters.yaml`, the one file you edit. Git ignores `.config/`, so the file stays on your machine
-   and can hold your secrets:
-
-   ```sh
-   make secrets
-   ```
-
-   The first run copies `clusters-example.yaml` to `.config/clusters.yaml`, readable only by you, and stops with
-   `edit it, then run make secrets again`.
-
-   In `.config/clusters.yaml`, replace each `REQUIRED-` value, add a block for each site, and set
-   `repositories.catalog` to your catalog repository's URL. A site's name is a DNS label; it becomes the site's ACM
-   cluster name, and you can't change it once the site is imported. For example:
-
-   ```yaml
-   apiVersion: ai-grid.dev/v1alpha1
-   kind: Clusters
-   hub:
-     api: https://api.hub.example.com:6443
-   sites:
-     - name: site-east-1
-       role: combined
-       location: us-east
-       api: https://api.site-east-1.example.com:6443
-     - name: site-east-2
-       role: inference
-       location: us-east
-       api: https://api.site-east-2.example.com:6443
-   repositories:
-     catalog: https://github.com/my-org/ai-grid-catalog.git
-     library: deployment-template
-   ```
-
-6. Add the secrets to `.config/clusters.yaml`:
-
-   ```sh
-   make secrets
-   ```
-
-   It asks for each secret in turn and doesn't show what you paste:
-
-   | It asks for | It writes |
-   |---|---|
-   | For each cluster in the file, a `cluster-admin` token, such as the output of `oc whoami -t` against that cluster. If you leave the token empty, it asks for a `cluster-admin` username and password instead. | `credentials.NAME.token`, or `credentials.NAME.username` and `credentials.NAME.password`, where `NAME` is the cluster's name, such as `hub` or `site-east-1` |
-   | The deployment token from step 3 | `github.deploymentToken` |
-   | The catalog token from step 2 | `github.catalogToken` |
-   | The `quay.io/rhoai` robot account's username and password | `quay.username` and `quay.password` |
-
-   An empty answer skips that secret. It keeps a value that's already set. To replace one entry's secrets, set `NAME`
-   to a cluster's name, to `github` for the two GitHub tokens or to `quay` for the robot account, such as
-   `make secrets NAME=site-east-1`. To replace them all, run `make secrets FORCE=1`.
-
-   A cluster token usually expires in about 24 hours. With a username and password instead, the scripts get a fresh
-   token from the cluster's OAuth server on every run, so a rerun the next day works.
+      Or run `make secrets NAME=github`, leave the deployment token empty, and paste the catalog token at its
+      prompt. Either way the token is in `github.catalogToken` in `.config/clusters.yaml`, and nowhere else.
 
 ### Check the prerequisites
 
 Confirm that every cluster and credential is ready before anything is installed.
 
-7. Log in to each cluster, then check the prerequisites:
+6. Log in to each cluster, then check the prerequisites:
 
    ```sh
    make login
@@ -199,7 +172,7 @@ Confirm that every cluster and credential is ready before anything is installed.
 
    Only for a cluster with none of these does it open your browser to log in, with `oc login --web`. For each cluster
    it prints `Logged in to NAME as USER.` or `NAME: already logged in.` If a cluster's login fails, replace its
-   credentials as in step 6, then run `make login` again.
+   credentials as in step 3, then run `make login` again.
 
    `make prereqs` prints one line per check, starting with `ok`, `MISSING`, `OLD`, `FAIL` or `skipped`. It checks
    the tools, the `quay.io/rhoai` login, the catalog token, and, for each cluster in `.config/clusters.yaml`, that
@@ -216,15 +189,15 @@ Confirm that every cluster and credential is ready before anything is installed.
 
 Run the install and confirm the end state.
 
-8. Run the install:
+7. Run the install:
 
    ```sh
    make install
    ```
 
    You don't commit `.config/clusters.yaml`: git ignores it. `make install` commits and pushes the files it
-   generates itself, with the deployment token. On new clusters it takes about 75 minutes; waiting for the hub's
-   Applications takes about 55 of them. It prints `== STEP` as each step starts, and ends with:
+   generates itself, with your git login, or with the deployment token if you set one. On new clusters it takes
+   about 75 minutes; waiting for the hub's Applications takes about 55 of them. It prints `== STEP` as each step starts, and ends with:
 
    ```text
    Installed. Outputs: .install/outputs.json
@@ -232,7 +205,7 @@ Run the install and confirm the end state.
 
    If it stops instead, see [If it stops](#if-it-stops).
 
-9. Check the end state, without changing anything:
+8. Check the end state, without changing anything:
 
    ```sh
    make ready-check
@@ -280,8 +253,8 @@ and content checks fail by design.
 ## What the install does
 
 Each step prints `== STEP` as it starts. Before the first one, the install turns the secrets into files under
-`.config/generated/`, readable only by you, and passes them to its scripts by path: the two GitHub tokens, and a
-`quay.io` auth file built from `quay:`, which the `bootstrap` step uses.
+`.config/generated/`, readable only by you, and passes them to its scripts by path: the catalog token, the
+deployment token if you set one, and a `quay.io` auth file built from `quay:`, which the `bootstrap` step uses.
 
 1. `login`: writes `.config/NAME/kubeconfig` for each cluster from its credentials and the API URL in
    `.config/clusters.yaml`.
@@ -353,6 +326,11 @@ The hub then installs OpenShift AI, MaaS and the grid on the site. To follow it,
   `AI_GRID_TOKEN_SITE_EAST_1`. A setting that the file leaves out of `options:` comes from the environment variable
   of the same name. To make `make login` fail instead of opening a browser for a cluster with no credentials, run
   `make login NONINTERACTIVE=1`; `make install` never opens a browser.
+- **A deployment token, for CI or an unattended run:** by default `make install` pushes your deployment repository
+  with your own git login. Where there's none, such as a CI job, set `github.deploymentToken` in
+  `.config/clusters.yaml`, or `AI_GRID_DEPLOYMENT_TOKEN`, to a fine-grained token with the same fields as the
+  catalog token in step 5, except **Token name** `ai-grid-deployment` and **Repository access** your deployment
+  repository only. With a token, `make install` uses only the token and skips your git credential helpers.
 - **A kubeconfig instead of a token:** set `credentials.NAME.kubeconfig` to the path of a working kubeconfig, such as
   the installer's `auth/kubeconfig`, or put the kubeconfig in `.config/NAME/kubeconfig`. `make install` keeps a
   kubeconfig that works.
