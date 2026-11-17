@@ -11,7 +11,7 @@
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
 .PHONY: help config login prereqs inputs check bootstrap status console-secrets console-call test update \
-  site-check site-wipe site-import site-status tenant-user tenant-call \
+  site-check site-wipe site-import site-status tenant-redirects tenant-user tenant-call \
   empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
 
 # The site targets work on the only site in clusters.yaml; with several, set
@@ -82,6 +82,9 @@ site-import: ## Preview importing a site into the hub's ACM; CONFIRM=1 imports i
 site-status: ## Show a site's ACM state, hub Applications, MaaS host and models; read-only
 	@scripts/site-status.sh $(SITE)
 
+tenant-redirects: ## Add every site's portal redirect to the live tenant realm (after make inputs; page 9)
+	@scripts/tenant-redirects.sh
+
 tenant-user: ## Create a test tenant user: ORG=... TENANT_USER=... PASSWORD_FILE=... (page 7)
 	@$(call need,ORG,ORG_NAME)$(call need,TENANT_USER,TENANT_USER)$(call need,PASSWORD_FILE,PASSWORD_FILE)
 	@scripts/create-test-tenant.sh --kubeconfig ".config/$$(scripts/clusters.sh --hub)/kubeconfig" --org "$(ORG)" \
@@ -112,5 +115,5 @@ install: ## Install the hub and import every site, unattended (page 9); HUB_ONLY
 provider-admin: ## Create the provider-admin ServiceAccount and its token
 	@scripts/provider-admin.sh
 
-ready-check: ## Check the installed end state and write .install/outputs.json; read-only
-	@scripts/ready-check.sh
+ready-check: ## Check the installed end state and write .install/outputs.json; IN_USE=1 on a hub in use; read-only
+	@scripts/ready-check.sh $(if $(IN_USE),--in-use)

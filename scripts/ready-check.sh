@@ -2,7 +2,11 @@
 # Check that an install reached its end state, and hand its endpoints to a test
 # suite. Read-only: it changes nothing on any cluster.
 #
-#   scripts/ready-check.sh
+#   scripts/ready-check.sh [--in-use]
+#
+# --in-use (make install passes it on a rerun on a hub that already uses this
+# catalog): the hub may already be in use, so a site in the grid, its
+# DataScienceCluster and the console's content are reported (INFO), not FAILs.
 #
 # Inputs: clusters.yaml, each cluster's login (.config/NAME/kubeconfig, from make
 # login), root/kustomization.yaml (the library pin), the branch root/inputs.env
@@ -28,6 +32,9 @@
 #   - deployment-root is Synced at the head of origin's deploymentRevision;
 #   - the console lists no organizations, models or subscriptions (WARN, not
 #     checked, without the provider-admin token).
+# With --in-use, the last two site checks and the console's content are INFO,
+# and so are the console's model Applications (acm-models-catalog-*) that
+# aren't Synced and Healthy: a model failing on a site doesn't stop a rerun.
 # With no FAIL it writes .install/outputs.json (git-ignored): the hub's name, API
 # and endpoint URLs, the token file's path (never the token), the library pin,
 # and each site's name, API, apps domain and ACM name (no role or location:
@@ -46,11 +53,15 @@ dir=$CLUSTERS_DIR
 : "${PERSES_SERVICE:=openshift-cluster-observability-operator/perses}"
 : "${THANOS_ROUTE:=open-cluster-management-observability/rbac-query-proxy}"
 token_rel=.config/provider-admin-token
+in_use=""
+case "${1:-}" in --in-use) in_use=1 ;; "") ;; *) echo "usage: ready-check.sh [--in-use]" >&2; exit 2 ;; esac
 
 failed=0
 ok() { echo "OK   $*"; }
 fail() { echo "FAIL $*"; failed=1; }
 warn() { echo "WARN $*"; }
+info() { echo "INFO $*"; }
+
 check() { # DESCRIPTION CHECK [ARG...]: OK, or FAIL with the check's reason
   local what=$1 out; shift
   if out=$("$@" 2>&1); then ok "$what"; else fail "$what: $(grep . <<<"$out" | tail -n 1)"; fi
@@ -117,11 +128,20 @@ read_main() { # sets main_sha, or main_err; reads origin once
 }
 
 # The hub.
-check "hub Applications Synced and Healthy, except those that wait for a site" apps_healthy
+if [ -n "$in_use" ]; then
+  check "hub Applications Synced and Healthy, except those that wait for a site and the console's models" apps_healthy --in-use
+else
+  check "hub Applications Synced and Healthy, except those that wait for a site" apps_healthy
+fi
 if apps=$(oc get applications.argoproj.io -n openshift-gitops -o json 2>/dev/null); then
   waiting=$(app_rows "$apps" "$(unmatched_placements || true)" |
     awk -F'\t' '$4 == "site" && $2" "$3 != "Synced Healthy" {print $1}' | paste -sd, - | sed 's/,/, /g' || true)
   [ -z "$waiting" ] || warn "Applications that wait for a site, expected until a site is added: $waiting"
+  if [ -n "$in_use" ]; then
+    models=$(app_rows "$apps" "[]" | awk -F'\t' '$1 ~ /^acm-models-catalog-/ && $2" "$3 != "Synced Healthy" {print $1 " (" $2 " " $3 ")"}' |
+      paste -sd, - | sed 's/,/, /g' || true)
+    [ -z "$models" ] || info "the console's model Applications not Synced and Healthy: $models"
+  fi
 fi
 check "MultiClusterHub Running" mch_running
 # The chart's Route, by name: the provider-admin token is sent to its host, so
@@ -145,6 +165,7 @@ for name in $(site_names); do
   else
     labels=$(jq -r '.metadata.labels // {} | keys[] | select(startswith("ai-grid/") or . == "location")' <<<"${mc:-{\}}" 2>/dev/null || true)
     if [ -z "$labels" ]; then ok "site $name: not added to the grid (no ai-grid/ or location label)"
+    elif [ -n "$in_use" ]; then info "site $name: in the grid: labels $(echo $labels | sed 's/ /, /g')"
     else fail "site $name: added to the grid by the install: labels $(echo $labels | sed 's/ /, /g')"; fi
   fi
 
@@ -154,6 +175,7 @@ for name in $(site_names); do
     if ! dsc=$(KUBECONFIG=$sk ready_read get datascienceclusters -A -o name); then
       fail "site $name: can't read its DataScienceClusters: $dsc"
     elif [ -z "$dsc" ]; then ok "site $name: no DataScienceCluster"
+    elif [ -n "$in_use" ]; then info "site $name: has a DataScienceCluster ($(echo $dsc))"
     else fail "site $name: has a DataScienceCluster ($(echo $dsc)): OpenShift AI comes with the Add, not the install"; fi
     domain=$(KUBECONFIG=$sk oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}' 2>/dev/null || true)
     [ -n "$domain" ] || fail "site $name: can't read its apps domain"
@@ -179,6 +201,7 @@ none_listed() { # SERVICE NOUN: ai_grid.v1.SERVICE/List lists no NOUN
   n=$(jq -r '.total // (.items | length)' "$tmp/body" 2>/dev/null || true)
   if [ "$code" != 200 ] || [ -z "$n" ]; then fail "no ${2}s: ai_grid.v1.$1/List answered HTTP $code"
   elif [ "$n" = 0 ]; then ok "no ${2}s"
+  elif [ -n "$in_use" ]; then info "the console lists $n $2(s)"
   else fail "no ${2}s: the console lists $n $2(s); the install creates none"; fi
 }
 if [ ! -f "$dir/$token_rel" ]; then

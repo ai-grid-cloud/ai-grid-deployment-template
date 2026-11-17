@@ -27,7 +27,10 @@
 #                    root/inputs.env names the same catalog, then
 #                    scripts/git-push.sh of root/ and the tenant IdP settings
 #   catalog          scripts/empty-catalog.sh --check: the catalog repository
-#                    must hold nothing but its README; the install never empties it
+#                    must hold nothing but its README; the install never empties it.
+#                    Skipped when the hub's root ApplicationSet apps already names
+#                    this catalog: a rerun on an installed hub, such as to add a
+#                    site. The ready step then runs scripts/ready-check.sh --in-use.
 #   bootstrap        scripts/bootstrap-hub.sh, unless Application deployment-root
 #                    and the hub pull secret it seeds last
 #                    (rhoai-prerequisites/rhoai-quay-pull-secret) both exist;
@@ -37,6 +40,8 @@
 #                    safe to rerun
 #   hub-apps         gate hub-apps: every hub Application Synced and Healthy,
 #                    except those waiting for a site
+#   tenant-redirects scripts/tenant-redirects.sh: the portal redirect of every
+#                    site, from the tenant IdP settings, in the live tenant realm
 # Then the sites phase, unless --hub-only. A site's MaaS gateway gets a
 # certificate of its own only when its clusters.yaml entry names an issuer
 # (maasCertificate.issuer); otherwise it keeps the chart's internal certificate,
@@ -176,6 +181,11 @@ step_login() {
 
 step_inputs() {
   step inputs
+  # The catalog the hub uses, read before this run pushes anything, so a new
+  # catalog in this push can't pass for the hub's own (step_catalog).
+  hub_catalog_rc=0
+  hub_catalog=$(oc_read get applicationsets.argoproj.io apps -n openshift-gitops \
+    -o jsonpath='{.spec.generators[0].git.values.catalogRepoURL}') || hub_catalog_rc=$?
   [ -z "${LIBRARY_REVISION:-}" ] || run_step inputs set-library.sh "$LIBRARY_REVISION"
   run_step inputs set-inputs.sh "$CATALOG_REPO_URL"
   local have want
@@ -188,8 +198,19 @@ step_inputs() {
   pushed=$(git -C "$dir" rev-parse HEAD)
 }
 
-step_catalog() {
+step_catalog() { # an empty catalog, unless the hub already runs this deployment with this catalog
   step catalog
+  # A rerun on an installed hub (to add a site, say) finds the catalog the
+  # console wrote to: ours, so not checked. Any other catalog must be empty.
+  # hub_catalog was read in step_inputs, before its push.
+  case "$hub_catalog_rc" in
+    0) if [ -n "$hub_catalog" ] && [ "$(https_url "$hub_catalog")" = "$(https_url "$CATALOG_REPO_URL")" ]; then
+         echo "the hub already uses the catalog $(https_url "$hub_catalog"): not checking that it's empty"
+         in_use=1
+         return 0
+       fi ;;
+    2) echo "error: can't read the hub: ${hub_catalog#oc error: }" >&2; stopped catalog ;;
+  esac
   run_step catalog empty-catalog.sh --check
 }
 
@@ -219,7 +240,12 @@ step_console_secrets() {
 
 step_hub_apps() {
   step hub-apps
-  hub_gate hub-apps "$GATE_HUB_APPS_SECONDS" apps_healthy
+  hub_gate hub-apps "$GATE_HUB_APPS_SECONDS" apps_healthy ${in_use:+--in-use}
+}
+
+step_tenant_redirects() {
+  step tenant-redirects
+  run_step tenant-redirects tenant-redirects.sh
 }
 
 hub_phase() {
@@ -230,6 +256,7 @@ hub_phase() {
   step_acm
   step_console_secrets
   step_hub_apps
+  step_tenant_redirects
 }
 
 # --- sites phase -------------------------------------------------------------
@@ -257,7 +284,7 @@ step_site() { # NAME: check the site, write and push its own files, import it in
 sites_phase() {
   local name
   for name in $(site_names); do step_site "$name"; done
-  hub_gate hub-apps-final "$GATE_HUB_APPS_SECONDS" apps_healthy
+  hub_gate hub-apps-final "$GATE_HUB_APPS_SECONDS" apps_healthy ${in_use:+--in-use}
 }
 
 # --- end ---------------------------------------------------------------------
@@ -268,7 +295,7 @@ ready_out="$dir/.install/ready-check.txt"
 ready_now() { # a gate check: scripts/ready-check.sh passes; its output in $ready_out
   local f=$ready_out n
   mkdir -p "${ready_out%/*}"
-  "$here/ready-check.sh" > "$f" 2>&1 && return 0
+  "$here/ready-check.sh" ${in_use:+--in-use} > "$f" 2>&1 && return 0
   n=$(grep -c '^FAIL' "$f" || true)
   if [ "$n" -gt 0 ]; then echo "$n FAIL; first: $(grep -m 1 '^FAIL' "$f")"
   else echo "ready-check.sh: $(grep . "$f" | tail -n 1)"; fi
@@ -295,7 +322,7 @@ deployment_load "$dir" || exit 1
 check_settings
 check_branch
 . "$here/gates.sh"   # after the settings, so their GATE_* values win
-pushed=""
+pushed="" in_use="" hub_catalog="" hub_catalog_rc=1
 
 hub_phase
 if [ -n "$hub_only" ]; then

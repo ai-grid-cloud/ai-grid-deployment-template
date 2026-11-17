@@ -21,11 +21,13 @@
 # then "oc error: " and the last line of oc's stderr. A missing object, or a
 # resource type the cluster doesn't have yet, is not ready, not an error.
 #   app_healthy NAME             Argo CD Application NAME is Synced and Healthy
-#   apps_healthy [--strict] [EXCEPT...]
+#   apps_healthy [--strict] [--in-use] [EXCEPT...]
 #                                every Application is Synced and Healthy, except
 #                                the names given and those waiting for a site;
 #                                with --strict, those waiting for a site count
-#                                as not ready
+#                                as not ready; with --in-use (a hub in use), the
+#                                console's model and subscription Applications
+#                                (acm-models-catalog-*) don't count either
 #   root_synced_to REV           Application deployment-root is Synced at REV,
 #                                a full commit SHA (Argo CD reports full SHAs)
 #   mch_running                  the MultiClusterHub's phase is Running
@@ -137,9 +139,10 @@ app_healthy() { # NAME
   [ "$s" = "Synced Healthy" ] || { echo "Application $1: $s"; return 1; }
 }
 
-apps_healthy() { # [--strict] [EXCEPT...]
-  local json rows name sync health why bad="" n=0 strict=""
+apps_healthy() { # [--strict] [--in-use] [EXCEPT...]
+  local json rows name sync health why bad="" n=0 strict="" in_use=""
   [ "${1:-}" != --strict ] || { strict=1; shift; }
+  [ "${1:-}" != --in-use ] || { in_use=1; shift; }
   json=$(oc_read get applications.argoproj.io -n openshift-gitops -o json) ||
     { [ $? = 2 ] && { echo "$json"; return 2; }; echo "Applications: can't read them"; return 1; }
   rows=$(app_rows "$json" "$(unmatched_placements || true)" || true)
@@ -148,6 +151,7 @@ apps_healthy() { # [--strict] [EXCEPT...]
     [ "$sync $health" = "Synced Healthy" ] && continue
     [ "$why" = site ] && [ -z "$strict" ] && continue
     case " $* " in *" $name "*) continue ;; esac
+    [ -z "$in_use" ] || case "$name" in acm-models-catalog-*) continue ;; esac
     n=$((n + 1)); bad+="${bad:+, }$name ($sync $health)"
   done <<<"$rows"
   [ -z "$bad" ] || { echo "$n Application(s) not Synced and Healthy: $bad"; return 1; }

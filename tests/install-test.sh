@@ -39,6 +39,7 @@ case "$a" in
   *" get secret rhoai-quay-pull-secret -n rhoai-prerequisites "*) ans hub-pull-secret ;;
   *" get managedclusters.cluster.open-cluster-management.io "*) set -- $*; ans "mc-$3.json" ;;
   *" get placements."*) echo '{"items":[]}' ;;
+  *" get applicationsets.argoproj.io apps "*) ans appset-catalog ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
 STUB
@@ -66,7 +67,7 @@ setup() { # NAME: a deployment repository $D and a stub directory $W, for one ca
   D="$T/$1/repo" W="$T/$1/stub"; mkdir -p "$W" "$D/.config"
   cp -R "$SRC/scripts" "$D/"
   for s in login.sh set-library.sh set-inputs.sh check-deployment.sh empty-catalog.sh \
-      install-report.sh provider-admin.sh site-files.sh; do fake "$s"; done
+      install-report.sh provider-admin.sh site-files.sh tenant-redirects.sh; do fake "$s"; done
   fake ready-check.sh '[ ! -f "$STUB_DIR/ready-check.sh.rc" ] || { echo "OK   hub Applications"; echo "FAIL site site-a: not available"; echo "Not ready: see FAIL above."; }'
   fake create-console-secrets.sh '[ -z "${CATALOG_TOKEN_FILE:-}" ] || cat "$CATALOG_TOKEN_FILE" > "$STUB_DIR/catalog-token-seen"'
   fake git-push.sh 'cat "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-seen"; echo "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-path"
@@ -112,7 +113,7 @@ all_out=""
 
 setup fresh; run
 t "fresh: runs every hub step in order" eval '[ "$rc" = 0 ] &&
-  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;site-check.sh site-a;site-files.sh site-a;git-push.sh install: site site-a files values/clusters/site-a/rhoai.yaml sites/site-a/maas-tls/certificate.yaml sites/site-a/maas-tls/kustomization.yaml apps/site-a-maas-tls.yaml;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
+  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ tenant-idp/manifests/settings.yaml;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;tenant-redirects.sh;site-check.sh site-a;site-files.sh site-a;git-push.sh install: site site-a files values/clusters/site-a/rhoai.yaml sites/site-a/maas-tls/certificate.yaml sites/site-a/maas-tls/kustomization.yaml apps/site-a-maas-tls.yaml;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
 
 t "end: provider-admin then ready-check, then the outputs line" eval '[ "$rc" = 0 ] &&
   [ "$(grep -E "^(== (provider-admin|ready)|gate (hub-apps-final|ready))" <<<"$out" | sed -E "s/ after .*//" | tr "\n" ";")" = "gate hub-apps-final: passed;== provider-admin;== ready;gate ready: passed;" ] &&
@@ -306,6 +307,42 @@ t "site-check fails: stops and names the site" eval '[ "$rc" = 1 ] && grep -q "F
   grep -qx "make install stopped at site site-b. Fix the cause, then run make install again." <<<"$out" &&
   grep -q "^import-site.sh site-a --yes" "$W/calls.log" && ! grep -q "^import-site.sh site-b" "$W/calls.log" &&
   ! grep -q "hub-apps-final" <<<"$out"'
+
+setup rerun-catalog
+echo "git@github.com:acme/catalog" > "$W/appset-catalog"
+run
+t "rerun on a hub that uses this catalog: no emptiness check" eval '[ "$rc" = 0 ] && grep -q "the hub already uses the catalog https://github.com/acme/catalog.git" <<<"$out" &&
+  ! grep -q "^empty-catalog.sh" "$W/calls.log" && grep -q "^import-site.sh site-a" "$W/calls.log" &&
+  grep -qx "ready-check.sh --in-use" "$W/calls.log"'
+setup inuse-model
+echo "git@github.com:acme/catalog" > "$W/appset-catalog"
+echo '{"items":[{"metadata":{"name":"acm"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"}}},{"metadata":{"name":"acm-models-catalog-models-site-a"},"status":{"sync":{"status":"Synced"},"health":{"status":"Degraded"}}}]}' > "$W/apps.json"
+run
+t "rerun on a hub in use: a console model not Healthy doesn't stop it" eval '[ "$rc" = 0 ] && grep -q "gate hub-apps: passed" <<<"$out" && grep -q "gate hub-apps-final: passed" <<<"$out"'
+setup fresh-model
+echo '{"items":[{"metadata":{"name":"acm"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"}}},{"metadata":{"name":"acm-models-catalog-models-site-a"},"status":{"sync":{"status":"Synced"},"health":{"status":"Degraded"}}}]}' > "$W/apps.json"
+GATE_HUB_APPS_SECONDS=0 run
+t "a first install: the same Application stops it at hub-apps" eval '[ "$rc" = 1 ] && grep -q "acm-models-catalog-models-site-a (Synced Degraded)" <<<"$out"'
+setup empty-appset
+: > "$W/appset-catalog"
+run
+t "an ApplicationSet with no catalog: checked" eval '[ "$rc" = 0 ] && grep -q "^empty-catalog.sh --check" "$W/calls.log" && grep -qx "ready-check.sh *" "$W/calls.log"'
+setup other-catalog
+echo "https://github.com/acme/other.git" > "$W/appset-catalog"
+echo 1 > "$W/empty-catalog.sh.rc"
+run
+t "a hub on another catalog: checked, and a full one stops" eval '[ "$rc" = 1 ] && grep -q "^empty-catalog.sh --check" "$W/calls.log" &&
+  grep -qx "make install stopped at catalog. Fix the cause, then run make install again." <<<"$out"'
+setup catalog-oc-error
+echo "error: Unauthorized" > "$W/appset-catalog.err"
+run
+t "a hub it can't read: stops at catalog" eval '[ "$rc" = 1 ] && grep -q "can.t read the hub" <<<"$out" && ! grep -q "^empty-catalog.sh" "$W/calls.log" &&
+  grep -qx "make install stopped at catalog. Fix the cause, then run make install again." <<<"$out"'
+setup redirects
+echo 1 > "$W/tenant-redirects.sh.rc"
+run
+t "tenant-redirects fails: stops before the sites" eval '[ "$rc" = 1 ] && grep -qx "make install stopped at tenant-redirects. Fix the cause, then run make install again." <<<"$out" &&
+  ! grep -q "^site-check.sh" "$W/calls.log"'
 
 setup sitefiles
 echo 1 > "$W/site-files.sh.rc"
