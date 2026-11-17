@@ -85,7 +85,7 @@ export GIT_TERMINAL_PROMPT=0
 token_file=${DEPLOYMENT_TOKEN_FILE:-.config/deployment-token}
 case "$token_file" in /*) ;; *) token_file="$dir/$token_file" ;; esac
 # With a token, only the token; without one, your own git login for origin.
-if [ -r "$token_file" ]; then gitc() { git -C "$dir" -c credential.helper= "$@"; }
+if [ -s "$token_file" ]; then gitc() { git -C "$dir" -c credential.helper= "$@"; }
 else gitc() { git -C "$dir" "$@"; }; fi
 branch=$( { [ -f "$dir/root/inputs.env" ] && sed -n 's/^deploymentRevision=//p' "$dir/root/inputs.env" | tail -n1; } || true)
 branch=${branch:-main}
@@ -93,7 +93,7 @@ main_sha="" main_err="" main_read=""
 read_main() { # sets main_sha, or main_err; reads origin once
   [ -z "$main_read" ] || return 0; main_read=1
   local out askpass=""
-  if [ -n "$token_file" ] && [ -r "$token_file" ]; then
+  if [ -s "$token_file" ]; then
     askpass=$(mktemp "${TMPDIR:-/tmp}/git-askpass.XXXXXX"); chmod 700 "$askpass"
     # The helper holds the file's path, never its contents.
     printf '#!/bin/bash\ncase "$1" in Username*) echo x-access-token ;; *) head -n1 %q ;; esac\n' "$token_file" > "$askpass"
