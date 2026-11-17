@@ -5,7 +5,7 @@ repository, set the names that must be yours, check the result, and push it.
 
 If you're reinstalling with your existing repositories, skip cloning, naming your clusters and
 [creating your catalog repository and its token](#2-create-your-catalog-repository-and-its-token). From your
-`deployment` directory, log in ([part 1, step 3](#1-clone-your-repository-and-log-in-to-your-clusters)), check your
+deployment repository's directory, log in ([part 1, step 3](#1-clone-your-repository-and-log-in-to-your-clusters)), check your
 prerequisites ([part 3](#3-check-your-prerequisites)), then do parts 4 and 5. Every command in them is safe to run
 again.
 
@@ -14,11 +14,11 @@ again.
 1. Clone your deployment repository:
 
    ```sh
-   git clone https://github.com/OWNER/DEPLOYMENT_REPO.git deployment && cd deployment
+   git clone https://github.com/OWNER/DEPLOYMENT_REPO.git && cd DEPLOYMENT_REPO
    ```
 
    Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every command in this guide from the
-   `deployment` directory.
+   `DEPLOYMENT_REPO` directory.
 
 2. Name your clusters. Copy the example file:
 
