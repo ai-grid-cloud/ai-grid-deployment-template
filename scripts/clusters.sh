@@ -24,6 +24,8 @@
 #   hub_name, site_names          the hub's name; the sites' names
 #   site_name [NAME]              NAME, or the only site when NAME is empty;
 #                                 with several sites, asks you to name one
+#   grid_site [NAME]              as site_name, but the hub when there is no site
+#   acm_name NAME                 the ManagedCluster: local-cluster for the hub
 #   cluster_api NAME              the cluster's API URL
 #   cluster_kubeconfig NAME       the path of NAME's kubeconfig
 #   merge_kubeconfigs HUB SITE OUT  one kubeconfig with contexts hub and site
@@ -214,6 +216,13 @@ site_name() { # [NAME]
     *) echo "error: name a site: $(echo $all | sed 's/ /, /g')" >&2; return 1 ;;
   esac
 }
+
+# A site to call or show: NAME, or the only site. With no site in
+# clusters.yaml (an all-in-one), the hub, which joins the grid as local-cluster.
+grid_site() { # [NAME]
+  if [ -z "${1:-}" ] && [ -z "$(site_names)" ]; then hub_name; else site_name "${1:-}"; fi
+}
+acm_name() { if [ "$1" = "$(hub_name)" ]; then echo local-cluster; else echo "$1"; fi; } # NAME -> its ManagedCluster
 
 cluster_api() { # NAME
   local v; v=$(awk -v n="$1" '$1 == n {print $3}' <<<"$CLUSTERS_ROWS")

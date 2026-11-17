@@ -47,6 +47,14 @@ t "clusters.sh --site with several sites" 1 "name a site" bash "$d/scripts/clust
 t "site_name: the word site is no longer special" 1 "site isn't a site in clusters.yaml: site-b" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name site' "$d1"
 t "site_name refuses a name that isn't a site" 1 "hub isn't a site in clusters.yaml: site-b, site-c" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name hub' "$d"
 t "clusters.sh --hub prints the hub" 0 "^hub$" bash "$d1/scripts/clusters.sh" --hub
+t "grid_site: the only site, as site_name" 0 "^site-b$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && grid_site' "$d1"
+t "grid_site: several sites still asks for one" 1 "name a site: site-b, site-c" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && grid_site' "$d"
+daio=$(repo aio "hub: {api: 'https://api.hub.example.com:6443'}
+sites: []")
+t "all-in-one: sites: [] loads, with the hub only" 0 "^hub hub https://api.hub.example.com:6443$" bash -c 'echo $(bash "$0/scripts/clusters.sh" --rows "$0")' "$daio"
+t "  ... site_name still says there's no site" 1 "clusters.yaml has no site" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && site_name' "$daio"
+t "  ... grid_site falls back to the hub" 0 "^hub$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && grid_site' "$daio"
+t "  ... whose ManagedCluster is local-cluster" 0 "^local-cluster site-b$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && echo $(acm_name hub) $(acm_name site-b)' "$daio"
 
 d=$(repo placeholder 'hub: {api: REQUIRED-hubAPIURL}')
 t "placeholder named" 1 "set these in clusters.yaml: REQUIRED-hubAPIURL" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0"' "$d"
