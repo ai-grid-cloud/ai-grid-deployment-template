@@ -72,7 +72,7 @@ tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
 # --- checks ---------------------------------------------------------------
 check_api() { # NAME: the login's API server is the cluster's api in clusters.yaml
   local want got
-  want=$(cluster_field "$1" api | sed 's#/*$##')
+  want=$(cluster_api "$1" | sed 's#/*$##')
   got=$(oc --kubeconfig "$(cluster_kubeconfig "$1")" whoami --show-server 2>/dev/null | sed 's#/*$##')
   [ "$got" = "$want" ] || die "$1: the login is for ${got:-no server}, not $want (clusters.yaml); run make login NAME=$1"
 }

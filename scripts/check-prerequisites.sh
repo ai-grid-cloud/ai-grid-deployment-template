@@ -125,7 +125,7 @@ if [ "$step" = spoke ]; then
       if [ "${mc_name:-}" = "$cluster" ]; then
         if [ -z "${mc_url:-}" ]; then
           ours=true ours_note=" (ManagedCluster $cluster has no client URL yet; import-site.sh finishes it)"
-        elif [ "${mc_url%/}" = "$(cluster_field "$cluster" api | sed 's#/*$##')" ]; then
+        elif [ "${mc_url%/}" = "$(cluster_api "$cluster" | sed 's#/*$##')" ]; then
           ours=true
         fi
       fi
