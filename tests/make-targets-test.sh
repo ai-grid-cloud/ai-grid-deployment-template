@@ -31,7 +31,9 @@ cat > "$T/bin/oc" <<'STUB'
 echo "$(basename "$(dirname "$KUBECONFIG")") oc $*" >> "$STUB_LOG"
 case " $* " in
   *" whoami "*) echo admin ;;
-  *" get managedcluster "*) echo '{"status":{"conditions":[{"type":"ManagedClusterJoined","status":"True"},{"type":"ManagedClusterConditionAvailable","status":"True"}]}}' ;;
+  *" get managedcluster "*) # site-b added as combined, site-c as inference; none with $STUB_LOG.not-added
+    case "$3" in site-b) l=combined ;; site-c) l=inference ;; *) l="" ;; esac; [ ! -f "$STUB_LOG.not-added" ] || l=""
+    echo "{\"metadata\":{\"labels\":{${l:+\"ai-grid/enabled\":\"true\",\"ai-grid/role\":\"$l\"}}},\"status\":{\"conditions\":[{\"type\":\"ManagedClusterJoined\",\"status\":\"True\"},{\"type\":\"ManagedClusterConditionAvailable\",\"status\":\"True\"}]}}" ;;
   *" get applications.argoproj.io "*) echo '{"items":[{"metadata":{"name":"rhoai-site-b-x"},"spec":{"destination":{"name":"site-b"}},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"}}},{"metadata":{"name":"rhoai-site-c-x"},"spec":{"destination":{"name":"site-c"}},"status":{"sync":{"status":"OutOfSync"},"health":{"status":"Missing"}}}]}' ;;
   *" get ingresses.config.openshift.io "*) echo apps.example.invalid ;;
   *" get managedclusteraddons.addon.open-cluster-management.io "*) cat "$STUB_LOG.addons" 2>/dev/null || echo '{"items":[]}' ;;
@@ -73,6 +75,11 @@ touch "$STUB_LOG.no-dsc"; : > "$STUB_LOG"
 t "site-status before OpenShift AI: MaaS not installed yet" 0 "^MaaS: not installed yet \(page 6\)$" m "$one" site-status
 t "  ... and no HTTP check" 0 "^ok$" bash -c '! grep -q "ingresses.config" "$0" && echo ok' "$STUB_LOG"
 rm "$STUB_LOG.no-dsc"
+touch "$STUB_LOG.not-added"; : > "$STUB_LOG"
+t "site-status for a site not added yet: says so (role from its ManagedCluster labels)" 0 "^AI Grid: not added to the grid yet$" m "$one" site-status
+t "  ... and no MaaS check" 0 "^ok$" bash -c '! grep -qE "ingresses.config|datasciencecluster" "$0" && echo ok' "$STUB_LOG"
+rm "$STUB_LOG.not-added"
+t "site-status names the role from its ManagedCluster labels" 0 "^AI Grid: added as combined$" m "$one" site-status
 t "site-status with several sites lists them" 2 "name a site: site-b, site-c" m "$two" site-status
 : > "$STUB_LOG"
 t "site-status SITE= picks one" 0 "rhoai-site-c-x" m "$two" site-status SITE=site-c
