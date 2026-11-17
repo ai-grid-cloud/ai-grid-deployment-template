@@ -43,7 +43,7 @@ chmod +x "$T/bin/oc"
 
 D="$T/repo"; mkdir -p "$D/root"; cp -R "$SRC/scripts" "$D/"
 printf '  libraryRevision: %s\n' "$(git -C "$T/lib" rev-parse HEAD)" > "$D/root/kustomization.yaml"
-printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, role: combined, location: us-east, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
 for n in hub site-b; do
   mkdir -p "$D/.config/$n"
   printf 'apiVersion: v1\nkind: Config\nclusters: [{name: c, cluster: {server: "https://api.%s.example.com:6443"}}]\nusers: [{name: u, user: {token: x}}]\ncontexts: [{name: x, context: {cluster: c, user: u}}]\ncurrent-context: x\n' "$n" > "$D/.config/$n/kubeconfig"

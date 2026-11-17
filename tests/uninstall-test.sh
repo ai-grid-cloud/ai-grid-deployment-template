@@ -11,9 +11,9 @@ cp -R "$SRC/scripts" "$D/"; touch "$D/.config/hub/kubeconfig" "$D/.config/site-b
 cat > "$D/clusters.yaml" <<'EOF'
 apiVersion: ai-grid.dev/v1alpha1
 kind: Clusters
-hub: {name: hub, api: "https://api.hub.example.com:6443"}
+hub: {api: "https://api.hub.example.com:6443"}
 sites:
-  - {name: site-b, role: combined, location: us-east, api: "https://api.site.example.com:6443"}
+  - {name: site-b, api: "https://api.site.example.com:6443"}
 EOF
 cp tests/fixtures/uninstall-applications.json "$W/apps.json"
 # clusters.sh reads clusters.yaml with the real kubectl and jq.

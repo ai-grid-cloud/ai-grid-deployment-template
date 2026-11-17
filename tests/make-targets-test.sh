@@ -16,10 +16,10 @@ t() { # name want_rc expect_grep cmd...
   else fails=$((fails+1)); echo "   FAIL $name (rc=$rc, wanted $want; output:)"; echo "$out"; fi
 }
 
-repo() { # name site... -> a repository copy whose clusters.yaml has those sites (name:role), with logins
+repo() { # name site... -> a repository copy whose clusters.yaml has those sites (name, or name:role with the role unused), with logins
   local d="$T/$1"; shift; mkdir -p "$d/.config/hub"; cp -R "$SRC/scripts" "$SRC/Makefile" "$d/"; : > "$d/.config/hub/kubeconfig"
-  { printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\nsites:\n'
-    for s in "$@"; do printf '  - {name: %s, role: %s, location: us-east, api: "https://api.%s.example.com:6443"}\n' "${s%:*}" "${s#*:}" "${s%:*}"
+  { printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n'
+    for s in "$@"; do printf '  - {name: %s, api: "https://api.%s.example.com:6443"}\n' "${s%:*}" "${s%:*}"
       mkdir -p "$d/.config/${s%:*}"; : > "$d/.config/${s%:*}/kubeconfig"; done; } > "$d/clusters.yaml"
   echo "$d"
 }

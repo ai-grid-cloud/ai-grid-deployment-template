@@ -119,7 +119,7 @@ t "bootstrap-hub refuses a library checkout off the pin" 1 "isn't at your pin 01
 # bootstrap-hub checks the auth file before it writes to the hub: a stub oc
 # logs every call, and a refused auth file must leave no oc apply.
 d=$(fixture auth)
-printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\n' > "$d/clusters.yaml"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\n' > "$d/clusters.yaml"
 mkdir -p "$d/.config/hub" "$T/ocbin"; : > "$d/.config/hub/kubeconfig"
 cat > "$T/ocbin/oc" <<STUB
 #!/bin/bash

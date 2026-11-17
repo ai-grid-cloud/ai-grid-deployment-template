@@ -25,7 +25,7 @@ mkdir -p "$T/home/.ai-grid"; printf 'x' > "$T/home/.ai-grid/catalog-token"; prin
 git -c init.defaultBranch=main -C "$T/lib" init -q && git -C "$T/lib" add -A && git -c core.hooksPath=/dev/null -C "$T/lib" commit -qm lib
 D="$T/repo"; mkdir -p "$D/root" "$D/.config/hub"; cp -R "$SRC/scripts" "$D/"; : > "$D/.config/hub/kubeconfig"
 printf '  libraryRevision: %s\n' "$(git -C "$T/lib" rev-parse HEAD)" > "$D/root/kustomization.yaml"
-printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\n' > "$D/clusters.yaml"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\n' > "$D/clusters.yaml"
 
 # The stub oc answers from files in $STUB_DIR; a missing file is NotFound.
 cat > "$T/bin/oc" <<'STUB'

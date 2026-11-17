@@ -60,7 +60,7 @@ STUB
 chmod +x "$T/bin/oc" "$T/bin/curl"
 
 D="$T/repo"; mkdir -p "$D/.config/hub"; cp -R "$SRC/scripts" "$D/"; : > "$D/.config/hub/kubeconfig"
-printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {name: hub, api: "https://api.hub.example.com:6443"}\n' > "$D/clusters.yaml"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\n' > "$D/clusters.yaml"
 TOK="$D/.config/provider-admin-token"
 mode() { stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1"; }
 
