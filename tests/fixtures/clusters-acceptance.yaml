@@ -1,0 +1,57 @@
+# Your AI Grid deployment: how to reach each cluster, and the install's
+# secrets. Git ignores .config/, and only you can read this file.
+# Replace every REQUIRED- value. Roles and locations are set later in the
+# provider console (Add to AI Grid), not here.
+apiVersion: ai-grid.dev/v1alpha1   # required header: the scripts parse this file with kubectl
+kind: Clusters
+
+# The ACM hub. Use username and password (a fresh token on every run), or a
+# token (from oc whoami -t, expires in about 24 h).
+hub:
+  api: REQUIRED-hubAPIURL          # e.g. https://api.hub.example.com:6443
+  username: REQUIRED-username      # a cluster-admin user, e.g. kubeadmin
+  password: REQUIRED-password
+  # token: sha256~TOKEN            # instead of username and password
+
+# The clusters the hub imports into ACM. You add them to the grid, and choose
+# each one's role, in the provider console.
+sites:
+  - name: REQUIRED-siteName       # its ACM name, a DNS label, e.g. site-1; fixed once imported
+    api: REQUIRED-siteAPIURL      # e.g. https://api.site-1.example.com:6443
+    username: REQUIRED-username
+    password: REQUIRED-password
+  - name: REQUIRED-siteName       # e.g. site-2
+    api: REQUIRED-siteAPIURL
+    username: REQUIRED-username
+    password: REQUIRED-password
+
+repositories:
+  # The catalog repository the console writes models and subscriptions to.
+  catalog: REQUIRED-catalogRepoURL # e.g. https://github.com/OWNER/ai-grid-catalog.git
+  # The library revision make install pins: a branch, a tag or a full commit SHA.
+  library: deployment-template
+
+github:
+  # Fine-grained token: Contents, Read and write, on the catalog repository only.
+  catalogToken: REQUIRED-catalogToken   # e.g. github_pat_...
+  # Optional: a token that can push to this repository. Without it, make install
+  # pushes with your own git login (gh or a credential helper).
+  # deploymentToken: github_pat_TOKEN
+
+quay:
+  # Your quay.io/rhoai robot account.
+  username: REQUIRED-quayUsername  # e.g. rhoai+robot
+  password: REQUIRED-quayPassword
+
+# Optional: make install's settings, shown with their defaults. Uncomment to change.
+options:
+  # KEYCLOAK: install                    # only "install" is supported
+  # ALLOW_GENERIC_LOGIN: 1               # let bootstrap use a general quay.io login from QUAY_AUTH_FILE
+  # PROVIDER_ADMIN_TOKEN_DURATION: 168h  # lifetime of .config/provider-admin-token
+  # GATE_ROOT_SECONDS: 600               # deployment-root Synced at the pushed commit
+  # GATE_MCH_SECONDS: 1800               # the MultiClusterHub Running
+  # GATE_HUB_APPS_SECONDS: 5400          # every hub Application Synced and Healthy
+  # GATE_SITE_IMPORT_SECONDS: 900        # each site's import
+  # GATE_READY_SECONDS: 600              # ready-check passes
+  # GATE_INTERVAL: 15                    # seconds between a gate's checks
+  # GATE_ERROR_LIMIT: 4                  # consecutive oc errors before a gate fails
