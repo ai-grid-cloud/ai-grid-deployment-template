@@ -4,8 +4,10 @@
 # reports, the Applications that aren't Synced and Healthy and those whose sync
 # waits for its next retry, the MultiClusterHub's phase, Argo CD's application
 # controller (restarts, and OOMKilled or CrashLoopBackOff called out), the
-# tenant Keycloak's Application, the provider console's Route and pod; then, for each site in clusters.yaml, OpenShift
-# AI's DataScienceCluster phase and its GridSite. Read-only; always exits 0
+# tenant Keycloak's Application, the provider console's Route and pod; then, for each site in clusters.yaml, its
+# AI Grid role (ManagedCluster labels ai-grid/enabled=true and ai-grid/role, set
+# by the provider console's Add to AI Grid) or "not added to the grid yet", and
+# for an added site OpenShift AI's DataScienceCluster phase and its GridSite. Read-only; always exits 0
 # once it reaches the hub.
 #
 # Runs against the hub in clusters.yaml, with its login (.config/NAME/kubeconfig).
@@ -105,13 +107,17 @@ oc get pods -n ai-grid-provider-console -o json 2>/dev/null | jq -r '
     ([$c[] | .state.waiting.reason // empty] | if length > 0 then "  !! " + join(", ") else "" end)
   end' 2>/dev/null || echo "Console pod: none yet"
 
-# Each site, through its own login: OpenShift AI's DataScienceCluster phase and
-# the site's GridSite (Available or not).
+# Each site: its role from its ManagedCluster on the hub, then, through its own
+# login, OpenShift AI's DataScienceCluster phase and the site's GridSite
+# (Available or not).
 for s in $(site_names); do
   echo
-  if ! cluster_login_ok "$s" 2>/dev/null; then echo "Site $s: no working login (make login NAME=$s)"; continue; fi
+  role=$(oc get managedclusters.cluster.open-cluster-management.io "$s" -o json 2>/dev/null |
+    jq -r '.metadata.labels // {} | if .["ai-grid/enabled"] == "true" then .["ai-grid/role"] // "" else "" end' 2>/dev/null)
+  if [ -z "$role" ]; then echo "Site $s: not added to the grid yet"; continue; fi
+  if ! cluster_login_ok "$s" 2>/dev/null; then echo "Site $s ($role): no working login (make login NAME=$s)"; continue; fi
   sk=$(cluster_kubeconfig "$s")
-  echo "Site $s ($(cluster_field "$s" role))"
+  echo "Site $s ($role)"
   dsc=$(KUBECONFIG=$sk oc get datasciencecluster -o jsonpath='{.items[0].status.phase}' 2>/dev/null)
   echo "  OpenShift AI (DataScienceCluster): ${dsc:-not created yet}"
   gs=$(KUBECONFIG=$sk oc get gridsites -A -o json 2>/dev/null |

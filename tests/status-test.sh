@@ -36,6 +36,7 @@ case "$a" in
   *" get datasciencecluster "*) ans dsc ;;
   *" get gridsites "*) ans gridsites.json ;;
   *" get route "*) ans route ;;
+  *" get managedclusters.cluster.open-cluster-management.io "*) ans "mc-$3.json" ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
 STUB
@@ -153,14 +154,19 @@ D="$T/repo-sites"; mkdir -p "$D/.config/hub" "$D/.config/site-b"; cp -R "$SRC/sc
 : > "$D/.config/hub/kubeconfig"; : > "$D/.config/site-b/kubeconfig"
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n  - {name: site-c, api: "https://api.site-c.example.com:6443"}\n' > "$D/clusters.yaml"
 W="$T/sites"; mkdir -p "$W"
+t "a site not added to the grid (no ManagedCluster labels)" "^Site site-b: not added to the grid yet$" "OpenShift AI|GridSite"
+echo '{"metadata":{"labels":{"ai-grid/role":"combined"}}}' > "$W/mc-site-b.json"
+t "  ... nor with a role but no ai-grid/enabled" "^Site site-b: not added to the grid yet$"
+echo '{"metadata":{"labels":{"ai-grid/enabled":"true","ai-grid/role":"combined"}}}' > "$W/mc-site-b.json"
+echo '{"metadata":{"labels":{"ai-grid/enabled":"true","ai-grid/role":"inference"}}}' > "$W/mc-site-c.json"
 t "site not installed yet" "^  OpenShift AI \(DataScienceCluster\): not created yet$"
 t "  ... no GridSite yet" "^  GridSite: not created yet$"
-t "a site without a login" "^Site site-c: no working login \(make login NAME=site-c\)$"
+t "a site without a login" "^Site site-c \(inference\): no working login \(make login NAME=site-c\)$"
 printf 'Ready' > "$W/dsc"
 echo '{"items":[{"metadata":{"name":"site-b"},"status":{"conditions":[{"type":"Available","status":"True"}]}}]}' > "$W/gridsites.json"
 t "site ready" "^  OpenShift AI \(DataScienceCluster\): Ready$"
 t "  ... GridSite available" "^  GridSite: site-b Available=True$"
-t "  ... named with its role" "^Site site-b \(combined\)$"
+t "  ... named with its role, from its ManagedCluster labels" "^Site site-b \(combined\)$"
 
 total=$((total+1))
 if grep -qwE 'apply|create|delete|patch|edit|label|annotate|replace|scale|rollout' "$T"/*/argv.log; then
