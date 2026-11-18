@@ -26,8 +26,11 @@
 #   inputs           scripts/set-library.sh LIBRARY_REVISION (when set: a
 #                    branch to follow, or a tag or SHA to pin),
 #                    scripts/set-inputs.sh (make inputs), a check that
-#                    root/inputs.env names the same catalog, then
-#                    scripts/git-push.sh of root/
+#                    root/inputs.env names the same catalog,
+#                    scripts/check-public-repos.sh --network-warn (the hub
+#                    reads the deployment and catalog repositories with no
+#                    login, so a private one stops it; a network error only
+#                    warns), then scripts/git-push.sh of root/
 #   catalog          scripts/empty-catalog.sh --check: the catalog repository
 #                    must hold nothing but its README; the install never empties it.
 #                    Skipped when the hub's root ApplicationSet apps already names
@@ -199,6 +202,13 @@ step_inputs() {
     echo "error: root/inputs.env names the catalog $have, but clusters.yaml's catalog.url is $want; set-inputs.sh keeps a value that's set. Edit catalogRepoURL in root/inputs.env, or delete that line so set-inputs.sh writes it again." >&2
     stopped inputs
   fi
+  # The hub's Argo CD reads the deployment and catalog repositories with no
+  # login: a private one would pass every step here and then time out at
+  # hub-root. Checked before anything is pushed or bootstrapped. A network
+  # error only warns: Argo CD's own sync (gate hub-root) shows a real one.
+  # bootstrap-hub.sh skips its own copy of the check.
+  run_step inputs check-public-repos.sh --network-warn
+  export PUBLIC_REPOS_CHECKED=1
   # hubCertManager=library adds the library's cert-manager OperatorGroup; a hub
   # that runs the platform's would then fail both (TooManyOperatorGroups). This
   # runs on every install, a rerun or an upgraded hub too, before the push.

@@ -124,6 +124,19 @@ case "\$*" in *"get argocd openshift-gitops"*) echo Available ;; esac
 case "\$*" in *"get operatorgroups.operators.coreos.com -n cert-manager-operator"*) [ ! -f "$T/platform-cm" ] || echo cert-manager-operator-og ;; esac
 STUB
 chmod +x "$T/ocbin/oc"
+# The stub git answers ls-remote (scripts/check-public-repos.sh): it fails with
+# $T/git-stub/err when that file exists, else lists main. The rest goes to the real git.
+mkdir -p "$T/git-stub"
+cat > "$T/ocbin/git" <<STUB
+#!/bin/bash
+case " \$* " in
+  *" ls-remote "*) echo "\${!#}" >> "$T/git-stub/ls-remote.log"
+    [ ! -f "$T/git-stub/err" ] || { cat "$T/git-stub/err" >&2; exit 128; }
+    printf '%040d\trefs/heads/main\n' 0 ;;
+  *) exec "$(command -v git)" "\$@" ;;
+esac
+STUB
+chmod +x "$T/ocbin/git"
 printf '{"auths":{"quay.io":{"auth":"dTpw"}}}' > "$T/generic.json"
 # Three workers, none a Submariner gateway yet (scripts/gateway-nodes.sh, tests/gateway-nodes-test.sh).
 w() { printf '{"metadata":{"name":"%s","labels":{"node-role.kubernetes.io/worker":""}},"status":{"conditions":[{"type":"Ready","status":"True"}]}}' "$1"; }
@@ -176,5 +189,27 @@ t "bootstrap-hub stops on the platform's cert-manager with hubCertManager=librar
   env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/rhoai.json" bash scripts/bootstrap-hub.sh --deployment "$d"
 t "  ... and made no oc apply" 0 "^ok$" bash -c '! grep -q " apply" "$0" && echo ok' "$T/oc.log"
 rm "$T/platform-cm"
+
+# The hub reads the deployment and catalog repositories with no login: a
+# private one stops bootstrap-hub before any write. make install checks it
+# itself and sets PUBLIC_REPOS_CHECKED=1, which skips this copy.
+: > "$T/oc.log"; rm -f "$T/git-stub/ls-remote.log"
+t "bootstrap-hub checks both repositories with no login" 0 "^ok$" bash -c 'env PATH="$1:$PATH" QUAY_AUTH_FILE="$2" bash scripts/bootstrap-hub.sh --deployment "$3" >/dev/null 2>&1 || true
+  grep -qx https://git.example.com/acme/deployment.git "$0" && grep -qx https://git.example.com/acme/catalog.git "$0" && echo ok' \
+  "$T/git-stub/ls-remote.log" "$T/ocbin" "$T/rhoai.json" "$d"
+printf '%s\n' "remote: Repository not found." "fatal: Authentication failed for 'https://git.example.com/acme/deployment.git/'" > "$T/git-stub/err"
+: > "$T/oc.log"
+t "bootstrap-hub stops on a private repository" 1 "deployment repository +https://git.example.com/acme/deployment.git is private or doesn't exist" \
+  env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/rhoai.json" bash scripts/bootstrap-hub.sh --deployment "$d"
+t "  ... and made no oc apply or label" 0 "^ok$" bash -c '! grep -qE " (apply|label node|patch)" "$0" && echo ok' "$T/oc.log"
+rm -f "$T/git-stub/ls-remote.log"
+env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/rhoai.json" PUBLIC_REPOS_CHECKED=1 bash scripts/bootstrap-hub.sh --deployment "$d" >/dev/null 2>&1 || true
+t "  ... PUBLIC_REPOS_CHECKED=1 (make install) skips the check" 0 "^ok$" bash -c '[ ! -f "$0" ] && echo ok' "$T/git-stub/ls-remote.log"
+echo "fatal: unable to access 'https://git.example.com/acme/deployment.git/': Could not resolve host: git.example.com" > "$T/git-stub/err"
+: > "$T/oc.log"
+t "bootstrap-hub: a network error only warns" 0 "^WARN +deployment repository .*a network error, not a login one" \
+  bash -c 'env PATH="$0:$PATH" QUAY_AUTH_FILE="$1" bash scripts/bootstrap-hub.sh --deployment "$2" 2>&1; true' "$T/ocbin" "$T/rhoai.json" "$d"
+t "  ... and goes on to apply the root" 0 "^ok$" bash -c 'grep -q "apply -f -" "$0" && echo ok' "$T/oc.log"
+rm -f "$T/git-stub/err"
 
 echo "deployment-scripts tests: $((total-fails)) ok, $fails failed"; exit "$fails"

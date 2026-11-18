@@ -20,6 +20,10 @@ again.
    Replace `OWNER/DEPLOYMENT_REPO` with your deployment repository. Run every command in this guide from the
    `DEPLOYMENT_REPO` directory.
 
+   Your deployment repository must be public. The hub's Argo CD reads it with no login, and private repositories
+   aren't supported. To make an existing repository public, run
+   `gh repo edit OWNER/DEPLOYMENT_REPO --visibility public --accept-visibility-change-consequences`.
+
 2. Name your clusters. Copy the example file:
 
    ```sh
@@ -73,7 +77,8 @@ The catalog repository holds your models and subscriptions: the hub delivers the
 console writes them there with a token that can write only this repository.
 
 1. [Create a new repository](https://github.com/new): name it, such as `ai-grid-catalog`, make it public, and turn on
-   **Add README**.
+   **Add README**. The catalog repository must be public: the hub's Argo CD reads it with no login, and private
+   repositories aren't supported. The catalog token is only for the provider console, which writes to it.
 
    <img src="images/new-catalog-repository.png" width="420" alt="The new repository form with Add README on">
 
@@ -185,6 +190,17 @@ Replace `CATALOG_REPO_URL` with your catalog repository's URL, such as
 already set is kept, so you can run `make inputs` again. `hub/catalog/` always follows `root/inputs.env`: each run
 rewrites it from that file. If `root/inputs.env` still has inputs the root no longer reads, such as `idpIssuerURL` or
 `portalRedirectURI`, `make inputs` removes them and prints a `removed` line for each.
+
+Then check that the hub can read both repositories with no login:
+
+```sh
+make prereqs
+```
+
+Now that `root/inputs.env` names them, it runs an anonymous `git ls-remote` of each and prints an `ok` or `FAIL` line
+for `deployment repository` and `catalog repository` under **Repositories the hub reads**. A `FAIL` that says
+`is private or doesn't exist` means the repository is private, or its URL is wrong: make it public with
+`gh repo edit OWNER/REPO --visibility public --accept-visibility-change-consequences`.
 
 `keycloakOverlay` chooses what the library's Keycloak, the tenants' identity provider on the hub, starts with.
 Choose it now, before your first push:

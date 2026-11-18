@@ -21,7 +21,9 @@ clusters.yaml or CATALOG_REPO_URL), the environment variables apply, else
 QUAY_AUTH_FILE is the first of ~/.config/containers/auth.json and
 $XDG_RUNTIME_DIR/containers/auth.json that exists, and CATALOG_TOKEN_FILE is
 ~/.ai-grid/catalog-token if it exists. A check whose input you haven't set prints
-"skipped". Every line is: status, name, detail. Statuses: ok, MISSING,
+"skipped". The deployment and catalog repositories must be public, because the
+hub reads them with no login: scripts/check-public-repos.sh checks each with an
+anonymous git ls-remote. Every line is: status, name, detail. Statuses: ok, MISSING,
 OLD, FAIL, skipped. Cluster checks are read-only (get, whoami, auth can-i).
 The registry check runs "oc image info" with your auth file; it never prints a
 credential. The exit code is always 0.
@@ -212,6 +214,29 @@ def check_deployment_push(deployment, resolved):
     else:
         report("FAIL", "deployment push", f"no token, and your git login can't push to origin ({first_line(err)}); "
                "log in to GitHub (such as gh auth login), or " + HINTS["DEPLOYMENT_TOKEN_FILE"])
+
+
+def check_public_repos(deployment, settings):
+    """The hub's Argo CD reads the deployment and catalog repositories with no login, so each must be
+    public: scripts/check-public-repos.sh runs an anonymous git ls-remote of each. Runs once there's
+    something to check: root/inputs.env, or make install's settings (catalog.url)."""
+    if settings is None and not os.path.isfile(os.path.join(deployment, "root", "inputs.env")):
+        return
+    section("Repositories the hub reads")
+    env = dict(os.environ, PATH=os.environ.get("PATH", "") + ":/usr/bin:/bin")
+    catalog = (settings or {}).get("CATALOG_REPO_URL") or os.environ.get("CATALOG_REPO_URL", "")
+    env["CATALOG_REPO_URL"] = catalog
+    try:
+        p = subprocess.run(["/bin/bash", os.path.join(REPO, "scripts", "check-public-repos.sh"), "--tsv", deployment],
+                           capture_output=True, text=True, timeout=120, env=env, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        report("FAIL", "repositories the hub reads", f"can't run scripts/check-public-repos.sh: {type(e).__name__}")
+        return
+    rows = [line.split("\t", 2) for line in p.stdout.splitlines() if line.count("\t") >= 2]
+    for status, name, detail in rows:
+        report(status, name, detail)  # URLs, which scrub() would mangle; report() still redacts secrets
+    if not rows:
+        report("FAIL", "repositories the hub reads", first_line(p.stderr) or "scripts/check-public-repos.sh printed nothing")
 
 
 def check_registry(auth_file, from_settings=False, label=None):
@@ -526,6 +551,7 @@ def main():
     check_catalog_token(a.catalog_token_file, settings is not None, catalog_label)
     if settings is not None:
         check_deployment_push(a.deployment, resolved.get("DEPLOYMENT_TOKEN_FILE", ("", "")))
+    check_public_repos(a.deployment, settings)
 
     counts = {s: results.count(s) for s in ("ok", "MISSING", "OLD", "FAIL", "skipped")}
     print("\n" + ", ".join(f"{n} {s.lower()}" for s, n in counts.items() if n))
