@@ -369,8 +369,8 @@ nothing.
 
 The supported minimum is a dedicated hub and at least one site, on two
 clusters. A hub that is also a site, one cluster with `local-cluster` added to
-the grid, isn't supported. A test run of `main` on such a cluster on 2026-11-18
-found these problems:
+the grid, isn't supported. At library commit `a3c63a9`, such a cluster has
+these problems:
 
 - The hub and the site both own the Loki operator's objects, so two
   Applications manage them.
@@ -400,6 +400,12 @@ for a hub whose sites you add later. `make status`, `make site-status`,
 `hubCertManager=site` still renders, with a warning (L17).
 
 **Fix:** none planned. Use two clusters or more.
+
+**If you already run an all-in-one:** take `local-cluster` out of the grid
+first (in the provider console, or remove its `ai-grid/enabled` label), wait
+until its site Applications are gone, then set `hubCertManager=library` in
+`root/inputs.env`, commit and push it. Add a second cluster as a site with
+`make site-import`.
 
 ## L19: merged into L18
 
