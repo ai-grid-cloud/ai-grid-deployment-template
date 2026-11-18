@@ -22,6 +22,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 deployment_load "$here/.."   # options.PROVIDER_ADMIN_TOKEN_DURATION
 hub=$(hub_name)
 cluster_login_ok "$hub"
+cluster_tls "$hub"   # the hub's ca: in clusters.yaml, for the call to its console
 export KUBECONFIG; KUBECONFIG=$(cluster_kubeconfig "$hub")
 ns=ai-grid-test sa=provider-admin role=ai-grid-provider-admin
 token_file="$CLUSTERS_DIR/.config/provider-admin-token"
@@ -67,7 +68,7 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 # because the token is sent to this host.
 console=$(oc get route ai-grid-provider-console -n ai-grid-provider-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
 [ -n "$console" ] || { echo "error: no console Route on $hub yet: see make status" >&2; exit 1; }
-code=$(curl -sS --max-time 20 -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
+code=$(curl -sS --max-time 20 ${CURL_TLS[@]+"${CURL_TLS[@]}"} -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
   -H 'Connect-Protocol-Version: 1' --data-binary '{}' -w '%{http_code}' \
   "https://$console/ai_grid.v1.Clusters/List") || code=000
 if [ "$code" != 200 ]; then

@@ -64,7 +64,8 @@ again.
    browser, and saves the login in `.config/NAME/kubeconfig`, which git ignores. Your own kubeconfig isn't touched.
    Clusters you're still logged in to are skipped. When one login expires later, run `make login` again, or
    `make login NAME=hub` for one cluster. To use a kubeconfig you already have instead, such as the installer's
-   `auth/kubeconfig`, copy it to `.config/NAME/kubeconfig`.
+   `auth/kubeconfig`, copy it to `.config/NAME/kubeconfig`. If `make login` stops with a certificate problem, see
+   [an untrusted cluster certificate](09-hands-off.md#an-untrusted-cluster-certificate).
 
 ## 2. Create your catalog repository and its token
 

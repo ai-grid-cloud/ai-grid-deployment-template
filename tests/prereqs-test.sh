@@ -114,6 +114,8 @@ t "nothing set: registry skipped" '^skipped +registry logins +no auth file at ~/
 t "no clusters.yaml: skipped, no guide page" '^skipped +cluster checks +no clusters.yaml: run cp clusters-example.yaml clusters.yaml and fill it in$' "$T/bin" "$w" --deployment "$T/other"
 P=$(mkdep placeholder 'hub: {api: REQUIRED-hubAPIURL}')
 t "clusters placeholder: skipped" '^skipped +cluster checks +.*REQUIRED-hubAPIURL' "$T/bin" "$w" --deployment "$P"
+DI=$(mkdep ca-ignore "hub: {api: 'https://api.hub:6443', ca: ignore}")
+t "ca: ignore: make prereqs passes on the warning" '^hub: TLS verification off \(ca: ignore\); your password is sent unverified$' "$T/bin" "$w" --deployment "$DI" --quay-auth-file "$A" --catalog-token-file "$TOK"
 t "site section named" '^Site site-b$' "$T/bin" "$w" "${ALL[@]}"
 t "nothing set: token skipped" '^skipped +catalog token file' "$T/bin" "$w"
 
