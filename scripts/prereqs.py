@@ -272,8 +272,13 @@ def check_registry(auth_file, from_settings=False, label=None):
         report("FAIL", "pull the pinned catalog", f"{short}: {first_line(err or out) or 'oc image info failed'}")
 
 
+class LoadError(str):
+    """scripts/clusters.sh ran and refused the file: its error, never a secret's value."""
+
+
 def read_clusters(deployment):
-    """[(name, kind)] from DIR/clusters.yaml, kind hub or site, or an error string. scripts/clusters.sh reads and checks it."""
+    """[(name, kind)] from DIR/clusters.yaml, kind hub or site, or why not: a LoadError when
+    scripts/clusters.sh ran and refused the file, else a string (it couldn't run)."""
     if not clusters_file(deployment):
         return "no clusters.yaml: run cp clusters-example.yaml clusters.yaml and fill it in"
     if not (shutil.which("kubectl") and shutil.which("jq")):
@@ -285,7 +290,8 @@ def read_clusters(deployment):
     except (OSError, subprocess.TimeoutExpired) as e:
         return f"can't read clusters.yaml: {e}"
     if p.returncode != 0:
-        return first_line(p.stderr).removeprefix("error: ") or "can't read clusters.yaml"
+        err = next((scrub(line.strip()) for line in p.stderr.splitlines() if line.strip()), "")
+        return LoadError(err.removeprefix("error: ") or "can't read clusters.yaml")
     return [tuple(line.split()[:2]) for line in p.stdout.splitlines() if line.strip()]
 
 
@@ -293,7 +299,12 @@ def check_clusters(deployment):
     rows = read_clusters(deployment)
     if isinstance(rows, str):
         section("Clusters")
-        report("skipped", "cluster checks", rows)
+        if isinstance(rows, LoadError) and os.path.isfile(os.path.join(deployment, ".config", "clusters.yaml")):
+            # make install reads the private file and stops on the same error, such as a REQUIRED- value
+            # make config left. scripts/clusters.sh names a secret by its field, never its value.
+            report("FAIL", ".config/clusters.yaml", rows)
+        else:
+            report("skipped", "cluster checks", rows)
         return
     for name, kind in rows:
         check_cluster(name, kind, os.path.join(deployment, ".config", name, "kubeconfig"))

@@ -26,12 +26,15 @@ help: ## Show the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed 's/:.*## /: /'
 
 # .config/clusters.yaml holds secrets: .config/ is mode 700 and the file mode 600.
-config: ## Create .config/clusters.yaml for you to edit (a copy of clusters.yaml if you have one, else of clusters-example.yaml), secrets included; never overwrites it (page 9)
+# From the example, scripts/config-from-example.sh uncomments the secret lines make install needs, as REQUIRED- values.
+config: ## Create .config/clusters.yaml for you to edit (a copy of clusters.yaml if you have one, else clusters-example.yaml with its secret lines uncommented); never overwrites it (page 9)
 	@test ! -e .config/clusters.yaml || { echo "error: .config/clusters.yaml already exists; edit it, or move it away first" >&2; exit 1; }
 	@src=clusters-example.yaml; test ! -f clusters.yaml || src=clusters.yaml; \
-	(umask 077; mkdir -p .config && cp "$$src" .config/clusters.yaml) && chmod 700 .config && chmod 600 .config/clusters.yaml && \
+	(umask 077; mkdir -p .config && if [ "$$src" = clusters.yaml ]; then cp "$$src" .config/clusters.yaml; \
+	  else scripts/config-from-example.sh < "$$src" > .config/clusters.yaml || { rm -f .config/clusters.yaml; exit 1; }; fi) && \
+	chmod 700 .config && chmod 600 .config/clusters.yaml && \
 	if [ "$$src" = clusters.yaml ]; then echo "Copied clusters.yaml to .config/clusters.yaml (readable only by you): the scripts read it from now on, so edit that one."; \
-	else echo "Created .config/clusters.yaml from clusters-example.yaml (readable only by you): edit it."; fi
+	else echo "Created .config/clusters.yaml from clusters-example.yaml (readable only by you): edit it, and replace every REQUIRED- value."; fi
 
 login: ## Log in to each cluster that needs it, with its stored credentials, else the browser; NAME=... for one
 	@scripts/login.sh $(if $(filter 1,$(NONINTERACTIVE)),--non-interactive) $(NAME)

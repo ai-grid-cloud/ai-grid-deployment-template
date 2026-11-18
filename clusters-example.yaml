@@ -4,11 +4,13 @@
 #
 # Copy this file to one of two places, then replace every REQUIRED- value:
 #
-# - .config/clusters.yaml, for the one-command install (install guide, page 9;
-#   make config copies it). Git ignores .config/, the file must be readable
-#   only by you (chmod 600), and it's where your secrets go: uncomment the
-#   token or username and password lines, catalog.token, and the deployment:,
-#   quay: and stage: sections.
+# - .config/clusters.yaml, for the one-command install (install guide, page 9).
+#   Run make config to create it: it uncomments the secrets make install needs,
+#   each cluster's username and password, catalog.token, and the quay: and
+#   stage: sections, each with a REQUIRED- value. Git ignores .config/, the file
+#   must be readable only by you (chmod 600), and it's where your secrets go. To
+#   log in with a token instead of a password, uncomment token: and delete
+#   username: and password:. deployment: is optional and stays commented out.
 #
 # - clusters.yaml at the root, for the page-by-page guide (pages 1 to 8):
 #   cp clusters-example.yaml clusters.yaml. You commit it, so it holds no

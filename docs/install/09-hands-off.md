@@ -110,13 +110,13 @@ Tell the install which clusters and repositories to use, and give it the credent
    make config
    ```
 
-   It copies `clusters-example.yaml` to `.config/clusters.yaml`, readable only by you, and prints `edit it`. If you
-   already have a `clusters.yaml` at the root (from pages 1 to 8), it copies that one instead. Git
-   ignores `.config/`, so the file stays on your machine and can hold your secrets. It never overwrites a file that's
-   already there.
+   It copies `clusters-example.yaml` to `.config/clusters.yaml`, readable only by you, with the secret lines that
+   `make install` needs uncommented, and prints `edit it`. If you already have a `clusters.yaml` at the root (from
+   pages 1 to 8), it copies that one as it is instead. Git ignores `.config/`, so the file stays on your machine and
+   can hold your secrets. It never overwrites a file that's already there.
 
-5. Open `.config/clusters.yaml` in an editor and fill it in. Each field has a comment that says what it is. The
-   secret lines are commented out in the example: uncomment each one you use and fill it in.
+5. Open `.config/clusters.yaml` in an editor and fill it in. Each field has a comment that says what it is. Replace
+   every `REQUIRED-` value: `make prereqs` and `make login` both name each one you leave.
 
    - **`hub` and `sites`:** replace each `REQUIRED-` value, and add an entry under `sites:` for each site, with
      its `name` and `api`; for an [all-in-one](#all-in-one-one-cluster), write `sites: []`. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't
@@ -126,10 +126,11 @@ Tell the install which clusters and repositories to use, and give it the credent
    - **`catalog`:** `url` is the URL of the catalog repository you created in step 2, such as
      `https://github.com/my-org/ai-grid-catalog.git`, and `token` is the token from step 3. The token is in
      `catalog.token` in `.config/clusters.yaml`, and nowhere else.
-   - **The secrets:** in `hub:` and in each site's entry, uncomment and fill in a `cluster-admin` `token`, or a
-     `username` and `password`. A cluster token usually expires in about 24 hours; with a username and password, the
-     scripts get a fresh token on every run, so a rerun the next day works. Uncomment and fill in `quay:` and `stage:`
-     too. Leave `deployment:` commented: without it, `make install` pushes with your own git login.
+   - **The secrets:** in `hub:` and in each site's entry, fill in a `cluster-admin` `username` and `password`. To use
+     a token instead, uncomment `token:`, fill it in, and delete `username:` and `password:`. A cluster token usually
+     expires in about 24 hours; with a username and password, the scripts get a fresh token on every run, so a rerun
+     the next day works. Fill in `quay:` and `stage:` too. Leave `deployment:` commented: without it,
+     `make install` pushes with your own git login.
 
    For example:
 

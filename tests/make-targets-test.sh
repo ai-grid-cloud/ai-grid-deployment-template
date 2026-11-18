@@ -150,8 +150,19 @@ t "console-call BODY_FILE missing, with a double quote in its path, names it" 2 
 t "make help: CATALOG for page 2, make install reads catalog.url" 0 "^inputs: .*CATALOG=URL \(page 2\); make install reads catalog.url$" make -s -C "$one" help
 
 # make config: only creates the private file from the example, never overwrites it.
-cfg="$T/config"; mkdir -p "$cfg"; cp "$SRC/Makefile" "$SRC/clusters-example.yaml" "$cfg/"
-t "make config: creates .config/clusters.yaml from the example" 0 "^ok$" bash -c 'out=$(make -s -C "$0" config) && grep -q "Created .config/clusters.yaml.*edit it" <<<"$out" && cmp -s "$0/clusters-example.yaml" "$0/.config/clusters.yaml" && echo ok' "$cfg"
+# From the example, the private file has the secrets make install needs uncommented, as REQUIRED- placeholders.
+cfg="$T/config"; mkdir -p "$cfg"; cp -R "$SRC/Makefile" "$SRC/clusters-example.yaml" "$SRC/scripts" "$cfg/"
+t "make config: creates .config/clusters.yaml from the example" 0 "Created .config/clusters.yaml from clusters-example.yaml.*REQUIRED-" make -s -C "$cfg" config
+for line in '  username: REQUIRED-hubUsername' '  password: REQUIRED-hubPassword' \
+    '    username: REQUIRED-siteUsername' '    password: REQUIRED-sitePassword' '  token: REQUIRED-catalogToken' \
+    'quay:' '  username: REQUIRED-quayUsername' '  password: REQUIRED-quayPassword' \
+    'stage:' '  username: REQUIRED-stageUsername' '  password: REQUIRED-stagePassword'; do
+  t "  ... uncommented: ${line# *}" 0 . grep -xF -- "$line" "$cfg/.config/clusters.yaml"
+done
+t "  ... the token alternatives stay commented" 0 "^2$" bash -c 'grep -cE "^ +# token: sha256~TOKEN$" "$0"; ! grep -qE "^ +token: sha256" "$0"' "$cfg/.config/clusters.yaml"
+t "  ... deployment: stays commented" 0 "^ok$" bash -c 'grep -qx "# deployment:" "$0" && grep -qx "#   token: github_pat_TOKEN" "$0" && ! grep -q "^deployment:" "$0" && echo ok' "$cfg/.config/clusters.yaml"
+t "  ... the rest is the example's" 0 "^ok$" bash -c 'diff <(grep -v REQUIRED- "$0/clusters-example.yaml" | grep -vxE "# (quay|stage):|#   (username|password): (rhoai\+robot|STAGE_USERNAME|PASSWORD)|  +# (username|password): (kubeadmin|PASSWORD)|  # token: github_pat_TOKEN") <(grep -v REQUIRED- "$0/.config/clusters.yaml" | grep -vxE "(quay|stage):") && echo ok' "$cfg"
+t "  ... parses, and the loader names each secret left to set" 0 "^ok$" bash -c 'out=$(bash "$0/scripts/clusters.sh" --rows "$0" 2>&1); for k in hub.username hub.password "sites\[0\].username" "sites\[0\].password" catalog.token quay.username quay.password stage.username stage.password; do grep -qE "set these in .config/clusters.yaml: .* $k( |$)" <<<"$out" || { echo "no $k in: $out"; exit 1; }; done; echo ok' "$cfg"
 t "  ... .config mode 700, the file mode 600" 0 "^700600$" bash -c 'for f in "$0/.config" "$0/.config/clusters.yaml"; do stat -f %Lp "$f" 2>/dev/null || stat -c %a "$f"; done | tr -d "\n"' "$cfg"
 echo "mine" >> "$cfg/.config/clusters.yaml"
 t "make config again: refuses" 2 "already exists" make -s -C "$cfg" config
