@@ -152,7 +152,7 @@ out=$(make -s -C "$D" help 2>&1); rc=0
 t "make help lists fetch-ca" grep -q "^fetch-ca: " <<<"$out"
 
 # The guard: only ca: ignore, in scripts/clusters.sh's cluster_tls, turns a check off.
-bad=$(grep -rnE -- '--insecure|insecure-skip-tls-verify|(^|[[:space:]"(])-k([[:space:]"]|$)|-verify[_ ]|verify_return_error|InsecureSkipVerify|verify=False|NODE_TLS_REJECT_UNAUTHORIZED|CURLOPT_SSL_VERIFY' "$SRC/scripts" "$SRC/Makefile" |
+bad=$(grep -rnE -- '--insecure|insecure-skip-tls-verify|(^|[[:space:]"(])-k([[:space:]"]|$)|(^|[^-])-verify[_ ]|verify_return_error|InsecureSkipVerify|verify=False|NODE_TLS_REJECT_UNAUTHORIZED|CURLOPT_SSL_VERIFY' "$SRC/scripts" "$SRC/Makefile" |
   grep -vE '^[^:]*scripts/clusters\.sh:[0-9]+:.*# ca: ignore only$' |
   grep -vE '^[^:]*scripts/clusters\.sh:[0-9]+:[[:space:]]*if grep -qE .*insecure-skip-tls-verify.* # ca: ignore check$' || true)
 rc=0; out=$bad

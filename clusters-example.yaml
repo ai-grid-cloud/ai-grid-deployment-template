@@ -86,7 +86,7 @@ catalog:
 # line to change it. A setting left out comes from the environment variable of
 # the same name, else the default.
 options:
-  # LIBRARY: main                        # repin the library at this revision (a branch, a tag or a full SHA); left out, root/applicationset.yaml's pin stands
+  # LIBRARY: main                        # the library revision: a branch the hub follows as it moves (default main), or a tag or full SHA to pin one commit; left out, root/applicationset.yaml's libraryRevision stands
   # KEYCLOAK: install                    # only "install" is supported
   # ALLOW_GENERIC_LOGIN: 1               # let bootstrap use a general quay.io login from QUAY_AUTH_FILE
   # PROVIDER_ADMIN_TOKEN_DURATION: 168h  # lifetime of .config/provider-admin-token

@@ -191,7 +191,7 @@ cluster_secret() { # NAME KEY: the hub's, or the site entry's, own token, userna
 # key the file sets (an empty value too, so it wins over the environment):
 # catalog.url is CATALOG_REPO_URL, options.LIBRARY is LIBRARY_REVISION (not
 # LIBRARY, which names the library checkout; nothing when left out, so the
-# root's pin stands), and each other options key is
+# root's libraryRevision stands), and each other options key is
 # itself. true is 1, false and null
 # are empty.
 settings_lines() {
@@ -202,7 +202,7 @@ settings_lines() {
     # REQUIRED-catalogRepoURL (the example) means no catalog yet, as "" does.
     (if (.catalog // {}) | has("url") then
       "CATALOG_REPO_URL=\(.catalog.url | v | if startswith("REQUIRED-") then "" else . end)" else empty end),
-    # options.LIBRARY repins the library; without it, the pin in root/applicationset.yaml stands.
+    # options.LIBRARY sets the library revision (a branch to follow, or a tag or SHA to pin); without it, libraryRevision in root/applicationset.yaml stands.
     (if (.options // {}) | has("LIBRARY") then "LIBRARY_REVISION=\(.options.LIBRARY | v)" else empty end),
     ((.options // {}) | to_entries[] | select(.key != "LIBRARY") | "\(.key)=\(.value | v)")' \
     --argjson private "$(clusters_private && echo true || echo false)" <<<"$CLUSTERS_JSON" 2>/dev/null ||

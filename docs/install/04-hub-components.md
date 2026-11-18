@@ -1,7 +1,8 @@
 # Install the hub components
 
-Argo CD now installs the selected components from the library at your pinned commit, the tenants' Keycloak among
-them. On this page you create the console's secrets, which waits for the install, and check the result.
+Argo CD now installs the selected components from the library at your library revision, the tip of its `main`
+branch unless you pinned a commit, the tenants' Keycloak among them. On this page you create the console's secrets,
+which waits for the install, and check the result.
 
 ## 1. Create the console's secrets
 

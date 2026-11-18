@@ -129,9 +129,9 @@ make prereqs
 
 It reads your registry logins from `~/.config/containers/auth.json`, or from `$XDG_RUNTIME_DIR/containers/auth.json`
 when that's where `podman login` saved them, and your catalog token from `~/.ai-grid/catalog-token`. To use another
-auth file, add `QUAY_AUTH_FILE=AUTH_FILE`. It also fetches the library at your pin into `.library/`, which git
-ignores; the scripts in `scripts/` use it. It changes nothing on your clusters and never blocks. The output is similar
-to the following:
+auth file, add `QUAY_AUTH_FILE=AUTH_FILE`. It also fetches the library at your library revision into `.library/`,
+which git ignores; the scripts in `scripts/` use it. It changes nothing on your clusters and never blocks. The output
+is similar to the following:
 
 ```text
 Tools

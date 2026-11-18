@@ -76,7 +76,7 @@ library's `main` branch, which reads less from your deployment repository
 - [Uninstall](08-uninstall.md): remove AI Grid from each site, then the hub.
 - [Limits of the library's `main` branch](../upstream-main-limits.md): what this template can't do yet, and the
   library change that would fix each limit.
-- The library's own docs, at the template's pin: [getting started](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/README.md),
+- The library's own docs, at the commit these pages were written against: [getting started](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/README.md),
   [the hub](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/hub-onboarding/README.md), [sites](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md),
   [Keycloak](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/apps/keycloak/README.md), [the provider console](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/apps/console/README.md) and
   [organization identity providers](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/organization-identity-providers/README.md).

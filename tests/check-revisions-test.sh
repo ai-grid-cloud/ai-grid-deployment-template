@@ -43,8 +43,8 @@ t "  ... other repositories aren't checked" 0 "^OK +console" "ai-grid-provider-c
 
 apps "$(app1 acm "$(src "$LIBURL" "$PIN" apps/acm/manifests)")" \
   "$(appn rhoai-site-b-1234 "$(src "$LIBURL" HEAD "")")" "$(app1 maas-db-local-cluster "$(src "$LIBURL" HEAD apps/maas-db/primary)")"
-t "Applications the library's own ApplicationSets generate at HEAD: reported as the known limit, not a failure" 0 \
-  "^HEAD +maas-db-local-cluster .*upstream-main-limits.md, L1" "^OFF "
+t "following a branch, Applications the library's own ApplicationSets generate at HEAD: reported, not a failure" 0 \
+  "^HEAD +maas-db-local-cluster .*reads the library at HEAD" "^OFF |can't pin|whatever you pin"
 t "  ... with a count" 0 "2 Application\(s\) read the library at HEAD"
 
 owned() { # NAME SOURCE: an Application the root ApplicationSet apps generated
@@ -60,6 +60,21 @@ t "a root-generated Application at the pin: OK" 0 "^OK +acm"
 
 apps "$(app1 acm "$(src "$LIBURL" 0123456789abcdef0123456789abcdef01234567 apps/acm/manifests)")"
 t "a library source at another commit: OFF, exit 1" 1 "^OFF +acm .*0123456789ab"
+
+# The template follows the branch main; a deployment that pins a commit is
+# checked against that commit instead.
+t0() { [ "$PIN" = main ]; }
+total=$((total+1)); if t0; then echo "   ok   the template's pin is the branch main"; else fails=$((fails+1)); echo "   FAIL the template's pin is $PIN, not main"; fi
+SHA=fedcba9876543210fedcba9876543210fedcba98
+sed -i.bak -E "s#^([[:space:]]*libraryRevision: &libraryRevision )[^[:space:]]+#\1$SHA#" "$D/root/applicationset.yaml"; rm "$D/root/applicationset.yaml.bak"
+apps "$(owned acm "$(src "$LIBURL" "$SHA" apps/acm/manifests)")"
+t "pinned at a SHA: a root-generated Application at it is OK" 0 "^OK +acm .*$SHA"
+apps "$(owned acm "$(src "$LIBURL" main apps/acm/manifests)")"
+t "  ... one at the branch main is OFF" 1 "^OFF +acm .*at main, not your pin $SHA"
+apps "$(app1 acm "$(src "$LIBURL" "$SHA" apps/acm/manifests)")" "$(app1 maas-db-local-cluster "$(src "$LIBURL" HEAD apps/maas-db/primary)")"
+t "  ... one at HEAD from the library's own ApplicationSets: the known limit, the root can't pin it" 0 \
+  "^HEAD +maas-db-local-cluster .*the root can't pin it .*upstream-main-limits.md, L1" "^OFF "
+t "  ... and they follow upstream main, whatever you pin" 0 "whatever you pin"
 
 rm "$D/.config/hub/kubeconfig"
 t "no hub login: stops" 1 "no login for hub|login expired"

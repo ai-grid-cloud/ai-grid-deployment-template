@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Bootstrap a hub from this deployment repository (install guide, page 3). It
-# uses the library at the commit the repository pins (scripts/library.sh).
+# uses the library at the revision the repository names: the branch it follows,
+# at its tip, or the commit it pins (scripts/library.sh).
 #
 # 1. Checks the deployment (check-deployment.sh), the registry logins in the
 #    auth file, and the hub's prerequisites, before it writes to the hub.
@@ -50,7 +51,7 @@ echo "Hub: $hub ($(oc whoami --show-server))."
 bash "$here/check-deployment.sh" "$dir"
 . "$here/deployment-inputs.sh"
 deployment_render "$dir"
-echo "Library at $(deployment_input libraryRevision)."
+echo "Library at $(deployment_input libraryRevision) (commit $(git -C "$lib" rev-parse --short=12 HEAD))."
 
 # Read the logins before any write, so a refused auth file leaves the hub as it
 # was. Prefer a login scoped to quay.io/rhoai (a robot token). A general quay.io
