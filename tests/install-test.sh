@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 SRC=$(pwd -P)
 T=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$T"' EXIT
 total=0 fails=0
-SENTINEL='sha256~SENTINEL_TOKEN_VALUE'
+SENTINEL=$(printf '%s~%s' sha256 "fake-install-$RANDOM$RANDOM")   # built at runtime, not a literal
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.com GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.com
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GATE_INTERVAL=0
 g() { git -c init.defaultBranch=main -c core.hooksPath=/dev/null "$@"; }

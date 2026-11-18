@@ -14,7 +14,9 @@ cd "$(dirname "$0")/.."
 SRC=$(pwd -P)
 T=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$T"' EXIT
 total=0 fails=0
-SECRET=SENTINEL-provider-admin-token
+# Fake tokens, built at runtime so no literal here looks like a secret.
+SECRET="fake-provider-admin-$RANDOM$RANDOM"
+DEPLOY_TOKEN="fake-deploy-$RANDOM$RANDOM" DEFAULT_TOKEN="fake-default-$RANDOM$RANDOM"
 
 run() { # [ARG...]: runs ready-check.sh in $D with the stubs reading $W; sets rc and out
   out=$(env PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" "$@" 2>&1) && rc=0 || rc=$?
@@ -260,10 +262,10 @@ git -C "$D" push -q origin HEAD:refs/heads/main; new=$(git -C "$D" rev-parse HEA
 git -C "$D" reset -q --hard "$old"; git -C "$D" update-ref refs/remotes/origin/main "$old"
 W="$T/ahead-w"; ready "$W"
 printf '{"status":{"sync":{"status":"Synced","revision":"%s"},"health":{"status":"Healthy"}}}' "$new" > "$W/hub/deployment-root.json"
-printf 'SENTINEL-deploy-token\n' > "$D/.config/deployment-token"
+printf '%s\n' "$DEPLOY_TOKEN" > "$D/.config/deployment-token"
 out=$(env PATH="$T/bin:$PATH" STUB_DIR="$W" DEPLOYMENT_TOKEN_FILE=.config/deployment-token "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?
 t "deployment-root compared with origin's main, not the local ref" 0 "^OK .*deployment-root Synced" \
-  '! grep -q "^FAIL" <<<"$out"' '! grep -q SENTINEL-deploy-token <<<"$out"'
+  '! grep -q "^FAIL" <<<"$out"' '! grep -qF "$DEPLOY_TOKEN" <<<"$out"'
 D="$T/repo"
 
 W="$T/secret"; ready "$W"; run
@@ -281,11 +283,11 @@ t "a Degraded Application not waiting for a site: FAIL" 1 "^FAIL .*keycloak" \
   '! grep -q "^FAIL .*limitador-redis" <<<"$out"' '[ ! -f "$(OUT)" ]'
 
 # With no DEPLOYMENT_TOKEN_FILE, origin is read with .config/deployment-token.
-D="$T/deftoken"; newrepo "$D"; printf 'SENTINEL-default-token\n' > "$D/.config/deployment-token"
+D="$T/deftoken"; newrepo "$D"; printf '%s\n' "$DEFAULT_TOKEN" > "$D/.config/deployment-token"
 W="$T/deftoken-w"; ready "$W"
 out=$(env -u DEPLOYMENT_TOKEN_FILE -u GIT_ASKPASS PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?
 t "no DEPLOYMENT_TOKEN_FILE: origin read with .config/deployment-token" 0 "^OK .*deployment-root Synced" \
-  '[ "$(cat "$W/askpass.out" 2>/dev/null)" = SENTINEL-default-token ]' '! grep -q SENTINEL-default-token <<<"$out"' \
+  '[ "$(cat "$W/askpass.out" 2>/dev/null)" = "$DEFAULT_TOKEN" ]' '! grep -qF "$DEFAULT_TOKEN" <<<"$out"' \
   'grep -qF -- "-c credential.helper= ls-remote" "$W/git-argv.log"'
 
 # No deployment token at all: origin is read with your own git login.

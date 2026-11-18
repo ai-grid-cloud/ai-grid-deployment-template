@@ -10,8 +10,13 @@ T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 LIBD="$T/library"; mkdir -p "$LIBD/apps/rhoai"
 printf 'image:\n  registry: quay.io\n  repository: rhoai/rhoai-fbc-fragment\n  tag: rhoai-3.6@sha256:%064d\n' 0 > "$LIBD/apps/rhoai/nightly.yaml"
 "$GIT" -C "$LIBD" init -q && "$GIT" -C "$LIBD" add -A && "$GIT" -C "$LIBD" -c user.name=t -c user.email=t@example.com commit -qm library
-TOKEN=c3R1Yi11c2VyOkZBS0VfVE9LRU5fZG9fbm90X3ByaW50XzQyNDI0Mg==   # base64 of stub-user:FAKE_TOKEN_do_not_print_424242
-PASSWORD=FAKE_TOKEN_do_not_print_424242
+# Fake credentials, built at runtime so no literal here looks like a secret.
+# PASSWORD is the fake quay password, TOKEN its registry auth (base64 of
+# stub-user:PASSWORD), SECRET the prefix of the other fake tokens.
+PASSWORD="fake-quay-$RANDOM$RANDOM"
+TOKEN=$(printf '%s:%s' stub-user "$PASSWORD" | base64 | tr -d '\n')
+SECRET="fake-do-not-print-$RANDOM$RANDOM"
+leaked() { grep -qF -e "$TOKEN" -e "$PASSWORD" -e "$SECRET"; }   # stdin holds a secret
 
 # Every stub uses only bash builtins: PATH has nothing else on it.
 mkbin() { # dir: a bin dir with every tool stubbed
@@ -71,7 +76,7 @@ t() { # name expect_regex bin world [args...]; also checks rc 0 and no secret in
   local name=$1 expect=$2 bin=$3 w=$4; shift 4; local rc out
   total=$((total+1))
   out=$(env -i LIBRARY="$LIBD" PATH="$bin" HOME="$T" STUB_DIR="$w" "$PY" "$SCRIPT" --deployment "$BARE" "$@" 2>&1) && rc=0 || rc=$?
-  if [ "$rc" -eq 0 ] && grep -qE -- "$expect" <<<"$out" && ! grep -qE "$TOKEN|$PASSWORD" <<<"$out"; then
+  if [ "$rc" -eq 0 ] && grep -qE -- "$expect" <<<"$out" && ! leaked <<<"$out"; then
     printf '   ok   %s\n' "$name"
   else
     printf '   FAIL %s (rc=%s; output:)\n%s\n' "$name" "$rc" "$out"; fails=$((fails+1))
@@ -94,7 +99,7 @@ out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$T" STUB_DIR="$w" "$PY" "$SCRIP
 total=$((total+1))
 if ! grep -q ClusterIssuer <<<"$out"; then echo "   ok   no ClusterIssuer check (no certificate step)"; else echo "   FAIL no ClusterIssuer check"; fails=$((fails+1)); fi
 t "all ok: catalog pulls" '^ok +pull the pinned catalog +quay.io/rhoai/rhoai-fbc-fragment' "$T/bin" "$w" "${ALL[@]}"
-if grep -qE "$TOKEN|$PASSWORD" "$w/argv.log"; then echo "   FAIL a secret reached oc's argv"; fails=$((fails+1)); else echo "   ok   no secret on oc's argv"; fi
+if leaked < "$w/argv.log"; then echo "   FAIL a secret reached oc's argv"; fails=$((fails+1)); else echo "   ok   no secret on oc's argv"; fi
 if grep -qwE 'apply|create|delete|patch|edit|label|annotate|replace|scale' "$w/argv.log"; then
   echo "   FAIL oc got a write verb"; fails=$((fails+1)); else echo "   ok   oc calls are read-only"; fi
 total=$((total+2))
@@ -185,11 +190,11 @@ settings_dep() { # dir options-body: a deployment with a hub and that options: b
 envt() { # name expect_regex [VAR=value ...]: runs from home1 against the deployment $ED
   local name=$1 expect=$2; shift 2; total=$((total+1))
   local out; out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$H1" STUB_DIR="$w" "$@" "$PY" "$SCRIPT" --deployment "$ED" 2>&1) || true
-  if grep -qE -- "$expect" <<<"$out" && ! grep -qE "$TOKEN|$PASSWORD|SECRET_do_not_print" <<<"$out"; then echo "   ok   $name"; else echo "   FAIL $name; output:"; echo "$out"; fails=$((fails+1)); fi
+  if grep -qE -- "$expect" <<<"$out" && ! leaked <<<"$out"; then echo "   ok   $name"; else echo "   FAIL $name; output:"; echo "$out"; fails=$((fails+1)); fi
 }
 # The private .config/clusters.yaml: the quay.io/rhoai robot account and the tokens from it.
 EP="$T/private"; mkdir -p "$EP/.config"
-printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\ncatalog: {url: 'https://example.com/c.git', token: SECRET_do_not_print_c}\nquay: {username: stub-user, password: FAKE_TOKEN_do_not_print_424242}\ndeployment: {token: SECRET_do_not_print_d}\n" > "$EP/.config/clusters.yaml"
+printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443'}\ncatalog: {url: 'https://example.com/c.git', token: %s}\nquay: {username: stub-user, password: %s}\ndeployment: {token: %s}\n" "$SECRET-c" "$PASSWORD" "$SECRET-d" > "$EP/.config/clusters.yaml"
 chmod 600 "$EP/.config/clusters.yaml"
 ED=$EP envt "private file: the quay.io/rhoai login from quay:" "^ok +auth file +quay: in .config/clusters.yaml"
 ED=$EP envt "  ... has the quay.io/rhoai entry" "^ok +quay.io/rhoai login +quay.io/rhoai entry"
@@ -215,12 +220,12 @@ ED=$EM envt "  ... origin readable but not writable: FAIL" "^FAIL +deployment pu
 git -C "$EM" config --unset remote.origin.pushurl
 # The private file as make config writes it, with REQUIRED- placeholders left: FAIL, naming each field, never a value.
 ER="$T/private-required"; mkdir -p "$ER/.config"
-printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443', username: kubeadmin, password: SECRET_do_not_print_h}\nsites:\n  - {name: site-b, api: 'https://api.site-b:6443', username: REQUIRED-siteUsername, password: REQUIRED-sitePassword}\ncatalog: {url: 'https://example.com/c.git', token: REQUIRED-catalogToken}\nquay: {username: REQUIRED-quayUsername, password: REQUIRED-quayPassword}\nstage: {username: REQUIRED-stageUsername, password: REQUIRED-stagePassword}\n" > "$ER/.config/clusters.yaml"
+printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443', username: kubeadmin, password: %s}\nsites:\n  - {name: site-b, api: 'https://api.site-b:6443', username: REQUIRED-siteUsername, password: REQUIRED-sitePassword}\ncatalog: {url: 'https://example.com/c.git', token: REQUIRED-catalogToken}\nquay: {username: REQUIRED-quayUsername, password: REQUIRED-quayPassword}\nstage: {username: REQUIRED-stageUsername, password: REQUIRED-stagePassword}\n" "$SECRET-h" > "$ER/.config/clusters.yaml"
 chmod 600 "$ER/.config/clusters.yaml"
 for k in 'sites\[site-b\].username' 'sites\[site-b\].password' catalog.token quay.username quay.password stage.username stage.password; do
   ED=$ER envt "private file with REQUIRED- secrets: FAIL naming $k" "^FAIL +.config/clusters.yaml +set these in .config/clusters.yaml: (.* )?$k( |$)"
 done
-sed -i.bak "s/password: SECRET_do_not_print_h/password: REQUIRED-hubPassword/" "$ER/.config/clusters.yaml"; rm "$ER/.config/clusters.yaml.bak"
+sed -i.bak "s/password: $SECRET-h/password: REQUIRED-hubPassword/" "$ER/.config/clusters.yaml"; rm "$ER/.config/clusters.yaml.bak"
 ED=$ER envt "  ... a REQUIRED- hub password too" "^FAIL +.config/clusters.yaml +set these in .config/clusters.yaml: (.* )?hub.password( |$)"
 # The private file when clusters.sh can't run (no jq): skipped, as before, not FAIL.
 total=$((total+1)); out=$(env -i LIBRARY="$LIBD" PATH="$T/nojq" HOME="$H1" STUB_DIR="$w" "$PY" "$SCRIPT" --deployment "$ER" 2>&1) || true
