@@ -143,7 +143,8 @@ The site step does the following:
 3. Runs `scripts/wipe-site.sh`, which deletes from the site, in order: models while KServe runs; MaaS objects,
    including `MaaSTenantConfig` and `AITenant`, before the DataScienceCluster; the DataScienceCluster and its
    components; the grid's `GridNetwork` and `GridSite`; the AI Grid gateways and their EnvoyFilters; the operators;
-   their leftover webhooks; their namespaces.
+   their leftover webhooks; the ACM `Klusterlet` if the detach left it, then the klusterlet operator and any
+   `AppliedManifestWork` records; their namespaces.
 4. Deletes everything else the hub's Applications applied to the site.
 5. Deletes the ACM `Klusterlet`, then the namespaces that Argo CD's record doesn't list: the ACM agent's and policy
    namespaces, the site's own policy namespace, Submariner's, and the operator-created `ai-tenants` and

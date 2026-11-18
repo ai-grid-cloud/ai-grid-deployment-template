@@ -156,6 +156,10 @@ if [ "$step" = spoke ]; then
       fi
     fi
     $ours || found+=("klusterlet (namespace open-cluster-management-agent: another hub, or one this check can't match, manages this cluster)")
+  elif oc_ get deployment klusterlet -n open-cluster-management -o name >/dev/null 2>&1; then
+    # Detached, but the old hub's klusterlet operator still runs: a new import can
+    # time out waiting for it to give up its lease (site-c, 2026-11-18).
+    found+=("klusterlet operator left by an old hub (Deployment open-cluster-management/klusterlet)")
   fi
   [ -n "$(oc_ get datascienceclusters -A -o name 2>/dev/null || true)" ] && found+=("DataScienceCluster")
   oc_ get subscriptions.operators.coreos.com rhods-operator -n redhat-ods-operator -o name >/dev/null 2>&1 &&

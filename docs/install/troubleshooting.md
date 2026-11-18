@@ -140,6 +140,36 @@ make install
 
 The restarts stop and the Applications progress within a few minutes.
 
+## `make site-import` stops with `timed out waiting for ManagedCluster`
+
+**Cause:** the site still runs an old hub's klusterlet operator, which holds its lease (`klusterlet-lock`) while the
+new import waits about 5 minutes for the ManagedCluster.
+
+**Fix:** run `make site-import CONFIRM=1` again; it resumes the registration. Before the next reuse of a cluster,
+run `make site-wipe CONFIRM=1` after the detach: it removes the old klusterlet operator
+([reuse a cluster](05-prepare-site.md#reuse-a-cluster-from-another-hub)).
+
+## A site imported from another hub keeps its old add-ons
+
+**Cause:** the site was imported without a detach and wipe, so the old hub's `AppliedManifestWork` records are
+still there. Each one names its hub in `spec.hubHash`. They co-own the same objects as the new hub's records, so
+deleting an add-on on the new hub removes only the new owner, and the old state stays, such as Submariner's old
+broker and Globalnet range.
+
+**Fix:** list the records with their hub, on the site:
+
+```sh
+oc get appliedmanifestworks -o custom-columns=NAME:.metadata.name,HUB:.spec.hubHash
+```
+
+Records for the new hub appeared at the import; the others are the old hub's. Delete each old one, first removing
+its finalizer, which only the old hub's work agent would clear:
+
+```sh
+oc patch appliedmanifestwork NAME --type merge -p '{"metadata":{"finalizers":null}}'
+oc delete appliedmanifestwork NAME
+```
+
 ## Hub Applications for Submariner, `limitador-redis` or the MaaS database stay unhealthy
 
 **Cause:** they wait for the first site to join.

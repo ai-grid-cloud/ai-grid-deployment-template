@@ -53,7 +53,7 @@ m() { env PATH="$T/bin:$PATH" make -s -C "$@"; }
 one=$(repo one site-b:combined)
 two=$(repo two site-b:combined site-c:inference)
 
-t "make help lists every guide target" 0 "console-secrets.*site-check.*site-wipe.*site-import.*site-status.*tenant-call.*uninstall-site.*uninstall-hub.*uninstall-check" \
+t "make help lists every guide target" 0 "console-secrets.*site-check.*site-detach.*site-wipe.*site-import.*site-status.*tenant-call.*uninstall-site.*uninstall-hub.*uninstall-check" \
   bash -c 'make -s -C "$0" help | tr "\n" " "' "$one"
 
 : > "$STUB_LOG"
@@ -91,6 +91,9 @@ done
 
 t "site-import previews by default" 0 "^ok$" bash -c 'out=$(make -n -C "$0" site-import); grep -q import-site.sh <<<"$out" && ! grep -q -- --yes <<<"$out" && echo ok' "$one"
 t "site-import CONFIRM=1 imports" 0 "import-site.sh +--yes" make -n -C "$one" site-import CONFIRM=1
+t "site-detach previews by default" 0 "detach-site.sh +--dry-run" make -n -C "$one" site-detach
+t "site-detach CONFIRM=1 runs it" 0 "^ok$" bash -c 'out=$(make -n -C "$0" site-detach CONFIRM=1); grep -q detach-site.sh <<<"$out" && ! grep -q -- --dry-run <<<"$out" && echo ok' "$one"
+t "site-detach SITE= passes the site" 0 "detach-site.sh --site site-c --dry-run" make -n -C "$two" site-detach SITE=site-c
 t "site-wipe previews by default" 0 "wipe-site.sh +--dry-run" make -n -C "$one" site-wipe
 t "site-wipe CONFIRM=1 runs it" 0 "^ok$" bash -c 'out=$(make -n -C "$0" site-wipe CONFIRM=1); grep -q wipe-site.sh <<<"$out" && ! grep -q -- --dry-run <<<"$out" && echo ok' "$one"
 t "site-wipe SITE= passes the site" 0 "wipe-site.sh --site site-c --dry-run" make -n -C "$two" site-wipe SITE=site-c
