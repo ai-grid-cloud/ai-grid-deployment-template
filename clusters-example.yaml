@@ -30,7 +30,7 @@ hub:
   # router's certificate (the OAuth server and Routes) chain to, when no public
   # CA signed them, as on a new cluster. It replaces your system's trust for
   # this cluster, so it must cover both; it doesn't apply to a site's MaaS
-  # gateway. make fetch-ca NAME=hub writes it here. One of:
+  # gateway. make fetch-ca writes it here (NAME=hub for the hub alone). One of:
   #   ca: |                    the PEM certificates
   #     -----BEGIN CERTIFICATE-----
   #     ...
@@ -54,7 +54,7 @@ hub:
 sites:
   - name: REQUIRED-siteName        # its ACM name, a DNS label, e.g. site-1; fixed once imported
     api: REQUIRED-siteAPIURL       # e.g. https://api.site-1.example.com:6443
-    # Optional: ca:, as for the hub; make fetch-ca NAME=SITE_NAME writes it.
+    # Optional: ca:, as for the hub; make fetch-ca writes it (NAME=SITE_NAME for this site alone).
     # Private file only: a cluster-admin login, as for the hub.
     # username: kubeadmin
     # password: PASSWORD

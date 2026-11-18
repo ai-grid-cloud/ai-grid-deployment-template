@@ -208,16 +208,19 @@ Confirm that every cluster and credential is ready before anything is installed.
    ```
 
    If `make login` stops with `self signed certificate in certificate chain`, or another certificate problem, the
-   cluster's certificates aren't publicly trusted, which is usual on a new cluster. Fetch its CA, then log in again:
+   cluster's certificates aren't publicly trusted, which is usual on a new cluster. Fetch the clusters' CAs, then log
+   in again:
 
    ```sh
-   make fetch-ca NAME=hub
+   make fetch-ca
    make login
    ```
 
-   Replace `hub` with the cluster's name. `make fetch-ca` prints the subject, issuer and SHA-256 fingerprint of each
-   certificate it fetches. Compare each fingerprint with the one that a cluster admin who already trusts the cluster
-   sees, then keep it. For more, see [An untrusted cluster certificate](#an-untrusted-cluster-certificate).
+   `make fetch-ca` fetches the CA of every cluster in `clusters.yaml` that has no `ca:` yet, and ends with one line
+   per cluster that says what it did for each: written, already set, placeholder skipped, block printed to paste, or
+   failed with the reason. To fetch one cluster's CA, add `NAME=hub` or a site's name. For each certificate it fetches, it prints the subject, issuer and SHA-256 fingerprint. Compare each
+   fingerprint with the one that a cluster admin who already trusts the cluster sees, then keep it. For more, see
+   [An untrusted cluster certificate](#an-untrusted-cluster-certificate).
 
    `make login` writes `.config/NAME/kubeconfig` for each cluster from the cluster's API URL and its credentials in
    `.config/clusters.yaml`. It uses the first of these that it finds:
@@ -469,14 +472,18 @@ secret, so the committed file can hold it too. `ca:` takes one of these values:
       -----END CERTIFICATE-----
   ```
 
-  `make fetch-ca NAME=NAME` writes this for you. It reads the certificate chain that the cluster's API host and its
-  OAuth host, `oauth-openshift.apps.DOMAIN`, present. From each chain it keeps the self-signed certificates, else the
-  last certificate the server sent, and warns when one it keeps isn't a self-signed CA, because such a certificate
-  changes when the cluster renews it. It writes them after the cluster's `api:` line, keeping the file's comments. If
-  the OAuth host doesn't answer, it writes the API's CA alone and warns; a login with a password then still fails until
-  you run it again. It edits `.config/clusters.yaml` if that file exists, else
-  `clusters.yaml`. If the cluster already has a `ca:`, it changes nothing and prints the block for you to paste; run
-  `make fetch-ca NAME=NAME FORCE=1` to replace it.
+  `make fetch-ca` writes this for you, for every cluster, or for one with `NAME=NAME`. It reads the certificate chain
+  that the cluster's API host and its OAuth host, `oauth-openshift.apps.DOMAIN`, present. From each chain it keeps the
+  self-signed certificates, else the last certificate the server sent, and warns when one it keeps isn't a self-signed
+  CA, because such a certificate changes when the cluster renews it. It writes them after the cluster's `api:` line,
+  keeping the file's comments. If the OAuth host doesn't answer, it writes the API's CA alone and warns; a login with
+  a password then still fails until you run it again. It edits `.config/clusters.yaml` if that file exists, else
+  `clusters.yaml`. If a cluster already has a `ca:`, including `ca: ignore`, `make fetch-ca` leaves it and says so in
+  its summary; with `NAME=NAME`, it prints the block for you to paste instead. Add `FORCE=1` to replace it. If it
+  can't edit a cluster's entry, such as a flow-style entry (`{api: ...}`), it prints the block for you to paste. With
+  no `NAME`, it skips each cluster whose `name:` or `api:` is still a `REQUIRED-` value and names it. An error in
+  `clusters.yaml`, such as a site name that isn't a DNS label, stops it before it fetches anything. One cluster that
+  fails doesn't stop the others, but `make fetch-ca` then exits with an error.
 - **A PEM file's path,** relative to your deployment repository or absolute, such as `ca: certs/hub-ca.pem`.
 - **`ignore`:** the scripts don't check the cluster's certificates at all, and every run warns that your password is
   sent unverified. Anyone between you and the cluster can then read your password and tokens. Use it only on a

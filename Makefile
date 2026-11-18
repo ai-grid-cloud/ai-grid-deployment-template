@@ -37,9 +37,8 @@ config: ## Create .config/clusters.yaml for you to edit (a copy of clusters.yaml
 	if [ "$$src" = clusters.yaml ]; then echo "Copied clusters.yaml to .config/clusters.yaml (readable only by you): the scripts read it from now on, so edit that one."; \
 	else echo "Created .config/clusters.yaml from clusters-example.yaml (readable only by you): edit it, and replace every REQUIRED- value."; fi
 
-fetch-ca: ## Write the CA certificates a cluster presents into its ca: in clusters.yaml: NAME=hub or a site's name; FORCE=1 replaces one (page 9)
-	@$(call need,NAME,hub)
-	@scripts/fetch-ca.sh $(call shq,$(NAME))
+fetch-ca: ## Write the CA certificates each cluster presents into its ca: in clusters.yaml, skipping those with a ca: already; NAME=hub or a site's name for one; FORCE=1 replaces existing ones (page 9)
+	@scripts/fetch-ca.sh $(if $(NAME),$(call shq,$(NAME)))
 
 login: ## Log in to each cluster that needs it, with its stored credentials, else the browser; NAME=... for one
 	@scripts/login.sh $(if $(filter 1,$(NONINTERACTIVE)),--non-interactive) $(NAME)
