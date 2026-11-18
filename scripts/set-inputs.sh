@@ -11,8 +11,10 @@
 # example organizations or test users); set it to default only for a test
 # deployment that wants the library's examples. hubCertManager is library (the
 # root installs cert-manager on the hub, as upstream's root does); set it to
-# platform when the hub already runs the platform's cert-manager (such a hub
-# can't also be a site). root/inputs.env is yours: the
+# platform when the hub already runs the platform's cert-manager. A third
+# value, site, is accepted only so an existing deployment's root still renders:
+# it was for a hub that is also a site, which isn't supported, and
+# check-deployment.sh (run last) warns about it. root/inputs.env is yours: the
 # template has none, and root/kustomization.yaml copies its values into the
 # root. A value that's already set in it is left alone. hub/catalog/ always follows inputs.env: it's
 # rewritten from it on every run. It reads no cluster.

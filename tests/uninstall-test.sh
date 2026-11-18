@@ -89,7 +89,7 @@ world; t "no step is refused" 1 "usage: uninstall.sh"
 world; t "a site step with no name takes the only site" 0 "site-b: signed in as" site --dry-run
 world; t "an unknown site is refused" 1 "site-z isn't a site in clusters.yaml" site site-z --dry-run
 world; t "the hub as a site is refused" 1 "hub is the hub" site hub --dry-run
-world; t "local-cluster as a site is refused" 1 "isn't supported yet" site local-cluster --dry-run
+world; t "local-cluster as a site is refused" 1 "a hub that is also a site isn't supported" site local-cluster --dry-run
 world; t "an unknown option is refused" 1 "unknown argument: --hub-kubeconfig" hub --hub-kubeconfig x
 
 # Logins

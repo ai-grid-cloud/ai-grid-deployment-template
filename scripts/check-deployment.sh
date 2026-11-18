@@ -41,6 +41,9 @@ left=$(cd "$dir" && { [ ! -d values/clusters ] || echo values/clusters/; ls -d a
 # whole ApplicationSet on the hub, so it fails here first.
 v="$(deployment_input keycloakOverlay)"; case "$v" in core|default|REQUIRED-*|"") ;; *) echo "keycloakOverlay is $v: core or default"; exit 1 ;; esac
 v="$(deployment_input hubCertManager)"; case "$v" in library|platform|site|REQUIRED-*|"") ;; *) echo "hubCertManager is $v: library, platform or site"; exit 1 ;; esac
+# site is still accepted, so an existing deployment's root renders, but only a
+# hub that is also a site used it, and that isn't supported.
+[ "$v" != site ] || echo "warning: hubCertManager=site is for a hub that is also a site (all-in-one), which isn't supported: set library or platform (docs/upstream-main-limits.md L17, L18)" >&2
 [ -z "$unset_inputs" ] || { echo "unset inputs:$unset_inputs"; exit 1; }
 printf '%s\n' "$out" | grep -q 'name: deployment-root' || { echo "deployment-root missing from root/"; exit 1; }
 

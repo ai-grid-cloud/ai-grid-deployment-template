@@ -29,6 +29,7 @@
 #   - each site is an available ManagedCluster with no ai-grid/ or location
 #     label, and has no DataScienceCluster: imported, not added to the grid (a
 #     missing resource type counts as none; any other API error is a FAIL);
+#   - clusters.yaml names at least one site: a hub is never a site;
 #   - deployment-root is Synced at the head of origin's deploymentRevision;
 #   - the console lists no organizations, models or subscriptions (WARN, not
 #     checked, without the provider-admin token). With keycloakOverlay=default
@@ -195,14 +196,8 @@ for name in $(site_names); do
   sites_json=$(jq -c --arg n "$name" --arg a "$(cluster_api "$name")" --arg d "$domain" \
     '. + [{name: $n, api: $a, appsDomain: $d, acmName: $n}]' <<<"$sites_json")
 done
-# An all-in-one (no site in clusters.yaml): the hub is the site, as local-cluster
-# once it's added to the grid, so outputs.json names it for a test suite.
-if [ -z "$(site_names)" ]; then
-  domain=$(oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}' 2>/dev/null || true)
-  [ -n "$domain" ] || fail "hub: can't read its apps domain"
-  sites_json=$(jq -c --arg n "$hub" --arg a "$(cluster_api "$hub")" --arg d "$domain" \
-    '[{name: $n, api: $a, appsDomain: $d, acmName: "local-cluster"}]' <<<'[]')
-fi
+# A hub is never a site (an all-in-one isn't supported), so no site is a FAIL.
+[ -n "$(site_names)" ] || fail "sites: clusters.yaml has no site: a hub needs at least one site; all-in-one isn't supported (docs/upstream-main-limits.md L18)"
 
 read_main
 if [ -z "$main_err" ]; then check "deployment-root Synced at origin's $branch ($main_sha)" root_synced_to "$main_sha"

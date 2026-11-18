@@ -103,6 +103,9 @@ t "all ok: no problem lines" '^[0-9]+ ok$' "$T/bin" "$w" "${ALL[@]}"
 out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$T" STUB_DIR="$w" "$PY" "$SCRIPT" "${ALL[@]}" 2>&1) || true
 total=$((total+1))
 if ! grep -q ClusterIssuer <<<"$out"; then echo "   ok   no ClusterIssuer check (no certificate step)"; else echo "   FAIL no ClusterIssuer check"; fails=$((fails+1)); fi
+DN=$(mkdep nosite "hub: {api: 'https://api.hub:6443'}\nsites: []")
+t "no site: MISSING, a hub needs at least one site" "^MISSING +a site +clusters.yaml names none: a hub needs at least one site; all-in-one isn't supported .*HUB_ONLY=1" \
+  "$T/bin" "$w" --deployment "$DN" --quay-auth-file "$A" --catalog-token-file "$TOK"
 t "all ok: catalog pulls" '^ok +pull the pinned catalog +quay.io/rhoai/rhoai-fbc-fragment' "$T/bin" "$w" "${ALL[@]}"
 if leaked < "$w/argv.log"; then echo "   FAIL a secret reached oc's argv"; fails=$((fails+1)); else echo "   ok   no secret on oc's argv"; fi
 if grep -qwE 'apply|create|delete|patch|edit|label|annotate|replace|scale' "$w/argv.log"; then

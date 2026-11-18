@@ -57,7 +57,7 @@ for c in oc python3; do command -v "$c" >/dev/null || die "required command not 
 clusters_load "$here/.."
 hub=$(hub_name)
 if [ "$step" = site ]; then
-  [ "$site" != local-cluster ] || die "a hub that is also a site isn't supported yet: unlabel local-cluster, then run the hub step"
+  [ "$site" != local-cluster ] || die "a hub that is also a site isn't supported: unlabel local-cluster, then run the hub step"
   [ "$site" != "$hub" ] || die "$site is the hub: run uninstall.sh hub"
   site=$(site_name "$site") || exit 1
 fi
@@ -403,7 +403,7 @@ if [ -n "$sites" ]; then
   echo "warning: sites are still managed ($(echo $sites)); the real run refuses until each is uninstalled"
 fi
 [ "$(H get managedcluster local-cluster -o jsonpath='{.metadata.labels.ai-grid/enabled}' 2>/dev/null)" != true ] ||
-  die "local-cluster is labelled ai-grid/enabled: a hub that is also a site isn't supported yet"
+  die "local-cluster is labelled ai-grid/enabled: a hub that is also a site isn't supported"
 
 say "inventory of the hub"
 load_plan hub "$tmp/plan"

@@ -93,6 +93,11 @@ t "an unknown keycloakOverlay fails the check" 1 "keycloakOverlay is examples: c
 d=$(fixture bad-cm)
 sed -i.bak 's#^hubCertManager=.*#hubCertManager=platfrom#' "$d/root/inputs.env"
 t "an unknown hubCertManager fails the check" 1 "hubCertManager is platfrom: library, platform or site" bash scripts/check-deployment.sh "$d"
+d=$(fixture site-cm)
+sed -i.bak 's#^hubCertManager=.*#hubCertManager=site#' "$d/root/inputs.env"
+t "hubCertManager=site still renders, with a warning: all-in-one isn't supported" 0 \
+  "warning: hubCertManager=site is for a hub that is also a site \(all-in-one\), which isn't supported: set library or platform" bash scripts/check-deployment.sh "$d"
+t "hubCertManager=library: no such warning" 0 "^ok$" bash -c 'out=$(bash scripts/check-deployment.sh "$0" 2>&1) && ! grep -q "hubCertManager=site" <<<"$out" && echo ok' "$(fixture lib-cm)"
 
 d=$(fixture old-site-files)
 mkdir -p "$d/values/clusters/site-a" "$d/sites/site-a/maas-tls"; : > "$d/values/clusters/site-a/rhoai.yaml"; : > "$d/apps/site-a-maas-tls.yaml"
@@ -167,19 +172,19 @@ t "  ... before it applies the root" 0 "^ok$" bash -c 'p=$(grep -n "patch argocd
 
 t "bootstrap-hub labels two hub workers as Submariner gateways" 0 "^oc label node w2 submariner.io/gateway=true$" cat "$T/oc.log"
 t "  ... before its first apply" 0 "^ok$" bash -c 'l=$(grep -n "label node" "$0" | head -1 | cut -d: -f1); r=$(grep -n " apply" "$0" | head -1 | cut -d: -f1); [ -n "$l" ] && [ -n "$r" ] && [ "$l" -lt "$r" ] && echo ok' "$T/oc.log"
-# An all-in-one (sites: []) on single-node OpenShift: nothing to label, but no
-# tunnel to carry either, so it warns and goes on.
+# A hub-only install with no sites yet (sites: []) on single-node OpenShift:
+# nothing to label, but no tunnel to carry yet either, so it warns and goes on.
 printf '{"items":[{"metadata":{"name":"sno","labels":{"node-role.kubernetes.io/master":"","node-role.kubernetes.io/worker":""}},"status":{"conditions":[{"type":"Ready","status":"True"}]}}]}' > "$T/nodes.json"
 : > "$T/oc.log"
-t "bootstrap-hub, all-in-one on single-node OpenShift: warns and continues" 0 "warning: no Submariner gateway nodes on the hub; an all-in-one needs them only once a second cluster joins" \
+t "bootstrap-hub, no sites yet, on single-node OpenShift: warns and continues" 0 "warning: no Submariner gateway nodes on the hub; the hub needs them before its first site joins" \
   bash -c 'env PATH="$0:$PATH" QUAY_AUTH_FILE="$1" bash scripts/bootstrap-hub.sh --deployment "$2" 2>&1; true' "$T/ocbin" "$T/rhoai.json" "$d"
 t "  ... and applies the root" 0 "^ok$" bash -c 'grep -q "apply -f -" "$0" && echo ok' "$T/oc.log"
 # With a site, the tunnel needs the hub's gateways: it stops before any write.
-cp "$d/clusters.yaml" "$T/clusters.aio"; printf 'sites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n' >> "$d/clusters.yaml"; : > "$T/oc.log"
+cp "$d/clusters.yaml" "$T/clusters.nosite"; printf 'sites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n' >> "$d/clusters.yaml"; : > "$T/oc.log"
 t "bootstrap-hub with a site, on single-node OpenShift: names the oc label command" 1 "oc label node sno submariner.io/gateway=true$" \
   env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/rhoai.json" bash scripts/bootstrap-hub.sh --deployment "$d"
 t "  ... and made no oc apply" 0 "^ok$" bash -c '! grep -q " apply" "$0" && echo ok' "$T/oc.log"
-cp "$T/clusters.aio" "$d/clusters.yaml"
+cp "$T/clusters.nosite" "$d/clusters.yaml"
 echo "{\"items\":[$(w w1),$(w w2),$(w w3)]}" > "$T/nodes.json"
 
 # hubCertManager=library (the fixture's) on a hub that runs the platform's

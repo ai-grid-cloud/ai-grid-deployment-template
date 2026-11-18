@@ -10,7 +10,8 @@
 #    Then labels two of the hub's worker nodes submariner.io/gateway=true for
 #    Submariner's gateways, unless two already carry it (gateway-nodes.sh); on a
 #    compact cluster or single-node OpenShift it stops and names the nodes to
-#    label by hand; on an all-in-one (sites: []) it only warns.
+#    label by hand; with no site in clusters.yaml yet (a hub-only install,
+#    sites added later) it only warns.
 # 2. Installs OpenShift GitOps from the library's bootstrap files.
 # 3. Applies the deployment's root/ (the root ApplicationSet and
 #    deployment-root). From then on Argo CD follows git; this script is not run
@@ -96,13 +97,14 @@ printf '%s\n' "$pre"
   die "the hub runs the platform's cert-manager, and hubCertManager is library: set hubCertManager=platform in root/inputs.env, commit it, then run this again"
 
 # Nothing in the library labels the hub's Submariner gateway nodes on this root
-# (scripts/gateway-nodes.sh), so the hub would run no gateway. An all-in-one
-# (sites: []) has no tunnel to carry, so there it only warns.
+# (scripts/gateway-nodes.sh), so the hub would run no gateway. A hub-only
+# install with no sites yet (sites: []) has no tunnel to carry, so there it
+# only warns.
 if [ -n "$(site_names)" ]; then
   bash "$here/gateway-nodes.sh" --kubeconfig "$KUBECONFIG" "$hub"
 else
   bash "$here/gateway-nodes.sh" --kubeconfig "$KUBECONFIG" "$hub" ||
-    echo "warning: no Submariner gateway nodes on the hub; an all-in-one needs them only once a second cluster joins" >&2
+    echo "warning: no Submariner gateway nodes on the hub; the hub needs them before its first site joins" >&2
 fi
 
 oc apply -f "$lib/bootstrap/namespace.yaml" -f "$lib/bootstrap/gitops-operator-group.yaml" -f "$lib/bootstrap/openshift-gitops-sub.yaml"

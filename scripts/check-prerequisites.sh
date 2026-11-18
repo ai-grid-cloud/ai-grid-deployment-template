@@ -9,9 +9,9 @@
 #
 #   --cert-manager the hub's cert-manager (root/inputs.env hubCertManager):
 #                  library (default; the root installs it, so the platform's
-#                  must not be there), platform (its CRDs must be) or site (the
-#                  hub is also a site: OpenShift AI's chart owns it; checked as
-#                  platform)
+#                  must not be there), platform (its CRDs must be) or site (for
+#                  a hub that is also a site, which isn't supported; still
+#                  accepted, and checked as platform)
 #   --step hub     the hub, before and after its infrastructure step: OpenShift
 #                  version, a default StorageClass, cert-manager, the
 #                  quay.io/rhoai pull-secret file ($RHOAI_QUAY_PULL_SECRET_FILE)
@@ -113,7 +113,7 @@ if [ "$step" = hub ]; then
       other=$(tr ' ' '\n' <<<"$ogs" | grep -vx -e openshift-cert-manager-operator -e '' | head -n1 || true)
     fi
     if [ -n "$other" ]; then
-      report FOUND "cert-manager OperatorGroup" "$other: the hub runs the platform's cert-manager; set hubCertManager=platform in root/inputs.env (the hub then can't also be a site)"
+      report FOUND "cert-manager OperatorGroup" "$other: the hub runs the platform's cert-manager; set hubCertManager=platform in root/inputs.env"
     elif [ -n "$read_ok" ]; then
       report OK "cert-manager" "the root installs the library's (hubCertManager=library)"
     fi
