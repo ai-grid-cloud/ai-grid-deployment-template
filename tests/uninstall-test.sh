@@ -123,7 +123,9 @@ world; t "the site dry run runs wipe-site.sh" 0 "== 1. models" site site-b --dry
 world; t "a cluster-scoped object is deleted without a namespace" 0 "would delete: Namespace redhat-ods-applications\$" site site-b --dry-run
 world; t "a namespaced object is deleted in its namespace" 0 "would delete: Cluster.v1.postgresql.cnpg.io maas-db -n maas-db" hub --dry-run
 world; printf 'ai-tenants\nopen-cluster-management\n' > "$W/site-b.ns"; out=$(run site site-b --dry-run); total=$((total+1))
-k=$(grep -n "would delete: klusterlet klusterlet" <<<"$out" | cut -d: -f1); n=$(grep -n "would delete: ns open-cluster-management\$" <<<"$out" | cut -d: -f1)
+# The first Klusterlet delete (wipe-site.sh's, or the sweep's) comes before the first namespace delete.
+k=$(grep -nE "would delete: klusterlet(s.operator.open-cluster-management.io)? klusterlet" <<<"$out" | head -1 | cut -d: -f1)
+n=$(grep -n "would delete: ns open-cluster-management\$" <<<"$out" | head -1 | cut -d: -f1)
 if [ -n "$k" ] && [ -n "$n" ] && [ "$k" -lt "$n" ]; then echo "   ok   the site's leftover namespaces are swept, after its Klusterlet"
 else fails=$((fails+1)); echo "   FAIL the site's leftover namespaces are swept, after its Klusterlet"; fi
 world; printf 'ai-tenants\n' > "$W/site-b.ns"; out=$(run site site-b --dry-run); total=$((total+1))

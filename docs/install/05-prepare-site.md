@@ -19,8 +19,29 @@ when you rerun it after the import), skip to part 1. If it's
 `FOUND`, it names what it found, such as a klusterlet (another hub manages the cluster) or a DataScienceCluster;
 follow these steps first:
 
-1. On the old hub, remove the site's labels, wait for its Applications to go, then delete its ManagedCluster. Delete
-   its Argo CD cluster Secret and grid identity Secret (`redhat-ai-grid/grid-site-SITE`) if they stay behind.
+1. Detach the site from its old hub.
+   - If you can still sign in to the old hub, detach the site there: remove the site's labels, wait for its
+     Applications to go, then delete its ManagedCluster. Delete its Argo CD cluster Secret and grid identity Secret
+     (`redhat-ai-grid/grid-site-SITE`) if they stay behind.
+   - If the old hub is gone, detach the site on the site itself. Preview the detach; it deletes nothing:
+
+     ```sh
+     make site-detach
+     ```
+
+     Then run it:
+
+     ```sh
+     make site-detach CONFIRM=1
+     ```
+
+     It deletes the site's ACM `Klusterlet`, waits up to 10 minutes for the klusterlet operator to remove the
+     namespaces `open-cluster-management-agent` and `open-cluster-management-agent-addon`, then deletes the old
+     hub's `AppliedManifestWork` records. Left in place, those records co-own objects with the new hub's, so the new
+     hub could never remove the old add-ons. The output ends with `Detached:`. If it stops with `still present`, check
+     that the klusterlet operator's pod runs (`oc get pods -n open-cluster-management`), then run it again. It refuses
+     a site that is still a ManagedCluster on your hub (use `make uninstall-site` for that), and stops if your hub's
+     login doesn't work, because it can't check that.
 2. Preview the wipe of the old install. It deletes nothing:
 
    ```sh
@@ -30,6 +51,9 @@ follow these steps first:
    Read the list. It must not name your platform's identity provider, cert-manager, NFD, the GPU operator or your
    ACME ClusterIssuers; the script protects those by name. If your platform uses other names, set them,
    space-separated, in `WIPE_PROTECT_NAMESPACES` and `WIPE_PROTECT_PACKAGES` (operator package names) for both runs.
+   Besides OpenShift AI, MaaS and the grid, the list includes what the detach leaves: the old hub's klusterlet
+   operator (Deployment `klusterlet`, its lease `klusterlet-lock` and its namespace `open-cluster-management`). Left
+   running, that operator can delay a new import until it times out.
 3. Run the wipe. It leaves the cluster pull secret and image mirror, which the new hub delivers again:
 
    ```sh

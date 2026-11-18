@@ -12,7 +12,7 @@
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
 .PHONY: help config fetch-ca login prereqs inputs check bootstrap status console-secrets console-call test test-upstream update \
-  site-check site-wipe site-import site-status tenant-call \
+  site-check site-detach site-wipe site-import site-status tenant-call \
   empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
 
 # The site targets work on the only site in clusters.yaml; with several, set
@@ -85,6 +85,9 @@ update: ## Merge the template's latest main into this repository; never pushes
 
 site-check: ## Check a site before you import it; read-only (page 5)
 	@scripts/site-check.sh $(SITE)
+
+site-detach: ## Preview detaching a site from an old hub that's gone, on the site itself; CONFIRM=1 detaches it (page 5)
+	@scripts/detach-site.sh $(if $(SITE),--site $(SITE)) $(if $(CONFIRM),,--dry-run)
 
 site-wipe: ## Preview removing a site's old install; CONFIRM=1 removes it (page 5)
 	@scripts/wipe-site.sh $(if $(SITE),--site $(SITE)) $(if $(CONFIRM),,--dry-run)

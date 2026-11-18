@@ -2,14 +2,17 @@
 # Remove an AI Grid site's install (OpenShift AI, MaaS, the grid and their
 # operators) so the cluster can join a new hub from scratch.
 #
-# Run it only after the site has left its old hub (labels removed, ManagedCluster
-# deleted).
+# Run it only after the site has left its old hub: on the old hub (labels
+# removed, ManagedCluster deleted), or, when that hub is gone, with
+# detach-site.sh (make site-detach) on the site.
 #
 # Order: models while KServe still
 # runs; MaaS tenant objects before anything they need; the DSC, then
 # its components, before the operator; the grid's cluster-scoped records
 #; AI Grid gateways and their EnvoyFilters; operators; leftover
-# webhooks; namespaces last.
+# webhooks; the old hub's klusterlet operator (left by a detach; while it runs it
+# holds its lease, and a new hub's import can time out waiting for it);
+# namespaces last.
 #
 # Never touched, whatever the lists below say: the platform's Keycloak
 # (namespace keycloak, its operator, OAuth IdP rhbk), cert-manager, NFD, the GPU
@@ -65,7 +68,8 @@ for ns in $NAMESPACES; do contains "$PROTECTED_NAMESPACES" "$ns" && die "namespa
 for p in $OPERATOR_PACKAGES; do contains "$PROTECTED_PACKAGES" "$p" && die "package $p is protected"; done
 
 k get managedcluster >/dev/null 2>&1 && die "this cluster is an ACM hub; wipe-site.sh is for sites"
-$assume_detached || { k get ns open-cluster-management-agent >/dev/null 2>&1 && die "the cluster is still managed by a hub: detach it first"; }
+$assume_detached || { k get ns open-cluster-management-agent >/dev/null 2>&1 &&
+  die "the cluster is still managed by a hub: detach it first, on the old hub or, when that hub is gone, with make site-detach (page 5)"; }
 
 del() { # del ARGS... : delete, or print what would be deleted
   if $dry_run; then echo "would delete: $*"; else k delete "$@" --ignore-not-found --wait=false; fi
@@ -146,7 +150,44 @@ for kind in validatingwebhookconfigurations mutatingwebhookconfigurations; do
   { k get "$kind" -o name | grep -E "$WEBHOOK_PATTERN" || true; } | while read -r w; do del "$w"; done
 done
 
-echo "== 8. namespaces"
+# What "clusteradm unjoin --purge-operator" removes, less the CRD (CRDs stay), plus
+# the operator's leader lease and namespace. Its Klusterlet goes first, while the
+# operator still runs to clear its finalizer.
+echo "== 8. the old hub's klusterlet operator and AppliedManifestWorks"
+KLUSTERLET=klusterlets.operator.open-cluster-management.io
+if k get "$KLUSTERLET" klusterlet -o name >/dev/null 2>&1; then
+  del "$KLUSTERLET" klusterlet
+  wait_gone "Klusterlet" 300 k get "$KLUSTERLET" klusterlet -o name
+fi
+# The old hub's AppliedManifestWorks: after an import they'd co-own objects with the
+# new hub's works, so removing an add-on there would uninstall nothing (site-c,
+# 2026-11-18). The work agent that owns their finalizer is gone.
+for a in $(k get appliedmanifestworks.work.open-cluster-management.io -o name 2>/dev/null || true); do
+  if $dry_run; then echo "would delete without finalizers: $a"
+  else k patch "$a" --type merge -p '{"metadata":{"finalizers":null}}' >/dev/null 2>&1 || true; del "$a"; fi
+done
+if k get ns open-cluster-management >/dev/null 2>&1; then
+  del deployment.apps klusterlet -n open-cluster-management
+  del lease.coordination.k8s.io klusterlet-lock -n open-cluster-management
+  del serviceaccount klusterlet -n open-cluster-management
+  del clusterrolebinding.rbac.authorization.k8s.io klusterlet
+  del clusterrole.rbac.authorization.k8s.io klusterlet
+  # Its operator is gone, so nothing else clears a Klusterlet that didn't go.
+  if k get "$KLUSTERLET" klusterlet -o name >/dev/null 2>&1; then
+    if $dry_run; then echo "would remove the finalizers from $KLUSTERLET klusterlet if it's still there"
+    else k patch "$KLUSTERLET" klusterlet --type merge -p '{"metadata":{"finalizers":null}}' >/dev/null 2>&1 || true; fi
+  fi
+  # The namespace too, unless something else runs there.
+  deploys=$(k get deployments.apps -n open-cluster-management -o name 2>&1) ||
+    die "can't list the Deployments in namespace open-cluster-management: $(tail -n1 <<<"$deploys")"
+  other=$(grep -vx 'deployment.apps/klusterlet' <<<"$deploys" | awk 'NF' || true)
+  if [ -z "$other" ]; then
+    del ns open-cluster-management
+    wait_gone "namespace open-cluster-management" 600 k get ns open-cluster-management --no-headers
+  else echo "kept namespace open-cluster-management: it also runs $(echo $other)"; fi
+fi
+
+echo "== 9. namespaces"
 for ns in $NAMESPACES; do k get ns "$ns" >/dev/null 2>&1 && del ns "$ns"; done
 for ns in $NAMESPACES; do wait_gone "namespace $ns" 600 k get ns "$ns" --no-headers; done
 
