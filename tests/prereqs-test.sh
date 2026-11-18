@@ -21,8 +21,13 @@ leaked() { grep -qF -e "$TOKEN" -e "$PASSWORD" -e "$SECRET"; }   # stdin holds a
 # Every stub uses only bash builtins: PATH has nothing else on it.
 mkbin() { # dir: a bin dir with every tool stubbed
   local b=$1; mkdir -p "$b"; ln -sf "$PY" "$b/python3"
-  # git answers --version itself and passes rev-parse on to the real git.
-  printf '#!/bin/bash\n[ "$1" = --version ] && { echo "git version 1.2.3"; exit; }\nexec %s "$@"\n' "$GIT" > "$b/git"
+  # git answers --version itself and passes rev-parse on to the real git. It
+  # answers ls-remote (scripts/check-public-repos.sh, which runs git with a clean
+  # environment, so the directory is baked in) from $T/git-stub: it logs the
+  # URL, then fails with err when that file exists, else lists main.
+  mkdir -p "$T/git-stub"
+  printf '#!/bin/bash\n[ "$1" = --version ] && { echo "git version 1.2.3"; exit; }\ncase " $* " in *" ls-remote "*) echo "${!#}" >> %s/ls-remote.log\n  [ ! -f %s/err ] || { cat %s/err >&2; exit 128; }; echo "0 refs/heads/main"; exit ;; esac\nexec %s "$@"\n' \
+    "$T/git-stub" "$T/git-stub" "$T/git-stub" "$GIT" > "$b/git"
   # kubectl and jq answer --version themselves and pass the rest to the real ones (clusters.yaml).
   for t in kubectl jq; do
     printf '#!/bin/bash\ncase "$1" in version|--version) echo "%s 1.2.3"; exit ;; esac\nexec %s "$@"\n' "$t" "$(command -v "$t")" > "$b/$t"
@@ -252,6 +257,23 @@ E6="$T/env-catalog"; settings_dep "$E6" ""
 sed -i.bak '/^catalog: /d' "$E6/clusters.yaml"; rm "$E6/clusters.yaml.bak"
 ED=$E6 envt "catalog from CATALOG_REPO_URL: make install's auth file" "auth file +$E6/.config/quay-auth.json" CATALOG_REPO_URL=https://example.com/c.git
 ED=$E6 envt "  ... without it: the home directory's" "^ok +auth file +$H1/.config/containers/auth.json"
+# The repositories the hub reads with no login (scripts/check-public-repos.sh, through a stub git).
+EPub="$T/public"; settings_dep "$EPub" ""; mkdir -p "$EPub/root"
+printf 'deploymentRepoURL=https://github.com/acme/deploy.git\ncatalogRepoURL=https://github.com/acme/catalog.git\n' > "$EPub/root/inputs.env"
+rm -f "$T/git-stub/err" "$T/git-stub/ls-remote.log"
+ED=$EPub envt "public repositories: ok for the deployment" "^ok +deployment repository +https://github.com/acme/deploy.git: readable with no login$"
+ED=$EPub envt "  ... and the catalog" "^ok +catalog repository +https://github.com/acme/catalog.git: readable with no login$"
+total=$((total+1)); if grep -qx https://github.com/acme/deploy.git "$T/git-stub/ls-remote.log"; then echo "   ok     ... through git ls-remote"; else echo "   FAIL no ls-remote call"; fails=$((fails+1)); fi
+printf '%s\n' "remote: Repository not found." "fatal: Authentication failed for 'https://github.com/acme/deploy.git/'" > "$T/git-stub/err"
+ED=$EPub envt "private repository: FAIL, make it public" "^FAIL +deployment repository +https://github.com/acme/deploy.git is private or doesn't exist: the hub reads this repository without a login: make it public \(gh repo edit acme/deploy --visibility public --accept-visibility-change-consequences\); private repositories aren't supported"
+echo "fatal: unable to access 'https://github.com/acme/deploy.git/': Could not resolve host: github.com" > "$T/git-stub/err"
+ED=$EPub envt "network error: a distinct FAIL" "^FAIL +deployment repository +https://github.com/acme/deploy.git: can't reach github.com \(.*Could not resolve host.*\); a network error, not a login one"
+rm -f "$T/git-stub/err"
+printf 'deploymentRepoURL=REQUIRED-deploymentRepoURL\ncatalogRepoURL=REQUIRED-catalogRepoURL\n' > "$EPub/root/inputs.env"
+ED=$EPub envt "placeholder: skipped" "^skipped +deployment repository +deploymentRepoURL in root/inputs.env is still REQUIRED-deploymentRepoURL"
+total=$((total+1)); out=$(env -i LIBRARY="$LIBD" PATH="$T/bin" HOME="$T" STUB_DIR="$w" "$PY" "$SCRIPT" --deployment "$BARE" 2>&1) || true
+if ! grep -q "Repositories the hub reads" <<<"$out"; then echo "   ok   no inputs.env and no catalog: no repository check"; else echo "   FAIL repository check without inputs"; fails=$((fails+1)); fi
+
 # An install.env, which make install no longer reads, is a FAIL with the migration.
 printf 'CATALOG_REPO_URL=https://example.com/c.git\n' > "$E4/install.env"
 ED=$E4 envt "an old install.env: FAIL with the migration" "^FAIL +install.env +no longer read: move its settings into clusters.yaml"

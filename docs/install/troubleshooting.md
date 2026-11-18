@@ -197,6 +197,30 @@ To read the message on the hub, show the hub's status. The message is on the lin
 make status
 ```
 
+## A repository is private: `authentication required: Repository not found`
+
+**Symptom:** `make prereqs` prints `FAIL` for `deployment repository` or `catalog repository` with
+`is private or doesn't exist`, and `make install` stops at `inputs` (`make bootstrap` stops before it writes to the
+hub). On a hub that was bootstrapped anyway, the `hub-root` gate waits until it times out (10 minutes by default),
+and the `deployment-root` Application, or a catalog Application, reports
+`authentication required: Repository not found`.
+
+**Cause:** the repository is private, or its URL is wrong. The hub's Argo CD reads your deployment and catalog
+repositories with no login; it has no credentials for either, so a private repository looks to it like one that
+doesn't exist. Private repositories aren't supported.
+
+**Fix:** make the repository public:
+
+```sh
+gh repo edit OWNER/REPO --visibility public --accept-visibility-change-consequences
+```
+
+Then rerun `make install` (or, page by page, `make prereqs` and `make bootstrap`).
+
+If the line says `a network error, not a login one` instead, the repository's host didn't answer: check your network
+or proxy. `make prereqs` reports that as `FAIL`; `make install` and `make bootstrap` print it as `WARN` and go on,
+because the `hub-root` gate shows whether Argo CD can read the repository.
+
 ## Nothing installs on the hub; the Argo CD controller restarts with `OOMKilled`
 
 **Symptom:** `make status` shows the same Applications for 10 minutes or more, or a line starting with `!!` about the

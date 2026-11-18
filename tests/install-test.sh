@@ -44,6 +44,21 @@ case "$a" in
 esac
 STUB
 chmod +x "$T/bin/oc"
+# The stub git answers ls-remote (scripts/check-public-repos.sh, which runs git
+# with a clean environment, so the stub's directory is baked in): it fails with
+# $T/git-stub/err when that file exists, else lists main. Anything else goes to
+# the real git.
+mkdir -p "$T/git-stub"
+cat > "$T/bin/git" <<STUB
+#!/bin/bash
+case " \$* " in
+  *" ls-remote "*) echo "\${!#}" >> "$T/git-stub/ls-remote.log"
+    [ ! -f "$T/git-stub/err" ] || { cat "$T/git-stub/err" >&2; exit 128; }
+    printf '%040d\trefs/heads/main\n' 0 ;;
+  *) exec "$(command -v git)" "\$@" ;;
+esac
+STUB
+chmod +x "$T/bin/git"
 
 # A fake for each script install.sh calls. bootstrap-hub.sh creates
 # deployment-root, Synced at HEAD, and the hub pull secret; git-push.sh
@@ -76,7 +91,8 @@ setup() { # NAME: a deployment repository $D and a stub directory $W, for one ca
   fake site-check.sh '[ ! -f "$STUB_DIR/site-check-$1.out" ] || cat "$STUB_DIR/site-check-$1.out"
     [ ! -f "$STUB_DIR/site-check-$1.rc" ] || exit "$(cat "$STUB_DIR/site-check-$1.rc")"'
   fake import-site.sh "[ -f \"\$STUB_DIR/mc-\$1.json\" ] || printf '%s' '$mc_available' > \"\$STUB_DIR/mc-\$1.json\""
-  fake bootstrap-hub.sh "printf '%s' '$root_at_head' > \"\$STUB_DIR/deployment-root\"; echo '{}' > \"\$STUB_DIR/hub-pull-secret\""
+  fake bootstrap-hub.sh "printf '%s' '$root_at_head' > \"\$STUB_DIR/deployment-root\"; echo '{}' > \"\$STUB_DIR/hub-pull-secret\"
+    echo \"\${PUBLIC_REPOS_CHECKED:-}\" > \"\$STUB_DIR/public-repos-checked\""
   # sites: comes last, so a test can append a site.
   cat > "$D/clusters.yaml" <<'YAML'
 apiVersion: ai-grid.dev/v1alpha1
@@ -92,11 +108,11 @@ YAML
   for f in deployment-token catalog-token; do printf '%s\n' "$SENTINEL" > "$D/.config/$f"; done
   printf '{"auths":{"quay.io/rhoai":{"auth":"%s"},"registry.stage.redhat.io":{"auth":"%s"}}}\n' "$SENTINEL" "$SENTINEL" > "$D/.config/quay-auth.json"
   mkdir -p "$D/.config/hub"; printf "users:\n- user: {token: '%s'}\n" "$SENTINEL" > "$D/.config/hub/kubeconfig"
-  mkdir -p "$D/root"; printf '%s\n' deploymentRevision=main 'catalogRepoURL=git@github.com:acme/catalog' > "$D/root/inputs.env"
+  mkdir -p "$D/root"; printf '%s\n' deploymentRevision=main 'catalogRepoURL=https://github.com/acme/catalog' > "$D/root/inputs.env"
   g -C "$D" init -q && g -C "$D" add clusters.yaml root && g -C "$D" commit -qm seed
   echo '{"items":[{"status":{"phase":"Running"}}]}' > "$W/mch.json"
   echo '{"items":[{"metadata":{"name":"acm"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"}}}]}' > "$W/apps.json"
-  : > "$W/calls.log"; : > "$W/argv.log"
+  : > "$W/calls.log"; : > "$W/argv.log"; rm -f "$T/git-stub/err" "$T/git-stub/ls-remote.log"
 }
 opt() { # KEY VALUE: adds an options: entry to clusters.yaml
   sed -i.bak "s#^options:\$#options:\\
@@ -119,6 +135,11 @@ t "end: provider-admin then ready-check, then the outputs line" eval '[ "$rc" = 
   [ "$(grep -E "^(== (provider-admin|ready)|gate (hub-apps-final|ready))" <<<"$out" | sed -E "s/ after .*//" | tr "\n" ";")" = "gate hub-apps-final: passed;== provider-admin;== ready;gate ready: passed;" ] &&
   [ "$(grep . <<<"$out" | tail -n 1)" = "Installed. Outputs: .install/outputs.json" ]'
 
+t "fresh: checks the catalog with an anonymous ls-remote" eval '[ "$rc" = 0 ] &&
+  grep -qx "https://github.com/acme/catalog" "$T/git-stub/ls-remote.log" &&
+  grep -qE "^ok +catalog repository +https://github.com/acme/catalog: readable with no login" <<<"$out"'
+t "  ... and tells bootstrap-hub.sh not to check again" grep -qx 1 "$W/public-repos-checked"
+
 setup readyfail
 echo 1 > "$W/ready-check.sh.rc"
 GATE_READY_SECONDS=0 run
@@ -127,6 +148,20 @@ t "ready check fails: its FAIL lines, the report, exit 1" eval '[ "$rc" = 1 ] &&
   grep -qx "FAIL site site-a: not available" <<<"$out" && grep -qx "install-report.sh ready" "$W/calls.log" &&
   grep -qx "make install stopped at ready. Fix the cause, then run make install again." <<<"$out" &&
   [ "$(cat "$D/.install/failed-gate")" = ready ] && ! grep -q "^Installed" <<<"$out"'
+
+setup privaterepo
+printf '%s\n' "remote: Repository not found." "fatal: Authentication failed for 'https://github.com/acme/catalog/'" > "$T/git-stub/err"
+run
+t "catalog not public: stops at inputs, before the push and bootstrap" eval '[ "$rc" = 1 ] &&
+  grep -q "is private or doesn.t exist: the hub reads this repository without a login: make it public (gh repo edit acme/catalog --visibility public --accept-visibility-change-consequences); private repositories aren.t supported" <<<"$out" &&
+  grep -qx "make install stopped at inputs. Fix the cause, then run make install again." <<<"$out" &&
+  ! grep -qE "^(git-push|empty-catalog|bootstrap-hub)" "$W/calls.log"'
+setup netrepo
+echo "fatal: unable to access 'https://github.com/acme/catalog/': Failed to connect to github.com port 443" > "$T/git-stub/err"
+run
+t "network error: a WARN, and the install goes on" eval '[ "$rc" = 0 ] &&
+  grep -qE "^WARN +catalog repository +.*can.t reach github.com .*a network error, not a login one" <<<"$out" &&
+  ! grep -q "make it public" <<<"$out" && grep -q "^bootstrap-hub" "$W/calls.log"'
 
 setup hubonly; run --hub-only
 t "--hub-only: no sites, no provider-admin, no ready check" eval '[ "$rc" = 0 ] &&

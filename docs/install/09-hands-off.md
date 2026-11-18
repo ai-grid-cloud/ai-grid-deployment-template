@@ -17,6 +17,9 @@ worker nodes or the network.
   models) or `inference` (models only). At least one site is `ingress` or `combined`. You choose each site's role
   and location after the install, when you add it to the grid in the provider console; `.config/clusters.yaml` has
   neither.
+- [ ] **A public deployment repository and a public catalog repository.** The hub's Argo CD reads both with no
+  login, so private repositories aren't supported. `make prereqs` and `make install` check each one with an
+  anonymous `git ls-remote`.
 - [ ] **A default StorageClass on each cluster.**
 - [ ] **No platform cert-manager Operator on a site.** A site whose namespace `cert-manager-operator` has an
   OperatorGroup other than `openshift-cert-manager-operator` can't join the grid yet: the install's `site` step stops
@@ -54,13 +57,21 @@ your models and subscriptions to the catalog repository, with a token that can w
    `DEPLOYMENT_REPO` directory, on branch `main`. `make install` pushes to this repository with your own git login,
    the one this clone uses; `make prereqs` checks that it can push without a prompt.
 
+   The repository must be public: the hub's Argo CD reads it with no login. If you created it
+   private, make it public:
+
+   ```sh
+   gh repo edit OWNER/DEPLOYMENT_REPO --visibility public --accept-visibility-change-consequences
+   ```
+
 2. Create your catalog repository:
 
    1. Open [Create a new repository](https://github.com/new).
    2. Fill in the form:
       - **Owner:** your account, or the organization that will own the repository
       - **Repository name:** such as `ai-grid-catalog`
-      - **Choose visibility:** **Public**
+      - **Choose visibility:** **Public**. The hub reads the catalog with no login; a private one isn't
+        supported.
       - **Add README:** **On**
       - **Everything else:** leave it as it is: no template, no `.gitignore` and no license
    3. Click **Create repository**.
@@ -235,7 +246,8 @@ Confirm that every cluster and credential is ready before anything is installed.
 
    `make prereqs` prints one line per check, starting with `ok`, `MISSING`, `OLD`, `FAIL` or `skipped`. It checks
    the tools, the `quay.io/rhoai` login, the catalog token, how `make install` pushes this repository (with your
-   git login, a dry-run push that sends nothing), and, for each cluster in `.config/clusters.yaml`, that it's reachable, runs
+   git login, a dry-run push that sends nothing), that the hub can read your deployment and catalog repositories with
+   no login (an anonymous `git ls-remote` of each), and, for each cluster in `.config/clusters.yaml`, that it's reachable, runs
    OpenShift 4.21 or later, has a default StorageClass and gives you `cluster-admin`. It changes nothing.
 
    Fix each `MISSING`, `OLD` or `FAIL` line, then run it again. Everything is ready when it prints no `MISSING`,
@@ -350,7 +362,9 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 1. `login`: writes `.config/NAME/kubeconfig` for each cluster from its credentials and the API URL in
    `.config/clusters.yaml`.
 2. `inputs`: sets the library revision to `LIBRARY` under `options:`, if you set it, writes your names to
-   `root/inputs.env` and the catalog to `hub/catalog/`, and pushes.
+   `root/inputs.env` and the catalog to `hub/catalog/`, checks that the hub can read your deployment and catalog
+   repositories with no login, and pushes. A private repository stops the install here, before anything is
+   pushed or installed; a network error only prints a `WARN`.
 3. `catalog`: checks that your catalog repository holds only its README, unless the hub already uses it.
 4. `bootstrap`: installs OpenShift GitOps and applies your root on the hub, then waits until Argo CD has synced it.
 5. `acm`: waits until ACM is running.

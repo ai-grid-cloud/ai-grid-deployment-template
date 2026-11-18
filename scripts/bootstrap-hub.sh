@@ -3,7 +3,9 @@
 # uses the library at the revision the repository names: the branch it follows,
 # at its tip, or the commit it pins (scripts/library.sh).
 #
-# 1. Checks the deployment (check-deployment.sh), the registry logins in the
+# 1. Checks the deployment (check-deployment.sh), that the hub can read the
+#    deployment and catalog repositories with no login (check-public-repos.sh),
+#    the registry logins in the
 #    auth file, and the hub's prerequisites, before it writes to the hub.
 #    Then labels two of the hub's worker nodes submariner.io/gateway=true for
 #    Submariner's gateways, unless two already carry it (gateway-nodes.sh); on a
@@ -53,6 +55,11 @@ cluster_login_ok "$hub" || exit 1
 KUBECONFIG=$(cluster_kubeconfig "$hub"); export KUBECONFIG
 echo "Hub: $hub ($(oc whoami --show-server))."
 bash "$here/check-deployment.sh" "$dir"
+# The hub's Argo CD reads the deployment and catalog repositories with no login:
+# a private one stops here, before any write; a network error only warns.
+# make install runs this check itself and sets PUBLIC_REPOS_CHECKED=1.
+[ "${PUBLIC_REPOS_CHECKED:-}" = 1 ] || bash "$here/check-public-repos.sh" --network-warn "$dir" ||
+  die "the hub can't read a repository with no login (FAIL above): make it public, then run this again"
 . "$here/deployment-inputs.sh"
 deployment_render "$dir"
 echo "Library at $(deployment_input libraryRevision) (commit $(git -C "$lib" rev-parse --short=12 HEAD))."
