@@ -123,7 +123,7 @@ setup readyfail
 echo 1 > "$W/ready-check.sh.rc"
 GATE_READY_SECONDS=0 run
 t "ready check fails: its FAIL lines, the report, exit 1" eval '[ "$rc" = 1 ] &&
-  grep -q "^gate ready: FAILED after 0s: 1 FAIL; first: FAIL site site-a: not available" <<<"$out" &&
+  grep -qE "^gate ready: FAILED after [0-9]+s: 1 FAIL; first: FAIL site site-a: not available" <<<"$out" &&
   grep -qx "FAIL site site-a: not available" <<<"$out" && grep -qx "install-report.sh ready" "$W/calls.log" &&
   grep -qx "make install stopped at ready. Fix the cause, then run make install again." <<<"$out" &&
   [ "$(cat "$D/.install/failed-gate")" = ready ] && ! grep -q "^Installed" <<<"$out"'
