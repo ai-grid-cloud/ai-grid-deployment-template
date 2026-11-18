@@ -204,6 +204,19 @@ total=$((total+1)); if [ -z "$(git -C "$EM" ls-remote origin ai-grid-prereqs-pus
 git -C "$EM" config remote.origin.pushurl "$T/no-such-origin.git"
 ED=$EM envt "  ... origin readable but not writable: FAIL" "^FAIL +deployment push +no token, and your git login can't push to origin .*gh auth login"
 git -C "$EM" config --unset remote.origin.pushurl
+# The private file as make config writes it, with REQUIRED- placeholders left: FAIL, naming each field, never a value.
+ER="$T/private-required"; mkdir -p "$ER/.config"
+printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub:6443', username: kubeadmin, password: SECRET_do_not_print_h}\nsites:\n  - {name: site-b, api: 'https://api.site-b:6443', username: REQUIRED-siteUsername, password: REQUIRED-sitePassword}\ncatalog: {url: 'https://example.com/c.git', token: REQUIRED-catalogToken}\nquay: {username: REQUIRED-quayUsername, password: REQUIRED-quayPassword}\nstage: {username: REQUIRED-stageUsername, password: REQUIRED-stagePassword}\n" > "$ER/.config/clusters.yaml"
+chmod 600 "$ER/.config/clusters.yaml"
+for k in 'sites\[site-b\].username' 'sites\[site-b\].password' catalog.token quay.username quay.password stage.username stage.password; do
+  ED=$ER envt "private file with REQUIRED- secrets: FAIL naming $k" "^FAIL +.config/clusters.yaml +set these in .config/clusters.yaml: (.* )?$k( |$)"
+done
+sed -i.bak "s/password: SECRET_do_not_print_h/password: REQUIRED-hubPassword/" "$ER/.config/clusters.yaml"; rm "$ER/.config/clusters.yaml.bak"
+ED=$ER envt "  ... a REQUIRED- hub password too" "^FAIL +.config/clusters.yaml +set these in .config/clusters.yaml: (.* )?hub.password( |$)"
+# The private file when clusters.sh can't run (no jq): skipped, as before, not FAIL.
+total=$((total+1)); out=$(env -i LIBRARY="$LIBD" PATH="$T/nojq" HOME="$H1" STUB_DIR="$w" "$PY" "$SCRIPT" --deployment "$ER" 2>&1) || true
+if grep -qE '^skipped +cluster checks +needs kubectl and jq' <<<"$out" && ! grep -q '^FAIL +.config/clusters.yaml' <<<"$out"; then echo "   ok   private file, no jq: skipped, not FAIL"
+else echo "   FAIL private file, no jq: skipped, not FAIL; output:"; echo "$out"; fails=$((fails+1)); fi
 # A catalog and no secrets: the legacy files under .config/, not the home directory's.
 E2="$T/env-defaults"; settings_dep "$E2" ""
 cp "$A" "$E2/.config/quay-auth.json"; printf 'x' > "$E2/.config/catalog-token"; chmod 600 "$E2/.config/catalog-token"
