@@ -10,6 +10,24 @@ reference, see its [getting started](https://github.com/ai-grid-cloud/ai-grid-cl
 
 **Fix:** set each one it names ([set your names](02-repositories.md#4-set-your-names)), and run the check again.
 
+## `make install` stops with `clusters.yaml has no site`
+
+**Symptom:** `make install` stops before it reads or writes any cluster with the following error:
+
+```text
+error: clusters.yaml has no site: a hub needs at least one site; all-in-one isn't supported (docs/upstream-main-limits.md L18)
+```
+
+With `sites:` empty, `make site-status`, `make tenant-call` and the ready check report the same error, and
+`make status` says to add a site.
+
+**Cause:** `sites:` in `.config/clusters.yaml` lists no site. The supported minimum is a hub and one site on two
+clusters. A hub that is also a site (all-in-one) isn't supported, so no script uses the hub as a site
+([limits of `main`, L18](../upstream-main-limits.md#l18-all-in-one-unsupported)).
+
+**Fix:** add at least one site under `sites:`, then run `make install` again. To install the hub before you have a
+site, run `make install HUB_ONLY=1`, which accepts `sites: []`.
+
 ## A script stops because `clusters.yaml` uses the old format
 
 **Cause:** your `clusters.yaml` or `.config/clusters.yaml` was written for an earlier version of the template. It has
@@ -332,11 +350,12 @@ certificate ([limits of `main`](../upstream-main-limits.md#l5-the-maas-gateway-p
 **Symptom:** on an `ingress` or `combined` site, every Org UI call at `https://maas.SITE_APPS_DOMAIN/maas-portal`
 fails with `500` and `EOF`.
 
-**Cause:** the Org UI reads the MaaS URL once, when it starts. On a new site it can start before the library sets
-the MaaS gateway's hostname, and it then keeps the load balancer's name. This is a known OpenShift AI 3.6 issue,
-RHAI-48803.
+**Cause:** the Org UI (`maas-ui`) reads the MaaS gateway's address once, when it starts, and caches it. On a new
+site it can start before the library sets the MaaS gateway's hostname, and it then keeps the load balancer's
+address. This is a known OpenShift AI 3.6 issue, RHAI-48803.
 
-**Fix:** after the site is **Provisioned**, restart the Org UI on the site:
+**Fix:** after the site is **Provisioned**, restart the Org UI on the site. OpenShift AI's dashboard operator deploys
+it as Deployment `maas-ui` in namespace `redhat-ods-applications`, not the library, so the restart is safe:
 
 ```sh
 scripts/with-cluster.sh SITE_NAME oc rollout restart deployment/maas-ui -n redhat-ods-applications

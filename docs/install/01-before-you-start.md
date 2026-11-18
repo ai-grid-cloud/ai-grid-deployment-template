@@ -9,8 +9,8 @@ yourself.
   compact cluster or single-node OpenShift, they stop and print the `oc label` command for you to run instead
   ([limits of `main`, L21](../upstream-main-limits.md#l21-nothing-labels-the-submariner-gateway-nodes);
   [site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide)). Size the site for its
-  models; GPU models need GPU nodes. For a test, one cluster can be both hub and site
-  ([all-in-one](09-hands-off.md#all-in-one-one-cluster)).
+  models; GPU models need GPU nodes. Two clusters is the supported minimum: a hub that is also a site (all-in-one)
+  isn't supported ([limits of `main`, L18](../upstream-main-limits.md#l18-all-in-one-unsupported)).
 - **The GPU stack on each GPU site, before the import:** Node Feature Discovery with a `NodeFeatureDiscovery`, and
   the NVIDIA GPU Operator with a `ClusterPolicy`. On the library's `main` branch your platform sets these up; the
   library doesn't install them. `make site-check` warns on [page 5](05-prepare-site.md) when a site has GPU nodes

@@ -39,9 +39,9 @@ template's earlier library branch didn't have.
 | L14 | Keycloak's default profile adds example organizations and test users | `keycloakOverlay`: `core` by default; `default` for test deployments only; chosen before the first push |
 | L15 | The tenant client secret shares a Secret with the Keycloak admin password | Documents it |
 | L16 | A Keycloak version bump can run two versions against one database | Documents it |
-| L17 | The hub's cert-manager has one owner: the library, the platform or the hub's own site | `hubCertManager`: `library` by default, `platform` or `site`; `make install` stops on a conflict |
-| L18 | A hub that is also a site has no usage logs | Documents it |
-| L19 | A hub that is also a site keeps Limitador's counters in memory | Documents it |
+| L17 | The hub's cert-manager has one owner: the library or the platform | `hubCertManager`: `library` by default, or `platform`; `make install` stops on a conflict; `site` is still accepted, with a warning (L18) |
+| L18 | All-in-one (unsupported): a hub that is also a site | `make install` refuses `sites: []`, except with `HUB_ONLY=1`; no script uses the hub as a site |
+| L19 | Merged into L18 | — |
 | L20 | Model runtimes pull only from `registry.stage.redhat.io` (pre-release nightlies) | Requires a stage login: `make prereqs` reports `FAIL`, `make bootstrap` stops |
 | L21 | Nothing labels the Submariner gateway nodes | `make bootstrap` and `make site-import` label two workers on each cluster; `make site-check` checks a site can get them |
 
@@ -354,44 +354,56 @@ Two OperatorGroups in one namespace fail every operator there
   root does. `make install` stops before it writes to the hub if the hub
   already runs the platform's cert-manager.
 - `platform`: the root's `cert-manager` Application selects no file, and the
-  hub's platform cert-manager stays the only one. Such a hub can't also be a
-  site: OpenShift AI's chart would add its own OperatorGroup beside the
-  platform's (L4).
-- `site`: the same as `platform` for the root. Set it on a hub installed with
-  `library`, before you add `local-cluster` as a site: OpenShift AI's chart on
-  the hub then owns the OperatorGroup and Subscription the library installed
-  (they have the chart's names), and the root's Application, now empty, leaves
-  them in place. With `library` left on, both Applications would manage them.
+  hub's platform cert-manager stays the only one.
+- `site` was only for an all-in-one, which isn't supported (L18). The root
+  still accepts it, so an existing deployment's root renders, and
+  `scripts/check-deployment.sh` (`make check`, `make inputs`) warns about it.
 
-A hub that runs the platform's cert-manager can't be a site. Switching an
-installed hub from `library` to `platform` leaves the library's cert-manager in
-place: Argo CD doesn't prune an Application that renders nothing.
+Switching an installed hub from `library` to `platform` leaves the library's
+cert-manager in place: Argo CD doesn't prune an Application that renders
+nothing.
 
 **Fix: upstream PR**, the same as L4's.
 
-## L18: a hub that is also a site has no usage logs
+## L18: all-in-one (unsupported)
 
-`apps/ai-grid-usage-logs/values.yaml` sets `excludeLocalCluster: true`, so the
-hub never gets the usage-log credentials, even when it's an `ingress` or
-`combined` site. The provider console's Usage tab stays empty for it
-(RHAI-48872).
+The supported minimum is a dedicated hub and at least one site, on two
+clusters. A hub that is also a site, one cluster with `local-cluster` added to
+the grid, isn't supported. A test run of `main` on such a cluster on 2026-11-18
+found these problems:
 
-**Template:** documents it.
+- The hub and the site both own the Loki operator's objects, so two
+  Applications manage them.
+- The usage-log site Policy leaves out the hub:
+  `apps/ai-grid-usage-logs/values.yaml` sets `excludeLocalCluster: true`, so the
+  hub never gets the usage-log credentials. The Org UI's usage views return
+  `401`, and the provider console's Usage tab stays empty (RHAI-48872).
+- PersesDatasource `redhat-ods-monitoring/usage-logs-all` has two owners: the
+  hub's `ai-grid-o11y` Application and the site's `maas-controller`. Argo CD
+  reverts the site's change, so the Org UI's admin usage view fails.
+- The hub's cert-manager needed a third owner, `hubCertManager=site`, so that
+  OpenShift AI's chart on the hub took over the cert-manager the library
+  installed (L17).
+- The root leaves out Limitador's shared-storage files on the hub, and the
+  library's Limitador placement leaves out `local-cluster`, so the hub's
+  Limitador keeps its counters in memory and doesn't share rate limits with
+  other ingress sites.
 
-**Fix: upstream PR** that lets the hub take the credentials when it's a site.
+A fix,
+[cluster-gitops PR #337](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/pull/337),
+was closed without merging.
 
-## L19: a hub that is also a site keeps Limitador's counters in memory
+**Template:** `make install` stops before any cluster call when `sites:` in
+`clusters.yaml` is empty; only `make install HUB_ONLY=1` accepts `sites: []`,
+for a hub whose sites you add later. `make status`, `make site-status`,
+`make tenant-call` and the ready check never use the hub as a site.
+`hubCertManager=site` still renders, with a warning (L17).
 
-The root leaves out Limitador's shared-storage files on the hub, and the
-library's Limitador placement leaves out `local-cluster`. When the hub is an
-`ingress` or `combined` site, its Limitador counts in memory. With one ingress
-site that changes nothing; with several, rate limits aren't shared with the
-hub's.
+**Fix:** none planned. Use two clusters or more.
 
-**Template:** documents it.
+## L19: merged into L18
 
-**Fix: upstream PR** that gives a hub that is a site the shared Limitador
-storage.
+This entry is now part of [L18](#l18-all-in-one-unsupported).
 
 ## L20: model runtimes pull only from `registry.stage.redhat.io`
 
@@ -446,9 +458,9 @@ GPU nodes last, and it says when it uses a GPU node. It never removes or changes
 a label. A GPU or infra node it falls back to may carry taints the gateway pods
 don't tolerate; check that the gateway pods run there. On a compact cluster or
 single-node OpenShift it labels nothing and stops with the `oc label` command
-to run, except on an all-in-one (`sites: []`), which has no tunnel to carry
-until a second cluster joins, where it only warns; single-node OpenShift needs one
-gateway node. `make site-check` reports what the import would label, or
+to run, except on a hub installed with `make install HUB_ONLY=1` and no sites yet
+(`sites: []`), which has no tunnel to carry until its first site joins, where it
+only warns; single-node OpenShift needs one gateway node. `make site-check` reports what the import would label, or
 `MISSING` with that command.
 
 **Fix: upstream PR** that labels the gateway nodes on every root the library

@@ -19,16 +19,10 @@ Two things follow:
   [page 5](05-prepare-site.md#1-check-the-sites-infrastructure) prints `FOUND` for its `cert-manager OperatorGroup`.
   Don't add such a site.
 
-### The hub as a site (all-in-one)
+### The hub isn't a site
 
-One cluster can be the hub and also a `combined` site: list only the hub in `clusters.yaml`, install it, then add
-`local-cluster` on this page as `combined`. Use a cluster without the platform's cert-manager, and install it with
-`hubCertManager=library` ([page 2](02-repositories.md#4-set-your-names)). Before you add `local-cluster`, set
-`hubCertManager=site` in `root/inputs.env`, commit and push it, and wait until `make status` shows `deployment-root`
-synced: OpenShift AI's chart then takes over the cert-manager the hub already runs, instead of two Applications
-managing it. Such a hub has no usage logs, and its
-Limitador keeps its counters in memory
-([limits](../upstream-main-limits.md#l18-a-hub-that-is-also-a-site-has-no-usage-logs)).
+Add only separate sites to the grid, never the hub (`local-cluster`): a hub that is also a site (all-in-one) isn't
+supported ([limits](../upstream-main-limits.md#l18-all-in-one-unsupported)).
 
 ## 1. Add the site in the console
 
