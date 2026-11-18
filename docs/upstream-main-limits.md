@@ -43,6 +43,7 @@ template's earlier library branch didn't have.
 | L18 | A hub that is also a site has no usage logs | Documents it |
 | L19 | A hub that is also a site keeps Limitador's counters in memory | Documents it |
 | L20 | Model runtimes pull only from `registry.stage.redhat.io` (pre-release nightlies) | Requires a stage login: `make prereqs` reports `FAIL`, `make bootstrap` stops |
+| L21 | Nothing labels the Submariner gateway nodes | `make bootstrap` and `make site-import` label two workers on each cluster; `make site-check` checks a site can get them |
 
 ## Losses compared with the earlier library branch
 
@@ -406,3 +407,40 @@ one (`podman login registry.stage.redhat.io`), or under `stage:` in
 **Fix: upstream PR** that lets the mirrors fall back to `registry.redhat.io`
 (no `NeverContactSource` on the `rhaii*` sources), or makes the stage mirrors
 an input, so a deployment without a stage login pulls released runtimes.
+
+## L21: nothing labels the Submariner gateway nodes
+
+`apps/acm/submariner/values.yaml:8` asks for two Submariner gateways on every
+managed cluster, the hub (`local-cluster`) included, through the
+`SubmarinerConfig`'s `gatewayConfig.gateways`
+(`apps/acm/submariner/templates/submariner.yaml:23-24`). Only the add-on's
+cloud-prepare step acts on it, and that needs a cloud credentials Secret the
+library never gives it: it logs `no CredentialsSecret` and labels nothing.
+The library's labelling Policy,
+`cluster-config/chart/templates/submariner-gateway-nodes.yaml:50-58`, labels
+every node whose only role is `worker`, but `cluster-config` is selected only by
+the lab root `bootstrap/applicationset.yaml:37`, not by the dedicated-hub root
+(L10). Its
+[site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide)
+say to label two workers `submariner.io/gateway=true` on each cluster by hand.
+A cluster without the label runs no Submariner gateway, so the sites can't reach
+the hub's services over Submariner, such as `limitador-redis` and the MaaS
+database.
+
+**Template:** `scripts/gateway-nodes.sh` labels them. `make bootstrap` runs it
+on the hub before its first write, `make install` on every run, and
+`make site-import CONFIRM=1` on the site before the import. When fewer than two
+nodes carry `submariner.io/gateway=true`, it labels Ready, schedulable workers
+outside the control plane, by name: nodes whose only role is `worker` first,
+GPU nodes last, and it says when it uses a GPU node. It never removes or changes
+a label. A GPU or infra node it falls back to may carry taints the gateway pods
+don't tolerate; check that the gateway pods run there. On a compact cluster or
+single-node OpenShift it labels nothing and stops with the `oc label` command
+to run, except on an all-in-one (`sites: []`), which has no tunnel to carry
+until a second cluster joins, where it only warns; single-node OpenShift needs one
+gateway node. `make site-check` reports what the import would label, or
+`MISSING` with that command.
+
+**Fix: upstream PR** that labels the gateway nodes on every root the library
+ships, such as by moving the `submariner-gateway-nodes` Policy out of
+`cluster-config` into `apps/acm`, choosing two nodes rather than every worker.

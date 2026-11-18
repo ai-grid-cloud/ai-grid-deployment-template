@@ -6,7 +6,8 @@
 # doesn't run the platform's cert-manager operator: on the library's main
 # branch OpenShift AI's chart then adds a second OperatorGroup in
 # cert-manager-operator and OLM fails the operator (TooManyOperatorGroups;
-# docs/upstream-main-limits.md).
+# docs/upstream-main-limits.md), and that the import can give the site its two
+# Submariner gateway nodes (scripts/gateway-nodes.sh --dry-run).
 #
 #   scripts/site-check.sh [NAME]     NAME defaults to the only site in clusters.yaml
 #
@@ -36,5 +37,13 @@ elif other=$(tr ' ' '\n' <<<"$ogs" | grep -vx -e "$chart_og" -e '' | head -n1) &
   rc=1
 else
   printf '%-8s %-40s %s\n' OK "cert-manager OperatorGroup" "none of the platform's"
+fi
+# Its Submariner gateway nodes: make site-import labels two workers, so this
+# fails only when it couldn't (a compact cluster or single-node OpenShift).
+if gw=$("$here/gateway-nodes.sh" --dry-run "$name" 2>&1); then
+  printf '%-8s %-40s %s\n' OK "Submariner gateway nodes" "${gw#"$name: "}"
+else
+  printf '%-8s %-40s %s\n' MISSING "Submariner gateway nodes" "${gw#error: }"
+  rc=1
 fi
 exit "$rc"

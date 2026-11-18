@@ -35,7 +35,8 @@
 #                    site. The ready step then runs scripts/ready-check.sh --in-use.
 #   bootstrap        scripts/bootstrap-hub.sh, unless Application deployment-root
 #                    and the hub pull secret it seeds last
-#                    (rhoai-prerequisites/rhoai-quay-pull-secret) both exist;
+#                    (rhoai-prerequisites/rhoai-quay-pull-secret) both exist,
+#                    when it runs only scripts/gateway-nodes.sh for the hub;
 #                    then gate hub-root: deployment-root Synced at the pushed commit
 #   acm              gate hub-acm: the MultiClusterHub is Running
 #   console-secrets  scripts/create-console-secrets.sh, on every run: it's
@@ -48,7 +49,8 @@
 # chart's internal certificate, and the library sets its hostname,
 # maas.<apps domain> (docs/upstream-main-limits.md).
 # Then for each site in clusters.yaml order:
-#   site NAME        scripts/site-check.sh NAME, scripts/import-site.sh NAME --yes,
+#   site NAME        scripts/site-check.sh NAME, scripts/import-site.sh NAME --yes
+#                    (which labels the site's Submariner gateway nodes),
 #                    then gate site-NAME-import: ManagedCluster NAME available
 # then gate hub-apps-final: every hub Application Synced and Healthy, except
 # those waiting for a site. Last:
@@ -235,6 +237,14 @@ step_bootstrap() {
   if exists applications.argoproj.io deployment-root -n openshift-gitops &&
       exists secret rhoai-quay-pull-secret -n rhoai-prerequisites; then
     echo "deployment-root and the hub pull secret exist: the hub is bootstrapped."
+    # bootstrap-hub.sh labels them; a hub bootstrapped before it did gets them here.
+    # An all-in-one (sites: []) has no tunnel to carry, so there it only warns.
+    if [ -n "$(site_names)" ]; then
+      run_step bootstrap gateway-nodes.sh "$(hub_name)"
+    else
+      "$here/gateway-nodes.sh" "$(hub_name)" ||
+        echo "warning: no Submariner gateway nodes on the hub; an all-in-one needs them only once a second cluster joins" >&2
+    fi
   else
     run_step bootstrap bootstrap-hub.sh
   fi

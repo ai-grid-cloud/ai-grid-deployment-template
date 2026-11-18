@@ -21,8 +21,10 @@ worker nodes or the network.
 - [ ] **No platform cert-manager Operator on a site.** A site whose namespace `cert-manager-operator` has an
   OperatorGroup other than `openshift-cert-manager-operator` can't join the grid yet: the install's `site` step stops
   on it ([limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values)).
-- [ ] **Two worker nodes on each cluster** for Submariner's gateways. On a compact cluster or single-node OpenShift,
-  you label two nodes `submariner.io/gateway=true` by hand, as the library's
+- [ ] **Two worker nodes outside the control plane on each cluster** for Submariner's gateways. The install labels two
+  of them `submariner.io/gateway=true` on the hub and on each site, preferring nodes without GPUs
+  ([limits of `main`, L21](../upstream-main-limits.md#l21-nothing-labels-the-submariner-gateway-nodes)). On a compact
+  cluster or single-node OpenShift it stops and prints the `oc label node` command to run, as the library's
   [site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide) describe.
 - [ ] **Network:** each cluster has a load-balancer provider for Submariner's LoadBalancer Service, each cluster
   reaches the other clusters' load balancers on UDP 4500 and 4490, and every router name answers `AAAA` queries
@@ -273,7 +275,8 @@ You now have:
 
 For a test, one cluster can be both the hub and a `combined` site. It needs everything a hub and a site need,
 including no platform cert-manager Operator, so install it with `hubCertManager=library`. The network items about
-reaching the other clusters' load balancers don't apply.
+reaching the other clusters' load balancers don't apply. The Submariner gateway labels are needed only once a second
+cluster joins, so on a compact cluster the install warns that it can't label them and continues.
 
 1. In `.config/clusters.yaml`, give the hub's `api` and login, and write `sites: []` with no entries.
 2. Run `make install`, not `make install HUB_ONLY=1`: `HUB_ONLY=1` skips the provider-admin token and the ready

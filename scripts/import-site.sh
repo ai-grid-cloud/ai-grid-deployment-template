@@ -2,8 +2,10 @@
 # Import a site from clusters.yaml into the hub's ACM, with the library's
 # import script at your pin (docs/acm/cluster-onboarding/import-managed-cluster.sh).
 # A preview by default: it prints the library script's summary and changes
-# nothing. With --yes (make site-import CONFIRM=1) it imports. A site already
-# joined and available on the hub is left alone.
+# nothing. With --yes (make site-import CONFIRM=1) it labels two of the site's
+# worker nodes submariner.io/gateway=true for Submariner's gateways
+# (scripts/gateway-nodes.sh), then imports. A site already joined and available
+# on the hub is left alone, apart from those labels.
 #
 #   scripts/import-site.sh [NAME] [--yes] [other flags of the library script]
 #
@@ -16,6 +18,13 @@ clusters_load "$here/.."
 if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then name=$(site_name "$1"); shift; else name=$(site_name); fi
 hub=$(hub_name)
 cluster_login_ok "$hub"; cluster_login_ok "$name"
+# The site's Submariner gateway nodes: nothing in the library labels them on this
+# template's root (scripts/gateway-nodes.sh). Labelled before the import, and
+# again for a site already imported; the preview only says what it would label.
+case " $* " in
+  *" --yes "*) "$here/gateway-nodes.sh" "$name" ;;
+  *) "$here/gateway-nodes.sh" --dry-run "$name" || true ;;
+esac
 # Already joined and available on this hub: nothing for the import to do.
 state=$(KUBECONFIG=$(cluster_kubeconfig "$hub") oc get managedcluster "$name" -o jsonpath='{.status.conditions[?(@.type=="ManagedClusterJoined")].status} {.status.conditions[?(@.type=="ManagedClusterConditionAvailable")].status}' 2>/dev/null || true)
 if [ "$state" = "True True" ]; then echo "$name is already imported; nothing to do."; exit 0; fi

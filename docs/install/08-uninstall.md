@@ -30,6 +30,8 @@ The uninstall leaves these on every cluster on purpose:
 - **The cluster pull secret's `quay.io/rhoai` and stage entries, and the image mirror.** A reinstall delivers the same
   again, and removing a mirror drains every node. Remove them by hand if you won't reinstall.
 - **The OAuth configuration and ClusterIssuers.** The uninstall never edits them.
+- **The `submariner.io/gateway=true` node labels** that `make bootstrap` and `make site-import` added. A reinstall
+  uses the same nodes. Remove them with `oc label node NODE submariner.io/gateway-` if you won't reinstall.
 - **The protected namespaces and operators:** the namespaces `keycloak`, `cert-manager`, `cert-manager-operator`,
   `openshift-cert-manager-operator`, `openshift-nfd`, `nvidia-gpu-operator`, `openshift-config` and
   `openshift-authentication`, and the operator packages `rhbk-operator`, `openshift-cert-manager-operator`, `nfd` and

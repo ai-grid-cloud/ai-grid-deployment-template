@@ -13,8 +13,9 @@ Bootstrap the hub:
 make bootstrap
 ```
 
-It checks your deployment, your registry logins and the hub, then installs OpenShift GitOps, applies `root/` once,
-and seeds the registry logins that a Policy copies to every site. It reads the logins from the same auth file as
+It checks your deployment, your registry logins and the hub, labels two of the hub's worker nodes for Submariner's
+gateways, then installs OpenShift GitOps, applies `root/` once, and seeds the registry logins that a Policy copies to
+every site. It reads the logins from the same auth file as
 `make prereqs`, or from `QUAY_AUTH_FILE=AUTH_FILE` if you add it, and never prints them. If your auth file is refused,
 nothing on the hub has changed yet. It stops if the auth file has no `registry.stage.redhat.io` login, because sites
 pull model runtimes only from there ([limits of `main`, L20](../upstream-main-limits.md#l20-model-runtimes-pull-only-from-registrystageredhatio)).
@@ -39,7 +40,14 @@ MISSING  object storage                           Secret open-cluster-management
 ```
 
 `MISSING object storage` is expected: ODF object storage installs it on the next page. For any other `MISSING` line, see
-[troubleshooting](troubleshooting.md#the-hub-check-prints-missing). You should see `Bootstrapped.` at the end.
+[troubleshooting](troubleshooting.md#the-hub-check-prints-missing).
+
+Next it gives the hub its Submariner gateway nodes, because nothing in the library labels them
+([limits of `main`, L21](../upstream-main-limits.md#l21-nothing-labels-the-submariner-gateway-nodes)). It prints a
+line similar to `hub: labelled worker-a, worker-b submariner.io/gateway=true for Submariner's gateways.`, or `already
+labelled` on a hub that has two. If it stops with `needs two Submariner gateway nodes` (or `one`, on single-node OpenShift), the hub has too few workers
+outside the control plane, as on a compact cluster: run the `oc label node` command it prints, then run
+`make bootstrap` again. You should see `Bootstrapped.` at the end.
 
 ## 2. Check that Argo CD follows your repository
 
@@ -58,6 +66,7 @@ You should see `deployment-root: Synced`, followed by its health, under the hub'
 ## Checkpoint
 
 - `make bootstrap` printed `Bootstrapped.`, and its hub check showed `OK` for everything except object storage.
+- Two of the hub's nodes carry `submariner.io/gateway=true`.
 - `deployment-root` is `Synced`, and the root ApplicationSet `apps` reports no error.
 
 Next: [4. Install the hub components](04-hub-components.md)
