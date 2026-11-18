@@ -230,11 +230,13 @@ run the command again with `KEYCLOAK_OVERLAY_CHANGE=1`, such as `make inputs KEY
 `hubCertManager` chooses which cert-manager the hub runs:
 
 - `library`: the hub installs the library's cert-manager, as upstream's root does. Use it on a hub that doesn't
-  run cert-manager yet, and always for a hub that you'll also add as a site.
-- `platform`: the hub already runs the platform's cert-manager, such as a demo.redhat.com cluster's. Such a hub
-  can't also be a site ([limits](../upstream-main-limits.md#l17-the-hubs-cert-manager-is-the-librarys-or-the-platforms-not-both)).
-- `site`: a hub you installed with `library` and are about to add as a site: OpenShift AI's chart then owns its
-  cert-manager ([the hub as a site](06-join-grid.md#the-hub-as-a-site-all-in-one)).
+  run cert-manager yet.
+- `platform`: the hub already runs the platform's cert-manager, such as a demo.redhat.com cluster's
+  ([limits](../upstream-main-limits.md#l17-the-hubs-cert-manager-is-the-librarys-or-the-platforms-not-both)).
+
+A third value, `site`, was for a hub that is also a site (all-in-one), which isn't supported
+([limits](../upstream-main-limits.md#l18-all-in-one-unsupported)). The root still accepts it, so an existing
+deployment's root renders, but `make inputs` and `make check` warn about it. Don't choose it.
 
 To check, run `oc get operatorgroups -n cert-manager-operator` on the hub. An OperatorGroup other than
 `openshift-cert-manager-operator` is the platform's. If you leave `library` on such a hub, `make install` stops and

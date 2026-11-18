@@ -11,8 +11,9 @@ You need the following. In step 6, `make prereqs` checks the clusters and logins
 worker nodes or the network.
 
 - [ ] **A hub and one or more sites on OpenShift 4.21 or later,** with nothing of AI Grid on them, and the API URL
-  and a `cluster-admin` login for each: a token, or a username and password. For a test, one cluster can be both
-  ([All-in-one: one cluster](#all-in-one-one-cluster)).
+  and a `cluster-admin` login for each: a token, or a username and password. Two clusters is the supported minimum:
+  a hub that is also a site (all-in-one) isn't supported
+  ([limits of `main`, L18](../upstream-main-limits.md#l18-all-in-one-unsupported)).
 - [ ] **A role in mind for each site:** `combined` (tenants enter and models run), `ingress` (tenants enter, no
   models) or `inference` (models only). At least one site is `ingress` or `combined`. You choose each site's role
   and location after the install, when you add it to the grid in the provider console; `.config/clusters.yaml` has
@@ -132,8 +133,10 @@ Tell the install which clusters and repositories to use, and give it the credent
    every `REQUIRED-` value: `make prereqs` and `make login` both name each one you leave.
 
    - **`hub` and `sites`:** replace each `REQUIRED-` value, and add an entry under `sites:` for each site, with
-     its `name` and `api`; for an [all-in-one](#all-in-one-one-cluster), write `sites: []`. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't
-     change it once the site is imported. The hub's name is always `hub`. The file says only how to reach each
+     its `name` and `api`. List at least one site: `make install` stops when `sites:` is empty, because a hub that is
+     also a site isn't supported. Only `make install HUB_ONLY=1` accepts `sites: []`, for a hub whose sites you add
+     later. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't change it once the
+     site is imported. The hub's name is always `hub`. The file says only how to reach each
      cluster: no role and no location. If a cluster's API or apps certificate isn't publicly trusted, such as a
      self-signed one, its entry also needs a `ca:`: see step 6.
    - **`catalog`:** `url` is the URL of the catalog repository you created in step 2, such as
@@ -202,8 +205,7 @@ Tell the install which clusters and repositories to use, and give it the credent
 
    The install also writes `hubCertManager=library`: the hub installs the library's cert-manager. If the hub already runs
    the platform's cert-manager, set `hubCertManager=platform` the same way; the install stops and says so if you
-   don't. Such a hub can't also be a site, so it can't be an
-   [all-in-one](#all-in-one-one-cluster).
+   don't.
 
    Never paste a secret into a chat, a command line or a file you commit.
 
@@ -300,31 +302,6 @@ You now have:
   and no OpenShift AI on it;
 - no organizations, models or subscriptions.
 
-## All-in-one: one cluster
-
-For a test, one cluster can be both the hub and a `combined` site. It needs everything a hub and a site need,
-including no platform cert-manager Operator, so install it with `hubCertManager=library`. The network items about
-reaching the other clusters' load balancers don't apply. The Submariner gateway labels are needed only once a second
-cluster joins, so on a compact cluster the install warns that it can't label them and continues.
-
-1. In `.config/clusters.yaml`, give the hub's `api` and login, and write `sites: []` with no entries.
-2. Run `make install`, not `make install HUB_ONLY=1`: `HUB_ONLY=1` skips the provider-admin token and the ready
-   check. With no sites, the install imports nothing, and the ready check reports the hub Applications that wait for a
-   site as `WARN`.
-3. Before you add the hub to the grid, set `hubCertManager=site` in `root/inputs.env`, commit and push it, and wait
-   until `make status` shows `deployment-root` synced. OpenShift AI's chart then takes over the cert-manager the hub
-   already runs, instead of two Applications managing it
-   ([limits of `main`, L17](../upstream-main-limits.md#l17-the-hubs-cert-manager-is-the-librarys-or-the-platforms-not-both)).
-4. Add the hub to the grid: in the provider console, click **Clusters**, then **Add to AI Grid** for
-   `local-cluster`, and choose role **combined** and a location.
-
-The hub is `local-cluster` in ACM and in the console. With no site in `clusters.yaml`, `make status`,
-`make site-status` and `make tenant-call` use the hub, and `sites[]` in `.install/outputs.json` names the hub with
-`acmName` `local-cluster`. `make site-check` and `make site-import` are for separate sites only. Such a hub has no
-usage logs, and its Limitador keeps its counters in memory
-([limits of `main`, L18](../upstream-main-limits.md#l18-a-hub-that-is-also-a-site-has-no-usage-logs)). Page 6 has
-[the same steps](06-join-grid.md#the-hub-as-a-site-all-in-one).
-
 ## If it stops
 
 When a step fails, `make install` prints why, then stops with a line like the following:
@@ -391,7 +368,7 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 | `hub.lokiStack` | The usage-log LokiStack, `redhat-ods-monitoring/usage-logs` |
 | `providerAdminTokenFile` | The path of the provider-admin token file, never the token |
 | `library.url`, `library.revision`, `library.commit` | The library; the branch you follow or the commit you pin; and the commit that revision was at when the check ran (`null` when the library couldn't be reached) |
-| `sites[]` | For each site: `name`, `api`, `appsDomain`, and `acmName`, its ManagedCluster's name. On an [all-in-one](#all-in-one-one-cluster), the hub, with `acmName` `local-cluster` |
+| `sites[]` | For each site: `name`, `api`, `appsDomain`, and `acmName`, its ManagedCluster's name |
 
 The provider-admin token is in `.config/provider-admin-token`. It belongs to ServiceAccount
 `ai-grid-test/provider-admin`, which is bound to the console's ClusterRole `ai-grid-provider-admin`, so a test suite
@@ -467,6 +444,9 @@ the grid in the console, as in [Add a site to the grid](#add-a-site-to-the-grid)
   ```sh
   make install HUB_ONLY=1
   ```
+
+  This is the only install that accepts `sites: []`. Add the sites to `.config/clusters.yaml` later, then run
+  `make install` again.
 
 ## An untrusted cluster certificate
 

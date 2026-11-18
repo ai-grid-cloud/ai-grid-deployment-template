@@ -122,7 +122,7 @@ The script refuses, and deletes nothing, in these cases:
   cluster.
 - A login isn't `cluster-admin`, or is only through objects the uninstall deletes.
 - The site's ACM agent says it's a different cluster.
-- The site is `local-cluster`: a hub that is also a site isn't supported yet.
+- The site is `local-cluster`: a hub that is also a site isn't supported.
 
 ## 3. Uninstall each site
 

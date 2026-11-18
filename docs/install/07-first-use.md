@@ -17,7 +17,8 @@ Steps 2 to 4 use the console. To script them instead, send each request with
    You should see the **AI Grid** page, with your user name followed by `(provider admin)`.
 
 2. Click **Clusters**. You should see your site with AI Grid status **Provisioned**, its role and its location. The
-   hub (`local-cluster`) shows **Not added**, which is expected.
+   hub (`local-cluster`) shows **Not added**, which is expected: don't add it, because a hub that is also a site
+   isn't supported.
 
 The **Monitoring** page shows the hub's dashboards. If it can't load them, see
 [troubleshooting](troubleshooting.md#the-monitoring-page-cant-load-dashboards).

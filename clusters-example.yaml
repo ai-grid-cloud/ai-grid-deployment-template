@@ -22,8 +22,8 @@ apiVersion: ai-grid.dev/v1alpha1   # required header: the scripts parse this fil
 kind: Clusters
 
 # The ACM hub: runs Argo CD, ACM and the shared services. The scripts and the
-# guide call it "hub". It runs no models unless it's also a site: in an
-# all-in-one, see sites: below.
+# guide call it "hub". It runs no models: a hub is never a site (all-in-one
+# isn't supported; docs/upstream-main-limits.md L18).
 hub:
   api: REQUIRED-hubAPIURL          # from oc whoami --show-server, e.g. https://api.hub.example.com:6443
   # Optional, in either file: the CAs that the cluster's API certificate and its
@@ -47,10 +47,9 @@ hub:
 # The clusters the hub imports into ACM. You add each one to the grid, and
 # choose its role and location, in the provider console.
 #
-# All-in-one (one cluster that is both hub and site): write "sites: []" and
-# remove the entry below. After make install, set hubCertManager=site, then
-# add the hub to the grid in the provider console: Add to AI Grid on
-# local-cluster, role combined (install guide, page 9, "All-in-one: one cluster").
+# List at least one site: make install stops when sites: is empty. Only
+# make install HUB_ONLY=1 accepts "sites: []", for a hub whose sites you add
+# later.
 sites:
   - name: REQUIRED-siteName        # its ACM name, a DNS label, e.g. site-1; fixed once imported
     api: REQUIRED-siteAPIURL       # e.g. https://api.site-1.example.com:6443
