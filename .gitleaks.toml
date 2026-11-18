@@ -1,0 +1,32 @@
+# Secret-scanner allowlist for fake values in this repository's history.
+#
+# The tests now build their fake credentials at runtime, so the current tree
+# holds no secret-shaped literal. Older commits still hold the fixed fake values
+# listed here. Each entry matches only those values; none of them is, or was, a
+# real credential. Add only fake values here, never anything real.
+#
+# [extend] keeps gitleaks' default rules: without it, this file would replace
+# them and the scan would find nothing. gitleaks 7 ignores [extend], so pass it
+# the default config explicitly when you also pass this file.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake test values from older commits"
+regexes = [
+  # OpenShift-token-shaped test values
+  '''sha256~(SENTINEL_TOKEN_VALUE|SENTINEL|SECRET_do_not_print_4242|OTHER|EXPIRED|LEGACY|FAKE_console_token|fixture)(?:$|[^\w-])''',
+  '''sha256%7ESENTINEL(?:$|[^\w-])''',
+  # fixed "never printed" test values
+  '''\b(FAKE_TOKEN|SECRET)_do_not_print(_4242|_424242|_[cdh])?(?:$|[^\w-])''',
+  '''\bSENTINEL(_ADMIN_PASSWORD|_CATALOG_TOKEN|-provider-admin-token|-deploy-token|-default-token)(?:$|[^\w-])''',
+  '''\bghp_SENTINEL(?:$|[^\w-])''',
+  '''PW~(SENTINEL pass|WRONG)''',
+  '''\bFAKE_(key|token|password|client_secret|console_token)(?:$|[^\w-])''',
+  '''\bdummy-client-secret(?:$|[^\w-])''',
+  # base64 of two fake values (stub-user:FAKE_TOKEN_do_not_print_424242 and
+  # FAKE_client_secret), split by empty groups so this file doesn't hold them
+  '''\bc3R1Yi11c2Vy(?:)OkZBS0VfVE9LRU5f(?:)ZG9fbm90X3ByaW50XzQyNDI0Mg==''',
+  '''\bRkFLRV9j(?:)bGllbnRfc2VjcmV0(?:$|[^\w-])''',
+]

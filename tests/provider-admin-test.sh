@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 SRC=$(pwd -P)
 T=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$T"' EXIT
 total=0 fails=0
+SA_TOKEN="fake-sa-$RANDOM$RANDOM"; export SA_TOKEN   # the stub oc's token, built at runtime
 
 run() { # runs provider-admin.sh in $D with the stubs reading $W; sets rc and out
   out=$(env PATH="$T/bin:$PATH" STUB_DIR="$W" "$D/scripts/provider-admin.sh" 2>&1) && rc=0 || rc=$?
@@ -16,7 +17,7 @@ run() { # runs provider-admin.sh in $D with the stubs reading $W; sets rc and ou
 t() { # name want_rc expect_grep [check...]: each check is a command that must succeed
   local name=$1 want=$2 expect=$3; shift 3; local check ok=1
   total=$((total+1))
-  if [ "$rc" = "$want" ] && grep -qE -- "$expect" <<<"$out" && ! grep -q SENTINEL <<<"$out"; then
+  if [ "$rc" = "$want" ] && grep -qE -- "$expect" <<<"$out" && ! grep -qF "$SA_TOKEN" <<<"$out"; then
     for check in "$@"; do eval "$check" || { ok=0; echo "      check failed: $check"; }; done
   else ok=0; fi
   if [ "$ok" = 1 ]; then echo "   ok   $name"
@@ -33,7 +34,7 @@ case "$a" in
     [ -f "$d/no-clusterrole" ] && { echo 'Error from server (NotFound): clusterroles "ai-grid-provider-admin" not found' >&2; exit 1; }
     echo clusterrole.rbac.authorization.k8s.io/ai-grid-provider-admin ;;
   *" apply "*) cat >> "$d/applied.yaml"; echo "applied" ;;
-  *" create token provider-admin "*) echo SENTINEL ;;
+  *" create token provider-admin "*) echo "$SA_TOKEN" ;;
   *" get route "*)
     if [ -f "$d/no-route" ]; then
       case "$a" in *"items[0]"*) echo 'error: error executing jsonpath "{.items[0].spec.host}": array index out of bounds' >&2; exit 1 ;; esac
@@ -66,13 +67,13 @@ mode() { stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1"; }
 
 W="$T/first"; mkdir -p "$W"; run
 t "creates SA, binding and token file" 0 "console accepted the provider-admin token" \
-  'grep -qx SENTINEL "$TOK"' '[ "$(mode "$TOK")" = 600 ]' \
+  'grep -qxF "$SA_TOKEN" "$TOK"' '[ "$(mode "$TOK")" = 600 ]' \
   'grep -q "kind: Namespace" "$W/applied.yaml" && grep -q "name: ai-grid-test$" "$W/applied.yaml"' \
   'grep -q "kind: ServiceAccount" "$W/applied.yaml" && grep -q "name: provider-admin$" "$W/applied.yaml"' \
   'grep -q "name: ai-grid-test-provider-admin$" "$W/applied.yaml" && grep -q "name: ai-grid-provider-admin$" "$W/applied.yaml"' \
   'grep -q "create token provider-admin -n ai-grid-test --duration=168h" "$W/argv.log"' \
-  'grep -q "Authorization: Bearer SENTINEL" "$W/headers"' \
-  '! grep -q SENTINEL "$W/curl.log"' '! grep -qE -- " (-k|--insecure) " "$W/curl.log"' \
+  'grep -qF "Authorization: Bearer $SA_TOKEN" "$W/headers"' \
+  '! grep -qF "$SA_TOKEN" "$W/curl.log"' '! grep -qE -- " (-k|--insecure) " "$W/curl.log"' \
   'grep -q "https://console.apps.hub.example.com/ai_grid.v1.Clusters/List" "$W/curl.log"' \
   'grep -q "Connect-Protocol-Version: 1" "$W/curl.log"' \
   '[ -s "$W/curl.log" ] && [ -z "$(grep -v -e "--max-time 20" "$W/curl.log")" ]'
@@ -87,7 +88,7 @@ t "call refused: stops with the code, saves no token" 1 "HTTP 401.*didn't accept
 
 W="$T/refused-old"; mkdir -p "$W"; printf 401 > "$W/code"; printf 'OLD\n' > "$TOK"; run
 t "call refused: the previous token stays as it was" 1 "HTTP 401" \
-  'grep -qx OLD "$TOK"' '! grep -q SENTINEL "$TOK"'
+  'grep -qx OLD "$TOK"' '! grep -qF "$SA_TOKEN" "$TOK"'
 
 W="$T/noroute"; mkdir -p "$W"; touch "$W/no-route"; rm -f "$TOK"; run
 t "no console Route: stops with the friendly message" 1 "no console Route on hub yet" \
@@ -101,7 +102,7 @@ W="$T/rerun"; mkdir -p "$W"; run; run
 t "rerun: apply is idempotent" 0 "console accepted" \
   '[ "$(grep -c "^apply " "$W/argv.log")" -ge 2 ]' \
   '! grep -qE "create (namespace|ns|serviceaccount|sa|clusterrolebinding)( |$)" "$W/argv.log"' \
-  'grep -qx SENTINEL "$TOK"'
+  'grep -qxF "$SA_TOKEN" "$TOK"'
 
 # The hub's ca: reaches the console call: a CA file, or ca: ignore with its warning.
 mkdir -p "$D/certs"; : > "$D/certs/hub.pem"

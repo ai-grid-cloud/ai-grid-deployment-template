@@ -5,7 +5,11 @@ cd "$(dirname "$0")/.."
 SRC=$(pwd -P)
 T=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$T"' EXIT
 total=0 fails=0
-SENTINEL='sha256~SENTINEL'
+# Fake credentials are built at runtime, so no literal in this file looks like
+# a secret. The stubs read them from the environment.
+SENTINEL=$(printf '%s~%s' sha256 "fake-login-$RANDOM$RANDOM")
+PW=$(printf '%s~%s pass' pw "fake-$RANDOM")   # a space, as a password may have
+export SENTINEL PW
 
 # The stub oc logs its arguments. whoami answers admin only when $KUBECONFIG
 # holds the token $STUB_TOKEN (default the sentinel), as a cluster that accepts
@@ -16,12 +20,12 @@ cat > "$T/bin/oc" <<'STUB'
 echo "$*" >> "$STUB_DIR/argv.log"; a=" $* "
 case "$a" in
   *" whoami "*) [ -z "${STUB_X509:-}" ] || { echo "error: tls: failed to verify certificate: x509: certificate signed by unknown authority" >&2; exit 1; }
-               grep -qF "token: '${STUB_TOKEN:-sha256~SENTINEL}'" "${KUBECONFIG:-/dev/null}" 2>/dev/null ||
-               grep -qxF "    token: ${STUB_TOKEN:-sha256~SENTINEL}" "${KUBECONFIG:-/dev/null}" 2>/dev/null && echo admin ||
+               grep -qF "token: '${STUB_TOKEN:-$SENTINEL}'" "${KUBECONFIG:-/dev/null}" 2>/dev/null ||
+               grep -qxF "    token: ${STUB_TOKEN:-$SENTINEL}" "${KUBECONFIG:-/dev/null}" 2>/dev/null && echo admin ||
                 { echo "error: You must be logged in to the server (Unauthorized)" >&2; exit 1; } ;;
   *" login "*) echo "stub oc: login $*"; echo "$KUBECONFIG" >> "$STUB_DIR/login-kubeconfig.log"
                IFS= read -r -t 1 l && echo "$l" >> "$STUB_DIR/login-stdin.log"
-               printf 'apiVersion: v1\nkind: Config\nusers:\n- name: x\n  user:\n    token: sha256~SENTINEL\n' > "$KUBECONFIG" ;;
+               printf 'apiVersion: v1\nkind: Config\nusers:\n- name: x\n  user:\n    token: %s\n' "$SENTINEL" > "$KUBECONFIG" ;;
   *" config view --raw --flatten "*) echo "# flattened"; cat "$KUBECONFIG" ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
@@ -43,9 +47,9 @@ case "$a" in
   *"/.well-known/oauth-authorization-server "*)
     echo '{"issuer":"https://oauth.apps.example.com","authorization_endpoint":"https://oauth.apps.example.com/oauth/authorize"}' ;;
   *"/oauth/authorize?"*)
-    want=$(printf 'user = "admin:%s"' "${STUB_PASSWORD_ESCAPED:-${STUB_PASSWORD:-PW~SENTINEL pass}}")
+    want=$(printf 'user = "admin:%s"' "${STUB_PASSWORD_ESCAPED:-${STUB_PASSWORD:-$PW}}")
     if grep -qxF "$want" <<<"$in" && [[ "$a" == *"X-CSRF-Token: 1"* ]]; then
-      printf 'HTTP/1.1 302 Found\r\nLocation: https://oauth.apps.example.com/oauth/token/implicit#access_token=sha256%%7ESENTINEL&expires_in=86400&scope=user%%3Afull&token_type=Bearer\r\n\r\n'
+      printf 'HTTP/1.1 302 Found\r\nLocation: https://oauth.apps.example.com/oauth/token/implicit#access_token=%s&expires_in=86400&scope=user%%3Afull&token_type=Bearer\r\n\r\n' "${SENTINEL//\~/%7E}"
     else printf 'HTTP/1.1 401 Unauthorized\r\n\r\n'; fi ;;
   *) echo "stub curl: unexpected: $*" >&2; exit 2 ;;
 esac
@@ -128,8 +132,8 @@ run -- --non-interactive hub
 t "token file ending in CRLF: works" working_kubeconfig hub https://api.hub.example.com:6443
 
 # The private .config/clusters.yaml with each cluster's credentials inline.
-PW='PW~SENTINEL pass'
-OTHER_TOKEN=sha256~OTHER EXPIRED_TOKEN=sha256~EXPIRED
+OTHER_TOKEN=$(printf '%s~%s' sha256 "fake-other-$RANDOM") EXPIRED_TOKEN=$(printf '%s~%s' sha256 "fake-expired-$RANDOM")
+LEGACY_TOKEN=$(printf '%s~%s' sha256 "fake-legacy-$RANDOM") WRONG_PW=$(printf '%s~%s' pw "fake-wrong-$RANDOM")
 private() { # "NAME: {credentials}"...: writes $D/.config/clusters.yaml (mode 600), the same clusters with those credentials inline
   local creds; mkdir -p "$D/.config"
   creds=$({ printf 'apiVersion: v1\nkind: ConfigMap\nmetadata: {name: c}\ndata:\n'; printf '  %s\n' "$@"; } |
@@ -154,7 +158,7 @@ new_repo; private "hub: {token: '$OTHER_TOKEN'}"
 run AI_GRID_TOKEN_HUB="$SENTINEL" -- --non-interactive hub
 t "AI_GRID_TOKEN_HUB beats hub.token" working_kubeconfig hub https://api.hub.example.com:6443
 
-new_repo; private "hub: {token: '$SENTINEL'}"; mkdir -p "$D/.config/hub"; printf 'sha256~LEGACY\n' > "$D/.config/hub/token"
+new_repo; private "hub: {token: '$SENTINEL'}"; mkdir -p "$D/.config/hub"; printf '%s\n' "$LEGACY_TOKEN" > "$D/.config/hub/token"
 run -- --non-interactive hub
 t "hub.token beats the legacy .config/hub/token" working_kubeconfig hub https://api.hub.example.com:6443
 
@@ -185,9 +189,9 @@ run STUB_X509=1 -- --non-interactive hub
 t "a certificate error with the token: no fall-through to the password" \
   bash -c '[ "$0" = 1 ] && grep -q "certificate problem" <<<"$1" && ! grep -q "^curl" "$2/argv.log"' "$rc" "$out" "$W"
 
-new_repo; private "hub: {username: admin, password: 'PW~WRONG'}"
+new_repo; private "hub: {username: admin, password: '$WRONG_PW'}"
 run -- --non-interactive hub
-bad_pw() { [ "$rc" = 1 ] && grep -q "hub: the OAuth server refused admin" <<<"$out" && no_secret PW~WRONG; }
+bad_pw() { [ "$rc" = 1 ] && grep -q "hub: the OAuth server refused admin" <<<"$out" && no_secret "$WRONG_PW"; }
 t "wrong password: stops, naming the user, not the password" bad_pw
 
 new_repo; private "hub: {username: admin, password: 'q\"u\\ote'}"
@@ -324,7 +328,7 @@ t "  ... with ca: ignore: kept" bash -c '[ "$0" = 0 ] && grep -q "hub: already l
 ca_repo; insecure_kc
 run -- hub <<<"y"
 web_fresh() { [ "$rc" = 0 ] && [ ! -s "$W/login-stdin.log" ] && [ "$(cat "$W/login-kubeconfig.log")" != "$(k)" ] &&
-  mode600 "$(k)" && ! grep -q insecure "$(k)" && grep -q SENTINEL "$(k)"; }
+  mode600 "$(k)" && ! grep -q insecure "$(k)" && grep -qF "$SENTINEL" "$(k)"; }
 t "oc login --web: no stdin, a fresh kubeconfig moved into place" web_fresh
 
 # M6: a certificate error on a cluster that has a ca: already says FORCE=1.

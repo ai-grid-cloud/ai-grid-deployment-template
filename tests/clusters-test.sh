@@ -152,9 +152,10 @@ fi
 # console-call.sh signs in with the hub login's token: a stub oc answers the
 # token and the Route, a stub curl logs its arguments and the header file.
 mkdir -p "$T/cbin"; : > "$d/.config/hub/kubeconfig"
+CONSOLE_TOKEN=$(printf '%s~%s' sha256 "fake-console-$RANDOM$RANDOM"); export CONSOLE_TOKEN   # built at runtime, not a literal
 cat > "$T/cbin/oc" <<'STUB'
 #!/bin/bash
-case "$*" in whoami) echo admin ;; "whoami -t") [ -f "$STUB_DIR/no-token" ] && exit 1; echo sha256~FAKE_console_token ;; *"get route"*) echo console.apps.hub.example.com ;; esac
+case "$*" in whoami) echo admin ;; "whoami -t") [ -f "$STUB_DIR/no-token" ] && exit 1; echo "$CONSOLE_TOKEN" ;; *"get route"*) echo console.apps.hub.example.com ;; esac
 STUB
 cat > "$T/cbin/curl" <<'STUB'
 #!/bin/bash
@@ -165,8 +166,8 @@ echo '{"object":{"id":"org-1"}}' > "$out"; cat "$STUB_DIR/code" 2>/dev/null || p
 STUB
 chmod +x "$T/cbin/oc" "$T/cbin/curl"; : > "$T/curl.log"
 t "console-call calls the console's Route" 0 "HTTP 200" env PATH="$T/cbin:$PATH" "$d/scripts/console-call.sh" ai_grid.v1.Clusters/List
-t "  ... with the hub login's token in a header file" 0 "Authorization: Bearer sha256~FAKE_console_token" cat "$T/curl.log"
-t "  ... never on the command line" 1 "^0$" bash -c 'grep "^curl " "$0" | grep -c FAKE_console_token' "$T/curl.log"
+t "  ... with the hub login's token in a header file" 0 "Authorization: Bearer $CONSOLE_TOKEN" cat "$T/curl.log"
+t "  ... never on the command line" 1 "^0$" bash -c 'grep "^curl " "$0" | grep -cF "$1"' "$T/curl.log" "$CONSOLE_TOKEN"
 t "  ... at the console's host and method" 0 "https://console.apps.hub.example.com/ai_grid.v1.Clusters/List" cat "$T/curl.log"
 t "  ... prints only the reply on stdout when piped, for jq" 0 "^org-1$" \
   bash -c 'PATH="$0:$PATH" "$1/scripts/console-call.sh" ai_grid.v1.Tenants/Create 2>/dev/null | jq -r .object.id' "$T/cbin" "$d"
@@ -228,7 +229,9 @@ options: {GATE_ROOT_SECOND: 1}")
 t "a misspelled GATE_ option" 1 "unknown keys \(typos\?\): options.GATE_ROOT_SECOND$" bash "$d/scripts/clusters.sh" --hub
 
 # The private file: .config/clusters.yaml, read first, the only place for secrets.
-SECRET='sha256~SECRET_do_not_print_4242'
+# Built at runtime, so no literal in this file looks like a secret; the checks
+# below grep for this value.
+SECRET=$(printf '%s~%s' sha256 "fake-do-not-print-$RANDOM$RANDOM"); export SECRET
 priv() { # name body: a repository whose .config/clusters.yaml (mode 600) has that body
   local d; d=$(repo "$1" "hub: {api: 'https://public:6443'}"); mkdir -p "$d/.config"
   printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\n%s\n' "$2" > "$d/.config/clusters.yaml"; chmod 600 "$d/.config/clusters.yaml"
@@ -250,7 +253,7 @@ t "cluster_secret: a site's inline username" 0 "^admin$" bash -c '. "$0/scripts/
 t "cluster_secret: the hub's inline token" 0 "^$SECRET$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret hub token' "$d"
 t "cluster_secret: unset is empty" 0 "^$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret hub password' "$d"
 t "cluster_secret: an unknown cluster" 1 "no cluster nope in" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret nope token' "$d"
-t "--rows and --settings print no secret" 0 "^0$" bash -c '{ bash "$0/scripts/clusters.sh" --rows "$0"; bash "$0/scripts/clusters.sh" --settings "$0"; } 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+t "--rows and --settings print no secret" 0 "^0$" bash -c '{ bash "$0/scripts/clusters.sh" --rows "$0"; bash "$0/scripts/clusters.sh" --settings "$0"; } 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 chmod 644 "$d/.config/clusters.yaml"
 t "a readable private file stops" 1 "mode 644: run chmod 600 .config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
 d=$(repo publicsecret "hub: {api: 'https://h:6443'}
@@ -261,11 +264,11 @@ t "private file without a catalog: stops early" 1 "set catalog.url in .config/cl
 d=$(priv scalardeploy "hub: {api: 'https://h:6443'}
 deployment: '$SECRET-scalar'")
 t "deployment: as a value, not a map: named by path" 1 "deployment must be a map" bash "$d/scripts/clusters.sh" --rows "$d"
-t "  ... the value never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+t "  ... the value never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 d=$(priv scalarsite "hub: {api: 'https://h:6443'}
 sites: ['$SECRET-scalar']")
 t "a site as a value: named by path" 1 "sites\[0\] must be a map" bash "$d/scripts/clusters.sh" --rows "$d"
-t "  ... the value never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+t "  ... the value never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 d=$(priv rootsecret "hub: {api: 'https://h:6443'}")
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\ncatalog: {token: x}\n' > "$d/clusters.yaml"
 t "secrets in the committed clusters.yaml stop, even beside a private one" 1 "clusters.yaml is committed, so it can't hold" bash "$d/scripts/clusters.sh" --rows "$d"
@@ -275,22 +278,22 @@ d=$(priv pastedkey "hub: {api: 'https://h:6443'}
 sites:
   - {name: s1, api: 'https://s:6443', '$SECRET-as-a-key': x}")
 t "a key that may be a pasted secret: counted, never named" 1 "unknown keys \(typos\?\): sites\[s1\] \(1 unknown key\)$" bash "$d/scripts/clusters.sh" --rows "$d"
-t "  ... the key never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+t "  ... the key never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 d=$(priv deploykeys "hub: {api: 'https://h:6443'}
 deployment: {'$SECRET-as-a-key': x, other: y}")
 t "unknown deployment keys: counted, never named" 1 "deployment \(2 unknown keys\)$" bash "$d/scripts/clusters.sh" --rows "$d"
-t "  ... the key never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+t "  ... the key never printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 d=$(priv scalarsites "hub: {api: 'https://h:6443'}
 sites: x")
 t "a scalar sites: must be a list" 1 "sites must be a list" bash "$d/scripts/clusters.sh" --rows "$d"
 d=$(priv placeholder2 "hub: {api: 'https://h:6443'}
 catalog: {url: 'https://github.com/o/c.git', token: 'REQUIRED-$SECRET'}")
 t "a secret's placeholder: named by key" 1 "set these in .config/clusters.yaml: catalog.token$" bash "$d/scripts/clusters.sh" --rows "$d"
-t "  ... never by value" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+t "  ... never by value" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 d=$(priv badyaml "hub: {api: 'https://h:6443'}
 quay: {password: '$SECRET' x: }")
 t "invalid YAML: names the line, not the text" 1 "isn't valid YAML" bash "$d/scripts/clusters.sh" --rows "$d"
-t "  ... never the text" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+t "  ... never the text" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 
 # deployment_load: settings and the secret files, for every target.
 load() { # dir [VAR=value...] -- shell: runs the shell after deployment_load in a clean HOME
@@ -306,7 +309,7 @@ t "  ... its source" 0 "^deployment.token in .config/clusters.yaml$" load "$d" -
 t "  ... the quay.io/rhoai auth file from quay:" 0 "^rhoai\+robot:$SECRET-q$" load "$d" -- 'jq -r ".auths[\"quay.io/rhoai\"].auth" "$QUAY_AUTH_FILE" | base64 -d'
 t "  ... AI_GRID_CATALOG_TOKEN wins" 0 "^env-token$" load "$d" AI_GRID_CATALOG_TOKEN=env-token -- 'cat "$CATALOG_TOKEN_FILE"'
 t "  ... CATALOG_TOKEN_FILE wins over the file" 0 "^/x/token CATALOG_TOKEN_FILE$" load "$d" CATALOG_TOKEN_FILE=/x/token -- 'echo "$CATALOG_TOKEN_FILE $CATALOG_TOKEN_FILE_SOURCE"'
-t "  ... --resolve prints paths and sources, no secret" 0 "^0$" bash -c 'HOME="$1" bash "$0/scripts/clusters.sh" --resolve "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d" "$T/home"
+t "  ... --resolve prints paths and sources, no secret" 0 "^0$" bash -c 'HOME="$1" bash "$0/scripts/clusters.sh" --resolve "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d" "$T/home"
 sed -i.bak -e '/^deployment:/d' -e "s|^catalog: .*|catalog: {url: 'https://github.com/o/c.git'}|" "$d/.config/clusters.yaml"; rm "$d/.config/clusters.yaml.bak"
 t "  ... a value removed from the file: the generated file goes" 0 "^gone$" load "$d" -- '[ ! -e "$0/.config/generated/deployment-token" ] && [ -z "$DEPLOYMENT_TOKEN_FILE" ] && echo gone'
 load "$(priv movetofile "$PRIV")" CATALOG_TOKEN_FILE=/x -- 'true' >/dev/null 2>&1 || true
@@ -332,7 +335,7 @@ quay: {username: 'rhoai+robot', password: '$SECRET-q'}
 stage: {username: 'stage-user', password: '$SECRET-s'}")
 t "stage: joins the generated auth file" 0 "^stage-user:$SECRET-s$" load "$d" -- 'jq -r ".auths[\"registry.stage.redhat.io\"].auth" "$QUAY_AUTH_FILE" | base64 -d'
 t "  ... beside quay.io/rhoai" 0 "^rhoai\+robot:$SECRET-q$" load "$d" -- 'jq -r ".auths[\"quay.io/rhoai\"].auth" "$QUAY_AUTH_FILE" | base64 -d'
-t "  ... --resolve prints no stage secret" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --resolve "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+t "  ... --resolve prints no stage secret" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --resolve "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 d=$(priv halfstage "hub: {api: 'https://h:6443'}
 quay: {username: u, password: p}
 stage: {password: '$SECRET-s'}")
@@ -356,7 +359,7 @@ stage: {username: s, password: p, token: x}")" -- 'true'
 old() { # name body want: the old-format message for a private file with that body
   local d; d=$(priv "old-$1" "$2")
   t "old format: $1" 1 "uses the old format.*$3" bash "$d/scripts/clusters.sh" --rows "$d"
-  t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+  t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 }
 old role "hub: {api: 'https://h:6443'}
 sites:
@@ -401,7 +404,7 @@ t "a top-level spokes: is an unknown key" 1 "unknown keys \(typos\?\): spokes$" 
 pub() { # name body path
   local d; d=$(repo "pub-$1" "$2")
   t "committed file refuses $3" 1 "clusters.yaml is committed, so it can't hold secrets: $3.*\.config/clusters.yaml" bash "$d/scripts/clusters.sh" --rows "$d"
-  t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+  t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 }
 pub hub-token "hub: {api: 'https://h:6443', token: '$SECRET'}" "hub.token"
 pub hub-password "hub: {api: 'https://h:6443', password: '$SECRET'}" "hub.password"
@@ -425,12 +428,12 @@ quay: {username: u, password: '$SECRET'}" "quay"
 d=$(priv pub-beside "hub: {api: 'https://h:6443'}")
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\nsites:\n  - {name: s1, api: "https://s:6443", password: "%s"}\n' "$SECRET" > "$d/clusters.yaml"
 t "committed file refuses an inline password, even beside a private one" 1 "can't hold secrets: sites\[s1\].password" bash "$d/scripts/clusters.sh" --rows "$d"
-t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 
 d=$(priv pub-github-beside "hub: {api: 'https://h:6443'}")
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\ngithub: {catalogToken: "%s"}\n' "$SECRET" > "$d/clusters.yaml"
 t "committed file with an old github: block stops, even beside a private one" 1 "can't hold secrets: github" bash "$d/scripts/clusters.sh" --rows "$d"
-t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -c SECRET_do_not_print || true' "$d"
+t "  ... no value printed" 0 "^0$" bash -c 'bash "$0/scripts/clusters.sh" --rows "$0" 2>&1 | grep -cF -- "$SECRET" || true' "$d"
 d=$(priv pub-repos-beside "hub: {api: 'https://h:6443'}")
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://h:6443"}\nrepositories: {catalog: "https://github.com/o/c.git"}\n' > "$d/clusters.yaml"
 t "committed file with old repositories: beside a private one: the old-format message" 1 "^error: clusters.yaml uses the old format: replace repositories.catalog with catalog.url" bash "$d/scripts/clusters.sh" --rows "$d"
@@ -481,8 +484,8 @@ t "  ... options.LIBRARY set: that revision" 0 "^LIBRARY_REVISION=main$" bash "$
 d=$(acc accept-library-empty "$FILL"' s/^  # LIBRARY: main .*/  LIBRARY: ""/;')
 t "  ... options.LIBRARY empty: keeps the template's pin" 0 "^LIBRARY_REVISION=$" bash "$d/scripts/clusters.sh" --settings "$d"
 t "committed file without options.LIBRARY: no library setting" 0 "^none$" bash -c 'bash "$0/scripts/clusters.sh" --settings "$0" | grep -q LIBRARY_REVISION || echo none' "$(repo nolibrary "hub: {api: 'https://h:6443'}")"
-d=$(acc accept-token "$FILL"' s/^(\s*)username: admin\s*$// if $. < 16; s/^(\s*)password: fixture-pw\s*$// if $. < 16; s/^  # token: sha256~TOKEN.*/  token: sha256~fixture/;')
-t "acceptance file with a hub token instead: loads" 0 "^sha256~fixture$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret hub token' "$d"
+d=$(acc accept-token "$FILL"' s/^(\s*)username: admin\s*$// if $. < 16; s/^(\s*)password: fixture-pw\s*$// if $. < 16; s/^  # token: sha256~TOKEN.*/  token: fixture-hub-token/;')
+t "acceptance file with a hub token instead: loads" 0 "^fixture-hub-token$" bash -c '. "$0/scripts/clusters.sh"; clusters_load "$0" && cluster_secret hub token' "$d"
 d=$(acc accept-committed "$FILL"); mv "$d/.config/clusters.yaml" "$d/clusters.yaml"; chmod 644 "$d/clusters.yaml"
 t "acceptance file filled in, committed: refused for its secrets" 1 "can't hold secrets: hub.username hub.password sites\[site-1\].username" bash "$d/scripts/clusters.sh" --rows "$d"
 

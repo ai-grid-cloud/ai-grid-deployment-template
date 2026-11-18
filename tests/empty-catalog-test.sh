@@ -39,7 +39,8 @@ t "--check on an empty catalog passes" 0 "already empty" "$D/scripts/empty-catal
 # --check with CATALOG_TOKEN_FILE: a git wrapper logs its argv and asks
 # $GIT_ASKPASS for the password, as git does over https; the token must reach
 # it only through the helper, never argv or output.
-token='SENTINEL_CATALOG_TOKEN'; printf '%s\n' "$token" > "$T/catalog-token"
+token="fake-catalog-$RANDOM$RANDOM"   # built at runtime, not a literal
+printf '%s\n' "$token" > "$T/catalog-token"
 mkdir -p "$T/bin"; real_git=$(command -v git)
 cat > "$T/bin/git" <<EOF
 #!/bin/bash
