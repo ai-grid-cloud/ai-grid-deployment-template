@@ -23,7 +23,8 @@
 #
 # The hub phase, each step printing "== STEP":
 #   login            scripts/login.sh --non-interactive
-#   inputs           scripts/set-library.sh LIBRARY_REVISION (when set),
+#   inputs           scripts/set-library.sh LIBRARY_REVISION (when set: a
+#                    branch to follow, or a tag or SHA to pin),
 #                    scripts/set-inputs.sh (make inputs), a check that
 #                    root/inputs.env names the same catalog, then
 #                    scripts/git-push.sh of root/

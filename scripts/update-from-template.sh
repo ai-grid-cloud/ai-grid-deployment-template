@@ -61,6 +61,16 @@ if ! git merge -q --no-edit -m "Merge the template's main" template/main; then
     echo "  git rm -rq tenant-idp && git commit --no-edit" >&2
     echo "  make inputs" >&2
   fi
+  if grep -qx root/applicationset.yaml <<<"$conflicts" &&
+    awk '/^<<<<<<< /{c=1} c && /^[[:space:]]*libraryRevision:/{f=1} /^>>>>>>> /{c=0} END{exit !f}' root/applicationset.yaml; then
+    # You set libraryRevision (scripts/set-library.sh, or LIBRARY under options:)
+    # and the template changed it too: never chosen for you.
+    echo "root/applicationset.yaml: you set the library revision (libraryRevision), and the template changed its own." >&2
+    echo "The template follows the library's main branch, so the hub updates as main moves. In that conflict," >&2
+    echo "keep your line to stay at your pin, or take the template's to follow main; to follow main later, run" >&2
+    echo "  scripts/set-library.sh main" >&2
+    echo "If you set LIBRARY under options: in clusters.yaml, it wins at the next make install, which writes its value." >&2
+  fi
   if grep -qvx -e root/inputs.yaml -e 'tenant-idp/.*' <<<"$conflicts"; then
     echo "Edit each file to keep your values and the template's other changes, then: git add FILE ... && git commit" >&2
   fi
@@ -68,6 +78,25 @@ if ! git merge -q --no-edit -m "Merge the template's main" template/main; then
   exit 1
 fi
 echo "Merged the template's main ($(git rev-parse --short template/main))."
+
+# The library revision: say when the merge moved it from a pinned commit to a
+# branch, and when options.LIBRARY in clusters.yaml would set another one at
+# the next make install (only that value is printed, never the file).
+if [ -f scripts/library.sh ] && [ -f root/applicationset.yaml ]; then
+  . scripts/library.sh
+  was_dir=$(mktemp -d); mkdir -p "$was_dir/root"
+  git show ORIG_HEAD:root/applicationset.yaml > "$was_dir/root/applicationset.yaml" 2>/dev/null || true
+  was=$(library_pin "$was_dir" libraryRevision) now=$(library_pin . libraryRevision)
+  rm -rf "$was_dir"
+  if library_is_sha "$was" && [ -n "$now" ] && ! library_is_sha "$now"; then
+    echo "The library: the hub now follows $now once you push, instead of staying at $was."
+    echo "  To stay at $was, run scripts/set-library.sh $was and commit root/applicationset.yaml."
+  fi
+  opt=$(bash scripts/clusters.sh --settings . 2>/dev/null | sed -n 's/^LIBRARY_REVISION=//p' | head -n1) || opt=""
+  if [ -n "$opt" ] && [ "$opt" != "$now" ]; then
+    echo "Note: options.LIBRARY is $opt in your clusters.yaml: the next make install sets the library revision to it, not $now."
+  fi
+fi
 
 if [ -d root ] && [ ! -f root/inputs.env ] && grep -q 'inputs.env' root/kustomization.yaml 2>/dev/null \
   && [ -z "$(git log -1 --format=%h -- root/inputs.env)" ]; then

@@ -99,11 +99,18 @@ if grep -qwE 'apply|create|delete|patch|edit|label|annotate|replace|scale' "$w/a
   echo "   FAIL oc got a write verb"; fails=$((fails+1)); else echo "   ok   oc calls are read-only"; fi
 total=$((total+2))
 
-t "library at the pin" '^ok +library at your pin' "$T/bin" "$w" "${ALL[@]}"
+t "library at the pin" '^ok +library at your revision' "$T/bin" "$w" "${ALL[@]}"
 mkdir -p "$T/other/root"; echo "  libraryRevision: &libraryRevision 0123456789abcdef0123456789abcdef01234567" > "$T/other/root/applicationset.yaml"
-t "library not at the pin" '^FAIL +library at your pin +.* not 0123456789ab: git -C ' "$T/bin" "$w" --deployment "$T/other"
+t "library not at the pin" '^FAIL +library at your revision +.* not 0123456789ab: git -C ' "$T/bin" "$w" --deployment "$T/other"
+# Following a branch: the checkout must be at that branch's tip (its local
+# branch, or origin/BRANCH as scripts/library.sh fetches it).
+br=$("$GIT" -C "$LIBD" symbolic-ref --short HEAD)
+mkdir -p "$T/branch/root"; echo "  libraryRevision: &libraryRevision $br" > "$T/branch/root/applicationset.yaml"
+t "library following a branch, at its tip" "^ok +library at your revision +$br at [0-9a-f]{12}" "$T/bin" "$w" --deployment "$T/branch"
+mkdir -p "$T/branch2/root"; echo "  libraryRevision: &libraryRevision feat/other" > "$T/branch2/root/applicationset.yaml"
+t "library not at the branch's tip" '^FAIL +library at your revision +.* not at the tip of feat/other: run scripts/library.sh' "$T/bin" "$w" --deployment "$T/branch2"
 keep=$LIBD; LIBD="$T/no-library"
-t "library not cloned" '^FAIL +library at your pin +no library checkout at .*no-library: run scripts/library.sh' "$T/bin" "$w" "${ALL[@]}"
+t "library not cloned" '^FAIL +library at your revision +no library checkout at .*no-library: run scripts/library.sh' "$T/bin" "$w" "${ALL[@]}"
 LIBD=$keep
 
 mkbin "$T/nojq"; rm "$T/nojq/jq"

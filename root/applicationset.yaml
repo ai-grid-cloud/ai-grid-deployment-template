@@ -2,9 +2,10 @@
 # modelled on the library's bootstrap/dedicated-hub/applicationset.yaml, and
 # differs from it in these ways (docs/upstream-main-limits.md lists what it can't
 # change):
-# - It reads the library at one pinned commit (libraryRevision below), not at
-#   HEAD. The templatePatch also pins every library source of each generated
-#   Application. Objects those Applications render that read the library
+# - It reads the library at libraryRevision below, not at HEAD: by default the
+#   branch main, so the hub follows main as it moves; or one commit, when you
+#   pin one. The templatePatch also sets every library source of each generated
+#   Application to it. Objects those Applications render that read the library
 #   themselves still read HEAD.
 # - It has no sample model or MaaS subscription, and doesn't select acm-models:
 #   the catalog's AppProjects and ApplicationSets are this repository's
@@ -21,9 +22,10 @@
 #   Application selects nothing. metallb serves only lab clusters labelled
 #   ai-grid/metallb-pool and isn't selected.
 #
-# To upgrade the library, change libraryRevision (scripts/set-library.sh); the
-# anchors below reuse it. The other inputs come from inputs.env
-# (kustomization.yaml).
+# libraryRevision is a branch, which the hub follows, or a full commit SHA, which
+# it stays at. To change it, run scripts/set-library.sh REVISION (make install
+# runs it with LIBRARY under options: in clusters.yaml); the anchors below reuse
+# it. The other inputs come from inputs.env (kustomization.yaml).
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -46,7 +48,7 @@ spec:
         # from inputs.env (kustomization.yaml).
         values: &inputs
           libraryRepoURL: &libraryRepoURL https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git
-          libraryRevision: &libraryRevision a3c63a980d3130a81af0b367039b547c5c738f22
+          libraryRevision: &libraryRevision main
           deploymentRepoURL: REQUIRED-deploymentRepoURL
           deploymentRevision: REQUIRED-deploymentRevision
           catalogRepoURL: REQUIRED-catalogRepoURL
@@ -113,7 +115,7 @@ spec:
         server: '{{.spec.destination.server}}'
         namespace: '{{.spec.destination.namespace}}'
   # Per component:
-  # - every source that reads the library: at libraryRevision.
+  # - every source that reads the library: at libraryRevision (a branch or a commit).
   # - grid-bootstrap: a new grid generates its CA and binds the global cluster
   #   set (as upstream's dedicated-hub root).
   # - odf: the channel follows the hub's version; a hub labelled

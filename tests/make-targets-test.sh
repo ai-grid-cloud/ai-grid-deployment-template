@@ -121,6 +121,9 @@ t "make login without it: unchanged" 0 "^scripts/login.sh *$" make -n -C "$one" 
 
 t "make help lists inputs, check and console-call" 0 "inputs:.*check:.*console-call:" bash -c 'make -s -C "$0" help | tr "\n" " "' "$one"
 t "make help marks test for maintainers" 0 "^test: .*for maintainers" make -s -C "$one" help
+t "make help lists test-upstream, against the library's current main" 0 "^test-upstream: .*current main" make -s -C "$one" help
+t "make test-upstream runs the library-reading tests at main" 0 "for t in tests/root-selection-test.sh tests/deployment-scripts-test.sh; do TEST_LIBRARY_REVISION=main bash" \
+  bash -c 'make -n -C "$0" test-upstream | tr "\n" " "' "$one"
 t "make inputs runs set-inputs.sh with no argument" 0 "^scripts/set-inputs.sh *$" make -n -C "$one" inputs
 t "make inputs CATALOG= passes it" 0 "^scripts/set-inputs.sh 'https://github.com/acme/cat.git' *$" make -n -C "$one" inputs CATALOG=https://github.com/acme/cat.git
 t "make check runs check-deployment.sh" 0 "^scripts/check-deployment.sh *$" make -n -C "$one" check

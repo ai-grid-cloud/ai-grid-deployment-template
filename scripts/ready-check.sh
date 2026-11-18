@@ -9,7 +9,7 @@
 # DataScienceCluster and the console's content are reported (INFO), not FAILs.
 #
 # Inputs: clusters.yaml, each cluster's login (.config/NAME/kubeconfig, from make
-# login), root/applicationset.yaml (the library pin), the branch root/inputs.env
+# login), root/applicationset.yaml (the library revision), the branch root/inputs.env
 # names as deploymentRevision (default main) on origin, read with git ls-remote
 # and git fetch, with no prompt (when DEPLOYMENT_TOKEN_FILE, default
 # .config/deployment-token, names a readable file, git reads the token from it
@@ -37,10 +37,12 @@
 # and so are the console's model Applications (acm-models-catalog-*) that
 # aren't Synced and Healthy: a model failing on a site doesn't stop a rerun.
 # With no FAIL it writes .install/outputs.json (git-ignored): the hub's name, API
-# and endpoint URLs, the token file's path (never the token), the library pin,
-# and each site's name, API, apps domain and ACM name (no role or location:
-# the provider console's Add to AI Grid sets those, after the install). persesURL is
-# the Service's in-cluster URL, not reachable from outside the hub.
+# and endpoint URLs, the token file's path (never the token), the library
+# revision (a branch or a pinned commit) and the commit it is at, read with git
+# ls-remote for a branch, and each site's name, API, apps domain and ACM name
+# (no role or location: the provider console's Add to AI Grid sets those, after
+# the install). persesURL is the Service's in-cluster URL, not reachable from
+# outside the hub.
 #
 # Perses is the Cluster Observability Operator's Service and the Thanos Route
 # ACM observability's; set PERSES_SERVICE or THANOS_ROUTE (NAMESPACE/NAME) to
@@ -235,16 +237,21 @@ fi
 . "$here/library.sh"
 rev=$(library_pin "$dir" libraryRevision)
 lib=$(library_pin "$dir" libraryRepoURL)
+# library.commit, for the record: the pinned commit, or the commit a followed
+# branch is at now (null when the library can't be reached).
+if library_is_sha "$rev"; then commit=$rev
+else commit=$(GIT_TERMINAL_PROMPT=0 git ls-remote "$lib" "refs/heads/$rev" 2>/dev/null | awk 'NR == 1 {print $1}') || commit=""
+fi
 mkdir -p "$dir/.install"
 jq -n --arg hub "$hub" --arg api "$(cluster_api "$hub")" \
   --arg console "$(url "$console_host")" \
   --arg keycloak "$(url "$(route_host maas-db keycloak)")" \
   --arg perses "https://${PERSES_SERVICE#*/}.${PERSES_SERVICE%%/*}.svc:8080" \
   --arg thanos "$(url "$(route_host "${THANOS_ROUTE%%/*}" "${THANOS_ROUTE#*/}")")" \
-  --arg token "$token_rel" --arg lib "$lib" --arg rev "$rev" --argjson sites "$sites_json" \
+  --arg token "$token_rel" --arg lib "$lib" --arg rev "$rev" --arg commit "$commit" --argjson sites "$sites_json" \
   '{hub: {name: $hub, api: $api, consoleURL: $console, keycloakURL: $keycloak, keycloakRealm: "saas",
           persesURL: $perses, thanosURL: $thanos, lokiStack: "redhat-ods-monitoring/usage-logs"},
-    providerAdminTokenFile: $token, library: {url: $lib, revision: $rev}, sites: $sites}' \
+    providerAdminTokenFile: $token, library: {url: $lib, revision: $rev, commit: (if $commit == "" then null else $commit end)}, sites: $sites}' \
   > "$dir/.install/outputs.json.tmp"
 mv "$dir/.install/outputs.json.tmp" "$dir/.install/outputs.json"
 echo "Ready. Outputs: .install/outputs.json"

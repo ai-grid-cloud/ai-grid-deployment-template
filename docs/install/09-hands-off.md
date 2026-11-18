@@ -329,8 +329,8 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 
 1. `login`: writes `.config/NAME/kubeconfig` for each cluster from its credentials and the API URL in
    `.config/clusters.yaml`.
-2. `inputs`: pins the library at `LIBRARY` under `options:`, writes your names to `root/inputs.env` and the catalog
-   to `hub/catalog/`, and pushes.
+2. `inputs`: sets the library revision to `LIBRARY` under `options:`, if you set it, writes your names to
+   `root/inputs.env` and the catalog to `hub/catalog/`, and pushes.
 3. `catalog`: checks that your catalog repository holds only its README, unless the hub already uses it.
 4. `bootstrap`: installs OpenShift GitOps and applies your root on the hub, then waits until Argo CD has synced it.
 5. `acm`: waits until ACM is running.
@@ -356,7 +356,7 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 | `hub.thanosURL` | The Thanos query Route |
 | `hub.lokiStack` | The usage-log LokiStack, `redhat-ods-monitoring/usage-logs` |
 | `providerAdminTokenFile` | The path of the provider-admin token file, never the token |
-| `library.url`, `library.revision` | The library and the commit you pin |
+| `library.url`, `library.revision`, `library.commit` | The library; the branch you follow or the commit you pin; and the commit that revision was at when the check ran (`null` when the library couldn't be reached) |
 | `sites[]` | For each site: `name`, `api`, `appsDomain`, and `acmName`, its ManagedCluster's name. On an [all-in-one](#all-in-one-one-cluster), the hub, with `acmName` `local-cluster` |
 
 The provider-admin token is in `.config/provider-admin-token`. It belongs to ServiceAccount
@@ -419,8 +419,11 @@ the grid in the console, as in [Add a site to the grid](#add-a-site-to-the-grid)
 - **An auth file instead of `quay:`:** set `QUAY_AUTH_FILE`, or save it as `.config/quay-auth.json`. It must hold the
   `quay.io/rhoai` and `registry.stage.redhat.io` logins, and `stage:` must be left out: the install stops when both
   are set.
-- **Another library revision:** set `LIBRARY` under `options:` to a branch, tag or commit. Left out or empty, the
-  template's own pin in `root/applicationset.yaml` stands.
+- **Another library revision:** by default the hub follows the library's `main` branch, so your clusters update on
+  their own as `main` moves. To pin one commit, so that your clusters change only when you change the pin, set
+  `LIBRARY` under `options:` to a tag or a full 40-character SHA. To follow another branch, set it to the branch's
+  name. Left out or empty, `libraryRevision` in `root/applicationset.yaml` stands. For more, see
+  [Follow the library or pin it](../../README.md#follow-the-library-or-pin-it).
 - **Another token lifetime:** set `PROVIDER_ADMIN_TOKEN_DURATION` under `options:` for `make install`, or in the
   environment for `make provider-admin`.
 - **Longer or shorter waits:** each `GATE_*_SECONDS` value under `options:` sets a readiness check's time limit, in

@@ -1,7 +1,8 @@
 # Run from your deployment repository. clusters.yaml names your hub and
 # sites; each one's login is .config/NAME/kubeconfig. The scripts fetch the
-# library at your pin into .library/ (scripts/library.sh); set LIBRARY to use
-# your own checkout.
+# library at your library revision (the tip of the branch you follow, or the
+# commit you pin) into .library/ (scripts/library.sh); set LIBRARY to use your
+# own checkout.
 
 # Optional, for the page-by-page guide and CI: QUAY_AUTH_FILE and
 # CATALOG_TOKEN_FILE name files that win over .config/clusters.yaml's secrets
@@ -10,7 +11,7 @@
 # KEYCLOAK_REALM default to the library Keycloak's maas-db and saas (console-secrets).
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
-.PHONY: help config fetch-ca login prereqs inputs check bootstrap status console-secrets console-call test update \
+.PHONY: help config fetch-ca login prereqs inputs check bootstrap status console-secrets console-call test test-upstream update \
   site-check site-wipe site-import site-status tenant-call \
   empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
 
@@ -73,6 +74,11 @@ console-call: ## Call the console's API as your hub login: METHOD=..., BODY='JSO
 
 test: ## Run the template's own tests (for maintainers)
 	@for t in tests/*-test.sh; do bash "$$t" || exit 1; done
+
+# make test checks the root against the library commit the guide's links pin,
+# so it gives the same result every day; this checks it against main now.
+test-upstream: ## Check the root against the library's current main, which a deployment follows by default (for maintainers; network)
+	@for t in tests/root-selection-test.sh tests/deployment-scripts-test.sh; do TEST_LIBRARY_REVISION=main bash "$$t" || exit 1; done
 
 update: ## Merge the template's latest main into this repository; never pushes
 	@scripts/update-from-template.sh

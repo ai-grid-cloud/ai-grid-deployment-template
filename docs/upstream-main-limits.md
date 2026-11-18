@@ -8,8 +8,9 @@ names the file and line in
 [`ai-grid-cluster-gitops`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops)
 at commit `a3c63a9`, upstream `main` with
 [PR 322](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/pull/322)
-merged. The template pins that commit (`libraryRevision` in
-`root/applicationset.yaml`; `scripts/set-library.sh REVISION` moves it).
+merged; a later `main` can move a line. The template follows `main`
+(`libraryRevision` in `root/applicationset.yaml`). To pin a commit instead, see
+[Follow the library or pin it](../README.md#follow-the-library-or-pin-it).
 
 Each entry is a candidate for a library pull request. The template doesn't work
 around these limits. It documents them, skips the check, or reports the limit
@@ -22,17 +23,17 @@ template's earlier library branch didn't have.
 
 | ID | Limit | What the template does |
 |---|---|---|
-| L1 | The library's own ApplicationSets read the library at `HEAD` | Reports them (`scripts/check-revisions.sh`); they follow upstream `main` |
+| L1 | The library's own ApplicationSets read the library at `HEAD` | Reports them (`scripts/check-revisions.sh`); they follow upstream `main`, which matters only when you pin a commit |
 | L2 | The console's catalog is the shared environment's | Carries its own copy (`hub/catalog/`, `apps/catalog.yaml`) |
 | L3 | The tenant IdP is the library's Keycloak, and only that | Selects the library's Keycloak; there's no IdP input |
 | L4 | Sites that need per-site values: the platform's cert-manager, GPU settings, a trusted MaaS certificate | Writes no site files; refuses `maasCertificate`; `make site-check` stops a site that runs its own cert-manager |
 | L5 | The MaaS gateway presents the cluster-internal certificate | `tenant-call.sh` names the limit when TLS verification fails |
 | L6 | No scripted tenant sign-in | `tenant-call.sh` takes an API key a tenant created in the Org UI |
-| L7 | The OpenShift AI nightly and chart follow `HEAD` | Covered by L1; `make prereqs` checks the pin's nightly, not `HEAD`'s |
+| L7 | The OpenShift AI nightly and chart follow `HEAD` | Covered by L1; `make prereqs` checks the nightly at your library revision |
 | L8 | Two odh-gitops charts are read at `main` | Left at `main`, as upstream ships them |
 | L9 | ODF is the only observability object store | Selects `apps/odf` |
 | L10 | No per-deployment cluster admins | Nothing grants Argo CD admin beyond the operator's default |
-| L11 | Resolved: a fresh hub needed PR 322 | Pins `a3c63a9`, which includes it |
+| L11 | Resolved: a fresh hub needed PR 322 | Follows `main`, which includes it |
 | L12 | `acm-models` bundles samples and a duplicate GitOpsCluster | Doesn't select `acm-models` |
 | L13 | The dedicated-hub root re-syncs itself from `HEAD` | Doesn't select `dedicated-hub-root`; has its own root |
 | L14 | Keycloak's default profile adds example organizations and test users | `keycloakOverlay`: `core` by default; `default` for test deployments only |
@@ -71,11 +72,15 @@ the library at `targetRevision: HEAD`:
 - `apps/metallb/hub/00-applicationset.yaml:29,32` and
   `apps/external-services/hub/05-applicationset.yaml:59` (not selected here).
 
-The root pins every Application it generates, through its `templatePatch`
-(`root/applicationset.yaml`). Argo CD applies that patch only to the
-Applications the root generates, not to the objects they render. So site
-installs, the MaaS database and Submariner follow upstream `main`, whatever the
-template pins.
+The root sets every Application it generates to `libraryRevision`, through
+its `templatePatch` (`root/applicationset.yaml`). Argo CD applies that patch
+only to the Applications the root generates, not to the objects they render.
+So site installs, the MaaS database and Submariner follow upstream `main`,
+whatever the deployment pins.
+
+By default the root follows `main` too, so the two agree, give or take an Argo
+CD refresh. The limit matters when you pin a commit: these Applications keep
+following `main` past your pin.
 
 **Template:** `scripts/check-revisions.sh` lists them as `HEAD` lines, not
 failures.
@@ -206,8 +211,9 @@ nightly at library `HEAD`:
 - `apps/rhoai/nightly.yaml:8` (the 3.6 nightly FBC).
 - `apps/rhoai/hub/01-applicationset.yaml:55` (the chart version).
 
-**Template:** `make prereqs` checks it can pull the nightly at the template's
-pin, which may differ from `HEAD`'s.
+**Template:** `make prereqs` checks it can pull the nightly at your library
+revision. Following `main`, that's `HEAD`'s nightly as `make prereqs` fetched
+it; with a pinned commit, it may differ from `HEAD`'s.
 
 ## L8: odh-gitops charts at `main`
 
@@ -252,8 +258,8 @@ deployment repository, and renders no binding without one.
 Without PR 322 (`apps/gitops-config/manifests/argocd.yaml`, the Placement
 health check), a Placement that matches no cluster yet is Degraded, and a fresh
 hub stops before the image mirror Policy and Loki. PR 322 is merged, and the
-template pins `a3c63a9`, which includes it. To move to a later `main`, run
-`scripts/set-library.sh main`.
+template follows `main`, which includes it. A deployment that pins a commit
+needs `a3c63a9` or later.
 
 ## L12: `acm-models` bundles samples and a duplicate GitOpsCluster
 

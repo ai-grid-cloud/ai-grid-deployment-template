@@ -5,7 +5,8 @@ Usage: scripts/prereqs.py [--library DIR] [--deployment DIR]
                           [--quay-auth-file FILE] [--catalog-token-file FILE]
 
 Runs from your deployment repository; the library is .library/, which make prereqs fetches
-at your pin (scripts/library.sh).
+at your library revision: the tip of the branch you follow, or the commit you pin
+(scripts/library.sh).
 
 The clusters come from the deployment's clusters.yaml, each with its login in
 .config/NAME/kubeconfig. LIBRARY sets the library checkout.
@@ -125,30 +126,43 @@ def check_tools():
 def check_library(deployment):
     section("Library checkout")
     if not deployment:
-        report("skipped", "library at your pin", "pass --deployment DIR (make prereqs does)")
+        report("skipped", "library at your revision", "pass --deployment DIR (make prereqs does)")
         return
     k = os.path.join(deployment, "root", "applicationset.yaml")
     try:
         text = open(k).read()
     except OSError:
-        report("FAIL", "library at your pin", f"can't read {k}")
+        report("FAIL", "library at your revision", f"can't read {k}")
         return
-    m = re.search(r"^\s*libraryRevision:\s*(?:&[\w-]+\s+)?([0-9a-f]+)", text, re.M)
+    # The value: a full commit SHA (a pin) or a branch the hub follows; not a
+    # YAML anchor (&name) or alias (*name).
+    m = re.search(r"^\s*libraryRevision:[ \t]*(?:&[\w-]+[ \t]+)?([^\s#&*][^\s#]*)", text, re.M)
     if not m:
-        report("FAIL", "library at your pin", f"no libraryRevision in {k}")
+        report("FAIL", "library at your revision", f"no libraryRevision in {k}")
         return
     pin = m.group(1)
     lib = os.path.relpath(LIB)
     if not os.path.exists(os.path.join(LIB, ".git")):
-        report("FAIL", "library at your pin", f"no library checkout at {lib}: run scripts/library.sh")
+        report("FAIL", "library at your revision", f"no library checkout at {lib}: run scripts/library.sh")
         return
     rc, out, _ = run(["git", "-C", LIB, "rev-parse", "HEAD"], timeout=5)
-    head = out.strip()
-    if rc == 0 and head == pin:
-        report("ok", "library at your pin", pin[:12])
-    else:
-        report("FAIL", "library at your pin",
-               f"{lib} is at {head[:12] or 'unknown'}, not {pin[:12]}: git -C {lib} checkout -q {pin}")
+    head = out.strip() if rc == 0 else ""
+    if re.fullmatch(r"[0-9a-f]{40}", pin):
+        if head == pin:
+            report("ok", "library at your revision", pin[:12])
+        else:
+            report("FAIL", "library at your revision",
+                   f"{lib} is at {head[:12] or 'unknown'}, not {pin[:12]}: git -C {lib} checkout -q {pin}")
+        return
+    # A branch: the checkout's origin/BRANCH (scripts/library.sh fetches it) or
+    # its local BRANCH, as last fetched; this check never fetches.
+    for ref in (f"refs/remotes/origin/{pin}", f"refs/heads/{pin}"):
+        rc, out, _ = run(["git", "-C", LIB, "rev-parse", "-q", "--verify", ref + "^{commit}"], timeout=5)
+        if head and rc == 0 and out.strip() == head:
+            report("ok", "library at your revision", f"{pin} at {head[:12]}")
+            return
+    report("FAIL", "library at your revision",
+           f"{lib} is at {head[:12] or 'unknown'}, not at the tip of {pin}: run scripts/library.sh")
 
 
 def pinned_catalog_image():

@@ -57,9 +57,10 @@ t "  ... once" 0 "^1$" grep -c "Running the template's latest" "$T/last"
 # .git may be a worktree link back to a real library repository).
 lib2="$T/lib2"; g init -q "$lib2"; g -C "$lib2" commit -q --allow-empty -m "a library commit"
 pin() { git -C "$lib2" rev-parse HEAD; }
-localize() { # root dir: pinned at lib2's HEAD
-  sed -i.bak -E -e "s/[0-9a-f]{40}/$(pin)/g" "$1/applicationset.yaml"; rm "$1/applicationset.yaml.bak"
+set_rev() { # root dir, revision: libraryRevision set to it
+  sed -i.bak -E -e "s#^([[:space:]]*libraryRevision: &libraryRevision )[^[:space:]]+#\1$2#" "$1/applicationset.yaml"; rm "$1/applicationset.yaml.bak"
 }
+localize() { set_rev "$1" "$(pin)"; } # root dir: pinned at lib2's HEAD, as the template was before it followed main
 fill_catalog() { # repo dir: hub/catalog names the catalog input, as set-inputs.sh writes it
   local f; for f in "$1"/hub/catalog/*.yaml; do
     sed -i.bak -e 's#REQUIRED-catalogRepoURL#https://github.com/acme/catalog.git#g' -e 's#REQUIRED-catalogRevision#main#g' "$f"; rm "$f.bak"
@@ -85,6 +86,55 @@ t "a pin move merges with your inputs set, and checks" 0 "every repository is an
 t "  ... takes the new pin" 0 "libraryRevision: &libraryRevision $(pin)" cat "$mine/root/applicationset.yaml"
 t "  ... keeps your inputs" 0 "^catalogRepoURL=https://github.com/acme/catalog.git$" cat "$mine/root/inputs.env"
 t "  ... in the merge commit only" 0 "^Merge the template's main$" g -C "$mine" log -1 --format=%s
+
+# The template moves from its pinned commit to following the library's main:
+# a deployment that kept the template's pin follows main after the update, as
+# any template change it hasn't touched.
+mk_pair() { # name: a template at lib2's pin and a deployment from it with its inputs set; sets tpl and mine
+  tpl="$T/tpl-$1"; mkdir -p "$tpl"; cp -R "$SRC/scripts" "$SRC/root" "$SRC/apps" "$SRC/hub" "$tpl/"; rm -f "$tpl/root/inputs.env"
+  localize "$tpl/root"; g -C "$tpl" init -q && g -C "$tpl" add -A && g -C "$tpl" commit -qm "root"
+  mine="$T/mine-$1"; mkdir -p "$mine"; cp -R "$tpl/scripts" "$tpl/root" "$tpl/apps" "$tpl/hub" "$mine/"
+  g -C "$mine" init -q && g -C "$mine" add -A && g -C "$mine" commit -qm "Initial commit"
+  printf '%s\n' deploymentRepoURL=https://github.com/acme/deploy.git deploymentRevision=main \
+    catalogRepoURL=https://github.com/acme/catalog.git catalogRevision=main keycloakOverlay=core hubCertManager=library > "$mine/root/inputs.env"
+  fill_catalog "$mine"; g -C "$mine" add -A && g -C "$mine" commit -qm "set our names"
+}
+keep_tpl=$tpl keep_mine=$mine
+mk_pair follow; was=$(pin)
+set_rev "$tpl/root" main; g -C "$tpl" commit -qam "follow the library's main"
+t "the template's pin was yours: the update follows main" 0 "every repository is an input" runl
+cp "$T/last" "$T/out"
+t "  ... libraryRevision is main" 0 "libraryRevision: &libraryRevision main$" cat "$mine/root/applicationset.yaml"
+t "  ... says the hub follows main once you push" 0 "follows main once you push, instead of staying at $was" cat "$T/out"
+t "  ... and how to stay at the old pin" 0 "run scripts/set-library.sh $was" cat "$T/out"
+t "  ... no LIBRARY warning without options.LIBRARY" 1 "^0$" grep -c "next make install" "$T/out"
+# options.LIBRARY in clusters.yaml wins at the next make install: the update says so
+# when it differs from the merged revision, and only then.
+clusters() { # repo, LIBRARY value: a committed clusters.yaml with that option
+  printf "apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: 'https://api.hub.example.com:6443'}\noptions: {LIBRARY: %s}\n" "$2" > "$1/clusters.yaml"
+  g -C "$1" add clusters.yaml && g -C "$1" commit -qm "our clusters"
+}
+mk_pair lib-option; clusters "$mine" v1.2
+set_rev "$tpl/root" main; g -C "$tpl" commit -qam "follow the library's main"
+t "options.LIBRARY differs from the merged revision: warns" 0 "options.LIBRARY is v1.2.*next make install" runl
+mk_pair lib-main; clusters "$mine" main
+set_rev "$tpl/root" main; g -C "$tpl" commit -qam "follow the library's main"
+runl > "$T/last" 2>&1 || true
+t "  ... options.LIBRARY main, the same: no warning" 1 "^0$" grep -c "next make install" "$T/last"
+# A deployment that pinned its own commit (LIBRARY: SHA): the update never
+# replaces it silently; the merge stops on that line and says what to choose.
+mk_pair own-pin
+g -C "$lib2" commit -q --allow-empty -m "the commit you pin"
+set_rev "$mine/root" "$(pin)"; g -C "$mine" commit -qam "pin the library"
+set_rev "$tpl/root" main; g -C "$tpl" commit -qam "follow the library's main"
+t "your own pin: the update stops on it" 1 "conflict in root/applicationset.yaml" runl
+cp "$T/last" "$T/out"
+t "  ... says how to keep your pin or follow main" 0 "scripts/set-library.sh main" cat "$T/out"
+t "  ... and that LIBRARY under options: wins at the next make install" 0 "LIBRARY under options: .*wins.*make install" cat "$T/out"
+t "  ... your pin is still there" 0 "^ *libraryRevision: &libraryRevision $(pin)$" cat "$mine/root/applicationset.yaml"
+(cd "$mine" && git merge --abort)
+t "  ... and an abort keeps it" 0 "libraryRevision: &libraryRevision $(pin)$" cat "$mine/root/applicationset.yaml"
+tpl=$keep_tpl mine=$keep_mine
 
 # A merge that leaves an input unset says not to push.
 sed -i.bak 's#^catalogRevision=.*#catalogRevision=#' "$mine/root/inputs.env"; rm "$mine/root/inputs.env.bak"

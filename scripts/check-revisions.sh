@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Check which commit of the library each Argo CD Application on the hub reads.
+# Check which revision of the library each Argo CD Application on the hub reads.
+# Your pin is libraryRevision in root/applicationset.yaml: a branch (main by
+# default), which the root's Applications follow, or a full commit SHA.
 # Read only; prints one line per Application that reads the library:
-#   OK    NAME  every library source at your pin (libraryRevision in
-#               root/applicationset.yaml)
+#   OK    NAME  every library source at your pin
 #   HEAD  NAME  a library source at HEAD, in an Application the root
 #               ApplicationSet (apps) didn't generate: one of the library's own
 #               ApplicationSets did (sites' rhoai-*, maas-db-*,
 #               acm-submariner-*). The root can't pin those on the library's
 #               main branch (docs/upstream-main-limits.md, L1), so this is
-#               reported, not a failure.
+#               reported, not a failure. Following a branch, the line says
+#               only that it reads HEAD, the library's default branch.
 #   OFF   NAME  a library source at any other revision, or at HEAD in an
 #               Application the root generated (it pins every one of those)
 # Exits 1 if any Application is OFF.
@@ -23,7 +25,7 @@ hub=$(hub_name)
 cluster_login_ok "$hub"
 pin=$(library_pin "$here/.." libraryRevision)
 url=$(library_pin "$here/.." libraryRepoURL)
-[[ "$pin" =~ ^[0-9a-f]{40}$ ]] && [ -n "$url" ] || { echo "error: no libraryRevision or libraryRepoURL in root/applicationset.yaml" >&2; exit 1; }
+[ -n "$pin" ] && [ -n "$url" ] || { echo "error: no libraryRevision or libraryRepoURL in root/applicationset.yaml" >&2; exit 1; }
 json=$(KUBECONFIG=$(cluster_kubeconfig "$hub") oc get applications.argoproj.io -n openshift-gitops -o json)
 rows=$(jq -r --arg u "${url%.git}" --arg p "$pin" '
   .items[] | .metadata.name as $n
@@ -39,9 +41,16 @@ while IFS=$'\t' read -r state name rev; do
   case "$state" in
     OK) printf '%-5s %-45s %s\n' OK "$name" "$rev" ;;
     HEAD) head=$((head + 1))
-      printf '%-5s %-45s %s\n' HEAD "$name" "reads the library at HEAD; the root can't pin it (docs/upstream-main-limits.md, L1)" ;;
+      if library_is_sha "$pin"; then
+        printf '%-5s %-45s %s\n' HEAD "$name" "reads the library at HEAD; the root can't pin it (docs/upstream-main-limits.md, L1)"
+      else
+        printf '%-5s %-45s %s\n' HEAD "$name" "reads the library at HEAD, its default branch"
+      fi ;;
     OFF) off=$((off + 1)); printf '%-5s %-45s %s\n' OFF "$name" "at $rev, not your pin $pin" ;;
   esac
 done <<<"$rows"
-[ "$head" = 0 ] || echo "$head Application(s) read the library at HEAD: they follow upstream main, whatever you pin."
+if [ "$head" != 0 ]; then
+  if library_is_sha "$pin"; then echo "$head Application(s) read the library at HEAD: they follow upstream main, whatever you pin."
+  else echo "$head Application(s) read the library at HEAD."; fi
+fi
 [ "$off" = 0 ] || { echo "$off Application(s) off your pin."; exit 1; }

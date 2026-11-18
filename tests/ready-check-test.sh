@@ -68,9 +68,16 @@ STUB
 # A git wrapper: a local origin never asks for a password, so on ls-remote it
 # asks $GIT_ASKPASS itself, as git would for https, and keeps the answer.
 REAL_GIT=$(command -v git)
+LIB_MAIN=1111111111111111111111111111111111111111
 cat > "$T/bin/git" <<STUB
 #!/bin/bash
 [ -z "\${STUB_DIR:-}" ] || printf '%s\n' "\$*" >> "\$STUB_DIR/git-argv.log"
+# The library (a github.com URL in the root): its branch main is at LIB_MAIN,
+# with no network; LIB_DOWN makes it unreachable.
+if [[ " \$* " == *" ls-remote "*ai-grid-cluster-gitops* ]]; then
+  [ -z "\${LIB_DOWN:-}" ] || { echo "fatal: unable to access" >&2; exit 128; }
+  printf '%s\trefs/heads/main\n' "$LIB_MAIN"; exit 0
+fi
 if [[ " \$* " == *" ls-remote "* ]] && [ -n "\${GIT_ASKPASS:-}" ]; then
   "\$GIT_ASKPASS" "Password for 'https://x-access-token@github.com': " > "\$STUB_DIR/askpass.out"
 fi
@@ -129,7 +136,8 @@ t "all ready: OK and outputs.json" 0 "^OK " \
   'jqt ".hub.persesURL == \"https://perses.openshift-cluster-observability-operator.svc:8080\" and .hub.thanosURL == \"https://thanos.apps.hub.example.com\""' \
   'jqt ".hub.lokiStack == \"redhat-ods-monitoring/usage-logs\""' \
   'jqt ".providerAdminTokenFile == \".config/provider-admin-token\""' \
-  'jqt ".library.url == \"https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git\" and (.library.revision | test(\"^[0-9a-f]{40}$\"))"' \
+  'jqt ".library.url == \"https://github.com/ai-grid-cloud/ai-grid-cluster-gitops.git\" and .library.revision == \"main\""' \
+  'jqt ".library.commit == \"$LIB_MAIN\""' \
   'jqt "(.sites | length) == 2"' \
   'jqt ".sites[0] == {name: \"site-b\", api: \"https://api.site-b.example.com:6443\", appsDomain: \"apps.site-b.example.com\", acmName: \"site-b\"}"' \
   'jqt ".sites[1] == {name: \"site-c\", api: \"https://api.site-c.example.com:6443\", appsDomain: \"apps.site-c.example.com\", acmName: \"site-c\"}"' \
@@ -143,6 +151,18 @@ t "all ready: OK and outputs.json" 0 "^OK " \
   '[ -z "$(grep ai_grid.v1 "$W/curl.log" | grep -v -e "--max-time 20")" ]' \
   'grep -q "^OK .*Perses" <<<"$out"' \
   '! grep -qwE "apply|create|delete|patch|edit|label|annotate|replace|scale|rollout" "$W/argv.log"'
+
+# library.commit: the commit the branch is at as the check runs; null when the
+# library can't be reached; for a pinned commit, that commit.
+W="$T/lib-down"; ready "$W"; rm -f "$(OUT)"; out=$(env PATH="$T/bin:$PATH" STUB_DIR="$W" LIB_DOWN=1 "$D/scripts/ready-check.sh" 2>&1) && rc=0 || rc=$?
+t "library unreachable: still OK, library.commit null" 0 "^OK " 'jqt ".library.revision == \"main\" and .library.commit == null"'
+D="$T/pinned"; newrepo "$D"; PINSHA=2222222222222222222222222222222222222222
+sed -i.bak -E "s#^([[:space:]]*libraryRevision: &libraryRevision )[^[:space:]]+#\1$PINSHA#" "$D/root/applicationset.yaml"; rm "$D/root/applicationset.yaml.bak"
+git -C "$D" -c core.hooksPath=/dev/null -c user.name=test -c user.email=test@example.com commit -qam pin && git -C "$D" push -q origin HEAD:refs/heads/main && git -C "$D" fetch -q origin
+W="$T/pinned-w"; ready "$W"; run
+t "pinned at a commit: library.revision and library.commit are that commit" 0 "^OK " \
+  'jqt ".library.revision == \"$PINSHA\" and .library.commit == \"$PINSHA\""'
+D="$T/repo"
 
 W="$T/decoy"; ready "$W"; rm -f "$(OUT)"
 echo "{\"items\":[$(route a a.attacker.example.net),$(route ai-grid-provider-console console.apps.hub.example.com)]}" > "$W/hub/route-ai-grid-provider-console.json"

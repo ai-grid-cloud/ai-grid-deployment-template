@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
 # Tests for scripts/check-deployment.sh and bootstrap-hub.sh's pin check,
 # against fixture deployments made from this repository's root/, apps/ and
-# hub/catalog/. Uses LIBRARY if set, else fetches the library at the pin.
+# hub/catalog/, at a fixed library commit: the one the guide's links pin
+# (README.md), or TEST_LIBRARY_REVISION (make test-upstream sets main). Uses
+# LIBRARY if set (a checkout at that revision), else fetches it, cached in this
+# repository's .library/.
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 SRC=$(pwd -P)
-LIB=$(scripts/library.sh); export LIBRARY=$LIB
 T=$(cd "$(mktemp -d)" && pwd -P); trap 'rm -rf "$T"' EXIT
 total=0 fails=0
-SHA=$(git -C "$LIB" rev-parse HEAD)
+REV=${TEST_LIBRARY_REVISION:-$(grep -ohE 'ai-grid-cluster-gitops/blob/[0-9a-f]{40}/' README.md | head -n1 | sed -E 's#.*/blob/([0-9a-f]{40})/#\1#')}
+[ -n "$REV" ] || { echo "no library commit in README.md's links, and no TEST_LIBRARY_REVISION" >&2; exit 1; }
+set_rev() { sed -i.bak -E "s#^([[:space:]]*libraryRevision: &libraryRevision )[^[:space:]]+#\1$2#" "$1/root/applicationset.yaml"; rm "$1/root/applicationset.yaml.bak"; }
+B="$T/base"; mkdir -p "$B" "$SRC/.library"; cp -R "$SRC/root" "$B/"; set_rev "$B" "$REV"; ln -s "$SRC/.library" "$B/.library"
+LIB=$(scripts/library.sh "$B"); export LIBRARY=$LIB
 
 fixture() { # name -> a deployment dir with every input set
   local d="$T/$1"; mkdir -p "$d"
-  cp -R "$SRC/root" "$SRC/apps" "$SRC/hub" "$d/"
+  cp -R "$SRC/root" "$SRC/apps" "$SRC/hub" "$d/"; set_rev "$d" "$REV"
   cat > "$d/root/inputs.env" <<ENV
 deploymentRepoURL=https://git.example.com/acme/deployment.git
 deploymentRevision=main
@@ -100,7 +106,7 @@ t "placeholders in the fetched .library/ are ignored" 0 "every repository is an 
 t "no root/ is a usage error" 2 "Usage" bash scripts/check-deployment.sh "$T/nothing"
 
 d=$(fixture pin)
-sed -i.bak "s/$SHA/0123456789abcdef0123456789abcdef01234567/g" "$d/root/applicationset.yaml"
+sed -i.bak -E "s#^([[:space:]]*libraryRevision: &libraryRevision )[^[:space:]]+#\10123456789abcdef0123456789abcdef01234567#" "$d/root/applicationset.yaml"
 t "bootstrap-hub refuses a library checkout off the pin" 1 "isn't at your pin 0123456789abcdef" \
   env PATH="$T/badk:$PATH" bash -c 'f=$(mktemp); echo {} > "$f"; RHOAI_QUAY_AUTH_FILE=$f KUBECONFIG=$f bash scripts/bootstrap-hub.sh --deployment "$0"' "$d"
 
@@ -122,6 +128,8 @@ printf '{"auths":{"quay.io":{"auth":"dTpw"}}}' > "$T/generic.json"
 t "bootstrap-hub refuses a general login before any write" 1 "no quay.io/rhoai login in .*generic.json.*ALLOW_GENERIC_LOGIN=1" \
   env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/generic.json" bash scripts/bootstrap-hub.sh --deployment "$d"
 t "  ... and made no oc apply" 0 "^ok$" bash -c '! grep -q " apply" "$0" && echo ok' "$T/oc.log"
+t "bootstrap-hub names the library revision and the commit it's at" 1 "^Library at $REV \(commit [0-9a-f]{12}\)\.$" \
+  env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/generic.json" bash scripts/bootstrap-hub.sh --deployment "$d"
 printf 'not json' > "$T/bad.json"
 t "bootstrap-hub refuses an unreadable auth file" 1 "can't read .*bad.json" \
   env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/bad.json" bash scripts/bootstrap-hub.sh --deployment "$d"

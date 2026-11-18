@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Tests for the root (root/applicationset.yaml and root/kustomization.yaml): its
 # selection, its library pin, and the Applications it generates. Renders a
-# copy of root/ offline with a sample inputs.env. The library comes from
-# LIBRARY (a checkout at the pin) or else scripts/library.sh's .library/.
+# copy of root/ offline with a sample inputs.env, at a fixed library commit so
+# the result doesn't change as the library's main moves: the commit the guide's
+# links pin (README.md), or TEST_LIBRARY_REVISION (make test-upstream sets main).
+# The library comes from LIBRARY (a checkout at that revision) or else
+# scripts/library.sh, cached in this repository's .library/.
 #
 # With Go installed, it also renders the root's templatePatch for every
 # selected component the way the ApplicationSet controller does
@@ -22,12 +25,13 @@ t() { # name cmd...: ok when cmd succeeds
 }
 
 . scripts/library.sh
-PIN=$(library_pin "$SRC" libraryRevision)
-[[ "$PIN" =~ ^[0-9a-f]{40}$ ]] || { echo "no 40-character libraryRevision in root/applicationset.yaml" >&2; exit 1; }
-LIB=${LIBRARY:-$(scripts/library.sh)}
-[ "$(git -C "$LIB" rev-parse HEAD)" = "$PIN" ] || { echo "the library at $LIB isn't at the pin $PIN" >&2; exit 1; }
-
-D="$T/deploy"; mkdir -p "$D"; cp -R "$SRC/root" "$SRC/apps" "$SRC/hub" "$D/"
+PIN=${TEST_LIBRARY_REVISION:-$(grep -ohE 'ai-grid-cluster-gitops/blob/[0-9a-f]{40}/' README.md | head -n1 | sed -E 's#.*/blob/([0-9a-f]{40})/#\1#')}
+[ -n "$PIN" ] || { echo "no library commit in README.md's links, and no TEST_LIBRARY_REVISION" >&2; exit 1; }
+echo "   (library at $PIN)"
+D="$T/deploy"; mkdir -p "$D" "$SRC/.library"; cp -R "$SRC/root" "$SRC/apps" "$SRC/hub" "$D/"; ln -s "$SRC/.library" "$D/.library"
+sed -i.bak -E "s#^([[:space:]]*libraryRevision: &libraryRevision )[^[:space:]]+#\1$PIN#" "$D/root/applicationset.yaml"; rm "$D/root/applicationset.yaml.bak"
+LIB=${LIBRARY:-$(scripts/library.sh "$D")}
+library_at "$LIB" "$PIN" || { echo "the library at $LIB isn't at $PIN" >&2; exit 1; }
 cat > "$D/root/inputs.env" <<'ENV'
 deploymentRepoURL=https://git.example.com/acme/deployment.git
 deploymentRevision=main
@@ -82,14 +86,19 @@ generators() {
 }
 t "ODF and own-apps generators, every one with every input" generators
 
-one_sha() {
+one_rev() {
   local s; s=$(jq -r '[.spec.generators[0].git.revision, .spec.generators[0].git.values.libraryRevision,
                         .spec.generators[1].matrix.generators[0].git.revision] | unique | .[]' "$AS")
-  [ "$s" = "$PIN" ] || { echo "rendered pins: $s; libraryRevision: $PIN"; return 1; }
-  [ "$(grep -cE '[0-9a-f]{40}' "$SRC/root/applicationset.yaml")" = 1 ] || { echo "want the SHA in exactly one place"; return 1; }
+  [ "$s" = "$PIN" ] || { echo "rendered revisions: $s; libraryRevision: $PIN"; return 1; }
+  [ "$(grep -cE '^[[:space:]]*libraryRevision:' "$D/root/applicationset.yaml")" = 1 ] || { echo "want libraryRevision set in exactly one place"; return 1; }
+  if library_is_sha "$PIN"; then
+    [ "$(grep -cE '[0-9a-f]{40}' "$D/root/applicationset.yaml")" = 1 ] || { echo "want the SHA in exactly one place"; return 1; }
+  else
+    ! grep -qE '[0-9a-f]{40}' "$D/root/applicationset.yaml" || { echo "a SHA in applicationset.yaml, which follows $PIN"; return 1; }
+  fi
   ! grep -qE '[0-9a-f]{40}' "$SRC/root/kustomization.yaml" || { echo "a SHA in kustomization.yaml"; return 1; }
 }
-t "pinned at one SHA, in one place" one_sha
+t "one library revision, in one place" one_rev
 
 # --- the generated Applications ----------------------------------------------
 TP="$T/templatepatch"
