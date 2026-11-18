@@ -33,6 +33,7 @@ cat > "$T/bin/openssl" <<STUB
 if [ "\$1" = s_client ]; then
   echo "openssl \$*" >> "\$STUB_DIR/openssl.log"
   host=""; prev=""; for a in "\$@"; do [ "\$prev" = -connect ] && host=\${a%:*}; prev=\$a; done
+  [ ! -f "\$STUB_DIR/\$host.hang" ] || exec sleep 37
   [ -f "\$STUB_DIR/\$host.chain" ] || { echo "connect:errno=61" >&2; exit 1; }
   echo "CONNECTED(00000003)"; echo "depth=1 CN = root"; echo "verify error:num=19:self-signed certificate in certificate chain" >&2
   echo "---"; echo "Certificate chain"; cat "\$STUB_DIR/\$host.chain"; echo "---"
@@ -146,8 +147,81 @@ t "  ... with a warning that it may change" bash -c 'grep -q "CN=api.hub.example
 new_repo; sed -i.bak 's#https://api.hub.example.com:6443#https://hub.example.com:6443#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"; run -- hub
 t "an API host not named api.DOMAIN: stops, saying why" bash -c '[ "$0" != 0 ] && grep -q "apps domain" <<<"$1"' "$rc" "$out"
 
-new_repo; out=$(make -s -C "$D" fetch-ca 2>&1) && rc=0 || rc=$?
-t "no NAME: asks for one" bash -c '[ "$0" != 0 ] && grep -q "NAME=hub" <<<"$1"' "$rc" "$out"
+# No NAME: every cluster.
+new_repo; run -- ""
+t "no NAME: every cluster written, exit 0" bash -c '[ "$0" = 0 ] &&
+  [ "$(ca_of hub)" = "$(cat "$1/api-root.pem" "$1/ingress-root.pem")" ] &&
+  [ "$(ca_of site-1)" = "$(cat "$1/other-root.pem")" ] && [ "$(ca_of site-2)" = "$(cat "$1/other-root.pem")" ]' "$rc" "$T"
+t "  ... one ca: per cluster, comments kept, the file still loads" bash -c '[ "$(grep -c "ca: |" "$0/clusters.yaml")" = 3 ] &&
+  grep -qF "# first" "$0/clusters.yaml" && grep -qF "  # a comment under the hub" "$0/clusters.yaml" && bash "$0/scripts/clusters.sh" --rows "$0" >/dev/null' "$D"
+t "  ... a summary line per cluster" bash -c 'for n in hub site-1 site-2; do grep -qE "^  $n: written" <<<"$0" || exit 1; done' "$out"
+t "  ... prints each cluster's fingerprints" bash -c '[ "$(grep -c "SHA-256 fingerprint: $1" <<<"$0")" -ge 2 ]' "$out" "$(fp other-root)"
+
+before=$(cksum < "$D/clusters.yaml") reads=$(wc -l < "$W/openssl.log")
+cat "$T/api-leaf.pem" "$T/api-root.pem" > "$W/api.site-2.example.com.chain"
+cat "$T/ingress-leaf.pem" "$T/api-root.pem" > "$W/oauth-openshift.apps.site-2.example.com.chain"
+run -- ""
+t "no NAME, every cluster with a ca: already: none fetched, file unchanged, each one skipped, exit 0" bash -c '[ "$0" = 0 ] && [ "$(cksum < "$1")" = "$2" ] &&
+  for n in hub site-1 site-2; do grep -qE "^  $n: already set \(ca:\), skipped" <<<"$3" || exit 1; done && [ "$(wc -l < "$4/openssl.log")" = "$5" ]' "$rc" "$D/clusters.yaml" "$before" "$out" "$W" "$reads"
+run FORCE=1 -- ""
+t "no NAME, FORCE=1: replaces every ca:" bash -c '[ "$0" = 0 ] && [ "$(ca_of site-2)" = "$(cat "$1/api-root.pem")" ] &&
+  [ "$(ca_of site-1)" = "$(cat "$1/other-root.pem")" ] && [ "$(grep -c "ca: |" "$2")" = 3 ] && [ "$(grep -c ": written" <<<"$3")" = 3 ]' "$rc" "$T" "$D/clusters.yaml" "$out"
+
+new_repo; printf '%s' "$CLUSTERS" | sed 's/^catalog:$/  - name: REQUIRED-siteName\n    api: https:\/\/api.site-3.example.com:6443\n  - name: site-4\n    api: REQUIRED-siteAPIURL\ncatalog:/' > "$D/clusters.yaml"
+run -- ""
+t "no NAME, placeholders: the others written, exit 0" bash -c '[ "$0" = 0 ] && [ -n "$(ca_of hub)" ] && [ -n "$(ca_of site-1)" ] && [ -n "$(ca_of site-2)" ] && [ "$(grep -c "ca: |" "$1")" = 3 ]' "$rc" "$D/clusters.yaml"
+t "  ... names each skipped one" bash -c 'grep -qE "^  site-4: placeholder \(skipped\): set its name: and api:" <<<"$0" && grep -q "Skipping site 3: .*REQUIRED-" <<<"$0" && grep -q "Skipping site-4: .*REQUIRED-" <<<"$0" &&
+  grep -qE "^  site 3: placeholder \(skipped\)" <<<"$0" && grep -qE "^  site-4: placeholder \(skipped\)" <<<"$0"' "$out"
+t "  ... never reads a placeholder's host" bash -c '! grep -q "site-3\|REQUIRED" "$0"' "$W/openssl.log"
+
+new_repo; rm "$W/api.site-1.example.com.chain"; run -- ""
+t "no NAME, one cluster fails: the others written, exit non-zero" bash -c '[ "$0" != 0 ] && [ -n "$(ca_of hub)" ] && [ -z "$(ca_of site-1)" ] && [ -n "$(ca_of site-2)" ]' "$rc"
+t "  ... the summary gives each result and the reason" bash -c 'grep -qE "^  hub: written" <<<"$0" && grep -qE "^  site-2: written" <<<"$0" &&
+  grep -qE "^  site-1: FAILED: no certificate from api.site-1.example.com:6443" <<<"$0"' "$out"
+
+new_repo; printf '%s' "$CLUSTERS" | sed 's/^catalog:$/  - {name: site-3, api: "https:\/\/api.site-3.example.com:6443"}\ncatalog:/' > "$D/clusters.yaml"
+cat "$T/api-leaf.pem" "$T/other-root.pem" > "$W/api.site-3.example.com.chain"; cat "$T/ingress-leaf.pem" "$T/other-root.pem" > "$W/oauth-openshift.apps.site-3.example.com.chain"
+run -- ""
+t "no NAME, a layout it can't edit: block printed for that one, the others written, exit non-zero" bash -c '[ "$0" != 0 ] &&
+  grep -qE "^  site-3: printed block to paste" <<<"$1" && grep -qx "ca: |" <<<"$1" && [ "$(grep -c "ca: |" "$2")" = 3 ] && [ -n "$(ca_of site-2)" ]' "$rc" "$out" "$D/clusters.yaml"
+
+new_repo; sed -i.bak 's/^  # a comment under the hub$/  ca: ignore/' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+run -- ""
+t "no NAME keeps ca: ignore" bash -c '[ "$0" = 0 ] && [ "$(ca_of hub)" = ignore ] && grep -qE "^  hub: already set \(ca: ignore\), skipped" <<<"$1" && [ -n "$(ca_of site-1)" ]' "$rc" "$out"
+run FORCE=1 -- ""
+t "no NAME, FORCE=1 replaces ca: ignore" bash -c '[ "$0" = 0 ] && [ "$(ca_of hub)" = "$(cat "$1/api-root.pem" "$1/ingress-root.pem")" ] && ! grep -q "ca: ignore" "$2"' "$rc" "$T" "$D/clusters.yaml"
+
+new_repo; sed -i.bak 's#^  api: https://api.hub.example.com:6443#  api: REQUIRED-hubAPIURL#; s#^  - name: site-1 .*#  - name: REQUIRED-siteName#; s#^    name: site-2#    name: REQUIRED-siteName#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+before=$(cksum < "$D/clusters.yaml"); run -- ""
+t "no NAME, every cluster a placeholder: summary, exit non-zero, file unchanged" bash -c '[ "$0" != 0 ] && [ "$(cksum < "$1")" = "$2" ] &&
+  grep -qE "^  hub: placeholder \(skipped\): set its api:$" <<<"$3" && grep -q "Skipping hub: its api: is still" <<<"$3" &&
+  grep -qE "^  site 1: placeholder" <<<"$3" && grep -qE "^  site 2: placeholder" <<<"$3" && grep -q "no cluster in clusters.yaml has its name: and api: set" <<<"$3"' "$rc" "$D/clusters.yaml" "$before" "$out"
+
+new_repo; sed -i.bak 's/^  - name: site-1 .*/  - name: Site_1/' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+before=$(cksum < "$D/clusters.yaml"); run -- ""
+t "no NAME, a clusters.yaml error (a name that isn't a DNS label): stops before fetching anything" bash -c '[ "$0" != 0 ] &&
+  grep -q "isn.t a DNS label" <<<"$1" && [ "$(cksum < "$2")" = "$3" ] && [ ! -e "$4/openssl.log" ] && ! grep -q summary <<<"$1"' "$rc" "$out" "$D/clusters.yaml" "$before" "$W"
+
+new_repo; mkdir -p "$D/.config"; (umask 077; cp "$D/clusters.yaml" "$D/.config/clusters.yaml"); chmod 600 "$D/.config/clusters.yaml"
+before=$(cksum < "$D/clusters.yaml"); run -- ""
+t "no NAME, .config/clusters.yaml with catalog.url unset: every cluster written there, mode still 600, clusters.yaml untouched" bash -c '[ "$0" = 0 ] &&
+  for n in hub site-1 site-2; do [ -n "$(ca_of $n "$1/.config/clusters.yaml")" ] || exit 1; done &&
+  [ "$(ls -l "$1/.config/clusters.yaml" | cut -c1-10)" = -rw------- ] && [ "$(cksum < "$1/clusters.yaml")" = "$2" ]' "$rc" "$D" "$before"
+
+new_repo; touch "$W/api.site-1.example.com.hang"; start=$(date +%s); run FETCH_CA_TIMEOUT=1 -- ""; took=$(( $(date +%s) - start ))
+t "no NAME, a server that never answers: FAILED after the timeout, the others written, done in seconds" bash -c '[ "$0" != 0 ] && [ "$1" -lt 15 ] &&
+  grep -qE "^  site-1: FAILED: no certificate from api.site-1.example.com:6443" <<<"$2" && [ -n "$(ca_of hub)" ] && [ -n "$(ca_of site-2)" ]' "$rc" "$took" "$out"
+
+new_repo; run FETCH_CA_TIMEOUT=47 -- ""
+t "no timeout watcher outlives the run" bash -c '[ "$0" = 0 ] && ! pgrep -f "^sleep 47$" >/dev/null' "$rc"
+
+new_repo; printf '%s' "$CLUSTERS" | sed 's/^catalog:$/  - name: REQUIRED-siteName\n    api: https:\/\/api.site-3.example.com:6443\ncatalog:/' > "$D/clusters.yaml"
+before=$(cksum < "$D/clusters.yaml"); run _FETCH_CA_RESULT="$T/stray" -- hub
+t "NAME= stays strict: a placeholder elsewhere stops it, even with _FETCH_CA_RESULT exported" bash -c '[ "$0" != 0 ] && grep -q "set these in clusters.yaml" <<<"$1" &&
+  [ "$(cksum < "$2")" = "$3" ] && [ ! -e "$4/stray" ]' "$rc" "$out" "$D/clusters.yaml" "$before" "$T"
+
+new_repo; run -- site-1
+t "NAME=: that cluster only, no summary" bash -c '[ "$0" = 0 ] && [ -n "$(ca_of site-1)" ] && [ -z "$(ca_of hub)" ] && [ -z "$(ca_of site-2)" ] && ! grep -q "summary" <<<"$1"' "$rc" "$out"
 out=$(make -s -C "$D" help 2>&1); rc=0
 t "make help lists fetch-ca" grep -q "^fetch-ca: " <<<"$out"
 

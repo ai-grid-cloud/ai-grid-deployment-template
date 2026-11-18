@@ -311,6 +311,7 @@ new_repo; mkdir -p "$D/.config/hub"; printf '%s\n' "$SENTINEL" > "$D/.config/hub
 run STUB_X509=1 -- --non-interactive hub
 three_ways() { [ "$rc" = 1 ] && grep -qF "make fetch-ca NAME=hub" <<<"$out" && grep -qF "ca: to a PEM file's path" <<<"$out" && grep -qF "ca: ignore (not recommended)" <<<"$out"; }
 t "a certificate error from the API: names fetch-ca, a ca: path and ca: ignore" three_ways
+t "  ... and, with no ca: yet, make fetch-ca for every cluster" grep -qF "(or make fetch-ca for every cluster)" <<<"$out"
 new_repo; private "hub: {username: admin, password: '$PW'}"
 run STUB_CURL_X509=1 -- --non-interactive hub
 t "  ... and from the OAuth server" three_ways
@@ -335,6 +336,7 @@ t "oc login --web: no stdin, a fresh kubeconfig moved into place" web_fresh
 ca_repo '  ca: certs/hub.pem'; mkdir -p "$D/certs"; cp "$T/ca.pem" "$D/certs/hub.pem"
 run AI_GRID_TOKEN_HUB="$SENTINEL" STUB_X509=1 -- --non-interactive hub
 t "a certificate error with a ca: already: make fetch-ca NAME=hub FORCE=1" bash -c '[ "$0" = 1 ] && grep -qF "make fetch-ca NAME=hub FORCE=1" <<<"$1"' "$rc" "$out"
+t "  ... never FORCE=1 for every cluster" bash -c '! grep -q "for every cluster" <<<"$0"' "$out"
 
 # M7: the CA path is single-quoted in the kubeconfig, a ' doubled.
 ca_repo "  ca: \"certs/it's.pem\""; mkdir -p "$D/certs"; cp "$T/ca.pem" "$D/certs/it's.pem"

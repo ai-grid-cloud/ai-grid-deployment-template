@@ -104,7 +104,8 @@ password_source() { # NAME: sets user, pass and src; 1 when there's no password,
 trust_fix() { # NAME: the ways to make the scripts trust NAME's certificates
   local entry force=""; if [ "$1" = hub ]; then entry=hub; else entry="sites[$1]"; fi
   [ "$(jq -r --arg n "$1" '(if $n == "hub" then .hub else first(.sites[] | select(.name == $n)) end) | has("ca")' <<<"$CLUSTERS_JSON")" = false ] || force=" FORCE=1"
-  echo "run make fetch-ca NAME=$1$force, or set $entry's ca: to a PEM file's path in clusters.yaml, or set ca: ignore (not recommended)"
+  # Without a ca: yet, make fetch-ca for every cluster is safe; FORCE=1 for every cluster would replace the others' ca:.
+  echo "run make fetch-ca NAME=$1$force${force:-" (or make fetch-ca for every cluster)"}, or set $entry's ca: to a PEM file's path in clusters.yaml, or set ca: ignore (not recommended)"
 }
 
 certificate_or() { # NAME ERR WHAT: says certificate problem when ERR is one, else WHAT

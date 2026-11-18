@@ -15,8 +15,13 @@
 #
 # Sourced by the other scripts:
 #   clusters_load DIR             reads and checks DIR/.config/clusters.yaml, else DIR/clusters.yaml
+#   clusters_load DIR --skip-placeholders
+#                                 the same, but allows REQUIRED- values: a cluster whose
+#                                 name: or api: is one is left out of CLUSTERS_ROWS and
+#                                 named in CLUSTERS_SKIPPED (make fetch-ca with no NAME)
 #   CLUSTERS_FILE                 the file it read
 #   CLUSTERS_ROWS                 one line per cluster: NAME KIND API, KIND hub or site
+#   CLUSTERS_SKIPPED              with --skip-placeholders, the clusters left out, one per line
 #   secret_get JQ_PATH            a secret's value, such as .catalog.token; empty when unset
 #   cluster_secret NAME KEY       the cluster's own token, username or password; empty when unset
 #   deployment_load DIR           clusters_load, then the settings and the secret files
@@ -35,7 +40,7 @@
 #   INSTALL_NS_RE                 an extended regex matching the namespaces an
 #                                 install creates on a hub or a site
 
-CLUSTERS_DIR="" CLUSTERS_ROWS="" CLUSTERS_JSON="" CLUSTERS_FILE=""
+CLUSTERS_DIR="" CLUSTERS_ROWS="" CLUSTERS_JSON="" CLUSTERS_FILE="" CLUSTERS_SKIPPED=""
 # The keys clusters.yaml's options: may hold (make install's settings).
 # GATE_O11Y_SECONDS and GATE_TENANT_IDP_SECONDS are accepted and unused: earlier
 # versions read them, and a private file may still set them.
@@ -57,7 +62,8 @@ _old_format() {
 
 clusters_load() {
   CLUSTERS_DIR=$(cd "${1:-.}" && pwd)
-  local f json cjson rows="" what name kind api left mode private="" rel
+  local f json cjson rows="" skipped="" what name kind api left mode private="" rel partial=""
+  [ "${2:-}" != --skip-placeholders ] || partial=1
   if [ -f "$CLUSTERS_DIR/.config/clusters.yaml" ]; then f="$CLUSTERS_DIR/.config/clusters.yaml" private=1
   else f="$CLUSTERS_DIR/clusters.yaml"; fi
   CLUSTERS_FILE=$f rel=${f#"$CLUSTERS_DIR/"}
@@ -145,9 +151,13 @@ clusters_load() {
       ([secret_paths] as $s | (if $private then . else del(.catalog.url) end) | reduce $s[] as $p (.; delpaths([$p]))
         | .. | strings | select(test("REQUIRED-")) | match("REQUIRED-[A-Za-z]+").string),
       (. as $root | secret_paths as $p | select(getpath($p) | test("REQUIRED-")) | $p | path_text($root))' --argjson private "$([ -n "$private" ] && echo true || echo false)" <<<"$json" | awk '!seen[$0]++' | tr '\n' ' ')
-  [ -z "$left" ] || { echo "error: set these in $rel: ${left% }" >&2; return 1; }
+  [ -z "$left" ] || [ -n "$partial" ] || { echo "error: set these in $rel: ${left% }" >&2; return 1; }
   # One tab-separated row per cluster: what (hub or site N), name, kind, api.
   while IFS=$'\t' read -r what name kind api; do
+    if [ -n "$partial" ] && [[ "$name$api" == *REQUIRED-* ]]; then
+      if [[ "$name" == *REQUIRED-* ]]; then skipped+="$what"$'\n'; else skipped+="$name"$'\n'; fi
+      continue
+    fi
     [ -n "$name" ] && [ -n "$api" ] ||
       { echo "error: clusters.yaml: $what needs $([ "$what" = hub ] || echo 'name and ')api" >&2; return 1; }
     [[ "$name" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || { echo "error: clusters.yaml: $what name $name isn't a DNS label" >&2; return 1; }
@@ -162,9 +172,9 @@ clusters_load() {
   left=$(jq -r '[(.sites // [])[] | select(has("maasCertificate")) | .name][0] // empty' <<<"$json")
   [ -z "$left" ] || { echo "error: $rel: sites[$left].maasCertificate: remove it: on the library's main branch a site's MaaS gateway keeps the cluster's internal certificate (docs/upstream-main-limits.md)" >&2; return 1; }
   # The private file is for make install, which needs the catalog: say so now, not later.
-  [ -z "$private" ] || [ -n "$(jq -r '.catalog.url // "" | select(startswith("REQUIRED-") | not)' <<<"$json")" ] ||
+  [ -z "$private" ] || [ -n "$partial" ] || [ -n "$(jq -r '.catalog.url // "" | select(startswith("REQUIRED-") | not)' <<<"$json")" ] ||
     { echo "error: set catalog.url in .config/clusters.yaml" >&2; return 1; }
-  CLUSTERS_ROWS=$rows CLUSTERS_JSON=$json
+  CLUSTERS_ROWS=$rows CLUSTERS_JSON=$json CLUSTERS_SKIPPED=$skipped
   # ca: ignore turns certificate checks off for that cluster: say so on every run, once per
   # cluster, even when a script runs another (AI_GRID_CA_IGNORE_WARNED is inherited).
   for name in $(jq -r '[(.hub | objects | select(.ca == "ignore") | "hub"), ((.sites // [])[] | objects | select(.ca == "ignore") | .name)][]' <<<"$json"); do

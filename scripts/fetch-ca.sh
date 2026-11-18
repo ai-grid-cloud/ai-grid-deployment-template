@@ -2,8 +2,19 @@
 # Fetches the CA certificates a cluster presents and writes them into the
 # cluster's ca: in clusters.yaml, so make login and the other scripts trust it.
 #
+#   scripts/fetch-ca.sh               (make fetch-ca) every cluster whose name: and api: are set
 #   scripts/fetch-ca.sh NAME          (make fetch-ca NAME=...) NAME is hub or a site's name
-#   FORCE=1 scripts/fetch-ca.sh NAME  replaces a ca: the cluster already has
+#   FORCE=1 scripts/fetch-ca.sh [NAME]  replaces a ca: the cluster already has, ca: ignore too
+#
+# With no NAME, it runs itself, as scripts/fetch-ca.sh --result FILE NAME, once
+# for each cluster in clusters.yaml, the hub
+# first, and skips, naming them, the clusters whose name: or api: is still a
+# REQUIRED- placeholder, and, without FORCE=1, those that have a ca: already,
+# ca: ignore included. Each run rereads the file, which the run before it may
+# have rewritten. A clusters.yaml error, such as a name that isn't a DNS label,
+# stops it before it fetches anything. One cluster that fails doesn't stop the
+# others: at the end it prints one line per cluster, and exits 1 when any of
+# them failed or needs its block pasted, or when every cluster is a placeholder.
 #
 # A new cluster's API server and its OAuth server, which the ingress router
 # serves, often present certificates that no public CA signed. This script
@@ -35,9 +46,60 @@ here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/clusters.sh"
 TIMEOUT=${FETCH_CA_TIMEOUT:-15}   # seconds for each server to answer
 
+# --result FILE: only the run for every cluster passes it, for one cluster's
+# outcome; that run allows the placeholders it skipped. NAME alone stays strict.
+result=""
+if [ "${1:-}" = --result ]; then
+  [ -n "${2:-}" ] && [ -n "${3:-}" ] || { echo "usage: scripts/fetch-ca.sh [--result FILE NAME | NAME]" >&2; exit 2; }
+  result=$2; shift 2
+fi
 name=${1:-}
-[ -n "$name" ] || { echo "error: name a cluster: make fetch-ca NAME=hub, or a site's name" >&2; exit 2; }
-clusters_load "$here/.." || exit 1
+
+# Every cluster: run this script once for each, and sum up.
+if [ -z "$name" ]; then
+  clusters_load "$here/.." --skip-placeholders || exit 1
+  placeholder_keys() { if [ "$1" = hub ]; then echo "api: is"; else echo "name: or api: is"; fi; }
+  tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+  summary="" failed=0
+  while IFS= read -r s; do
+    [ -n "$s" ] || continue
+    echo "Skipping $s: its $(placeholder_keys "$s") still a REQUIRED- placeholder."
+  done <<<"$CLUSTERS_SKIPPED"
+  for n in $(awk '{print $1}' <<<"$CLUSTERS_ROWS"); do
+    clusters_load "$here/.." --skip-placeholders || exit 1   # the run before may have rewritten the file
+    has=$(jq -r --arg n "$n" '(if $n == "hub" then .hub else first(.sites[] | select(.name == $n)) end)
+      | if has("ca") | not then "" elif .ca == "ignore" then "ca: ignore" else "ca:" end' <<<"$CLUSTERS_JSON")
+    if [ -n "$has" ] && [ "${FORCE:-}" != 1 ]; then
+      echo "Skipping $n: it has a $has already; FORCE=1 replaces it."
+      summary+="  $n: already set ($has), skipped"$'\n'
+      continue
+    fi
+    echo; echo "== $n"
+    : > "$tmp/result"
+    # The run's output goes to ours, and its errors to ours and to $tmp/err; 3>&- keeps
+    # fd 3 from the run, whose timeout watchers would otherwise hold our output open.
+    set +e
+    { "$here/fetch-ca.sh" --result "$tmp/result" "$n" </dev/null 2>&1 1>&3 3>&- | tee "$tmp/err" >&2; rc=${PIPESTATUS[0]}; } 3>&1
+    set -e
+    if [ "$rc" = 0 ]; then
+      summary+="  $n: $(cat "$tmp/result")"$'\n'
+    elif [ -s "$tmp/result" ]; then
+      summary+="  $n: $(cat "$tmp/result")"$'\n'; failed=1
+    else
+      why=$(grep '^error: ' "$tmp/err" | tail -n 1 | sed "s/^error: //; s/^$n: //" || true)
+      summary+="  $n: FAILED: ${why:-exit $rc}"$'\n'; failed=1
+    fi
+  done
+  while IFS= read -r s; do
+    [ -z "$s" ] || summary+="  $s: placeholder (skipped): set its $(if [ "$s" = hub ]; then echo api:; else echo name: and api:; fi)"$'\n'
+  done <<<"$CLUSTERS_SKIPPED"
+  echo; echo "fetch-ca summary:"; printf '%s' "$summary"
+  [ -n "$CLUSTERS_ROWS" ] || { echo "error: no cluster in ${CLUSTERS_FILE#"$CLUSTERS_DIR/"} has its name: and api: set" >&2; exit 1; }
+  exit "$failed"
+fi
+
+# One cluster. With --result, it writes its outcome to that file for the summary.
+clusters_load "$here/.." ${result:+--skip-placeholders} || exit 1
 api=$(cluster_api "$name") || exit 1
 file=$CLUSTERS_FILE rel=${CLUSTERS_FILE#"$CLUSTERS_DIR/"}
 
@@ -54,7 +116,8 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 with_timeout() { # SECONDS CMD...: runs CMD, stopping it after SECONDS
   local secs=$1 pid watch rc; shift
   "$@" & pid=$!
-  ( sleep "$secs"; kill "$pid" 2>/dev/null ) & watch=$!
+  # The watcher kills its own sleep when stopped, so no sleep outlives the run.
+  ( trap 'kill "$s" 2>/dev/null; exit 0' TERM; sleep "$secs" & s=$!; wait "$s"; kill "$pid" 2>/dev/null ) & watch=$!
   wait "$pid" && rc=0 || rc=$?
   kill "$watch" 2>/dev/null || true
   return "$rc"
@@ -100,6 +163,7 @@ echo "Compare each SHA-256 fingerprint with what a cluster admin who already tru
 echo "oc get configmap kube-root-ca.crt -n default and the router's certificate, before you rely on it."
 
 paste_block() { # WHY: prints the ca: block to paste, then exits 1
+  [ -z "$result" ] || echo "printed block to paste: $1" > "$result"
   echo
   echo "$rel unchanged: $1. Put this in $name's entry in $rel, at the indentation of its api: line:"
   echo
@@ -163,5 +227,6 @@ if ! new=$(KUBECONFIG=/dev/null kubectl label --local -f "$tmp/new" ai-grid.dev/
   paste_block "the edited file didn't load as expected"
 fi
 cat "$tmp/new" > "$file"   # in place, so the file keeps its mode
+[ -z "$result" ] || echo "written ($n certificate(s))" > "$result"
 echo
 echo "Wrote $n certificate(s) to $name's ca: in $rel.$([ "$rel" = clusters.yaml ] && echo " Commit it with your other changes.")"
