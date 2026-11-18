@@ -144,8 +144,8 @@ The restarts stop and the Applications progress within a few minutes.
 
 **Cause:** they wait for the first site to join.
 
-**Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#2-verify)). After a site joins, check the site's Submariner gateways: two of its nodes need the label
-`submariner.io/gateway=true` ([site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide)).
+**Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#2-verify)). After a site joins, check the Submariner gateways on the hub and on the site: two nodes on each need the label
+`submariner.io/gateway=true`, which `make bootstrap` and `make site-import` add (`make install` on every run; [limits of `main`, L21](../upstream-main-limits.md#l21-nothing-labels-the-submariner-gateway-nodes)).
 
 ## Tenants get certificate errors on the MaaS hostname
 

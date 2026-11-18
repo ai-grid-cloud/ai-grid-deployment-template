@@ -1,12 +1,14 @@
 # Before you start
 
-You need the following. On the next page, `make prereqs` checks most of it for you, but not the network or the
-Submariner gateway nodes: check those yourself.
+You need the following. On the next page, `make prereqs` checks most of it for you, but not the network: check that
+yourself.
 
 - **Two clusters on OpenShift 4.21 or later:** a hub and a site, each with a default StorageClass and two nodes for
-  Submariner's gateways. Any two worker nodes do: the hub labels them. On a compact cluster or single-node OpenShift,
-  you label two nodes `submariner.io/gateway=true` by hand
-  ([site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide)). Size the site for its
+  Submariner's gateways. Any two worker nodes outside the control plane do: `make bootstrap` labels two of the hub's
+  workers `submariner.io/gateway=true`, and `make site-import` two of the site's, preferring nodes without GPUs. On a
+  compact cluster or single-node OpenShift, they stop and print the `oc label` command for you to run instead
+  ([limits of `main`, L21](../upstream-main-limits.md#l21-nothing-labels-the-submariner-gateway-nodes);
+  [site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide)). Size the site for its
   models; GPU models need GPU nodes. For a test, one cluster can be both hub and site
   ([all-in-one](09-hands-off.md#all-in-one-one-cluster)).
 - **No platform cert-manager Operator on the site.** On the library's `main` branch, a site that already runs the
@@ -36,6 +38,6 @@ Submariner gateway nodes: check those yourself.
 
 ## Checkpoint
 
-- You have everything in the list. Page 2 checks most of it; you checked the network and the gateway nodes.
+- You have everything in the list. Page 2 checks most of it; you checked the network.
 
 Next: [2. Set up your deployment repository](02-repositories.md)

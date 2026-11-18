@@ -42,6 +42,8 @@ STUB
 chmod +x "$T/bin/oc"
 
 D="$T/repo"; mkdir -p "$D/root"; cp -R "$SRC/scripts" "$D/"
+# The stub gateway-nodes.sh (tested in tests/gateway-nodes-test.sh) logs its arguments.
+printf '#!/bin/bash\necho "gateway-nodes $*" >> "%s/gw.log"\necho "GATEWAY $*"\nexit $(cat "%s/gw.rc" 2>/dev/null || echo 0)\n' "$T" "$T" > "$D/scripts/gateway-nodes.sh"
 printf '  libraryRepoURL: file://%s\n  libraryRevision: &libraryRevision %s\n' "$T/lib" "$(git -C "$T/lib" rev-parse HEAD)" > "$D/root/applicationset.yaml"
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
 for n in hub site-b; do
@@ -58,8 +60,15 @@ t "  ... with the first wait line" 0 "^Waiting for Argo CD cluster secret s \(1/
 t "  ... then one every 30 seconds" 0 "\(6/60\)" "\((2|3|4|5|7)/60\)" "" --yes
 t "a name and --yes" 0 "--cluster-name site-b --yes" "" "" site-b --yes
 
+t "the preview only previews the gateway nodes" 0 "GATEWAY --dry-run site-b" "" ""
+t "--yes labels the site's gateway nodes" 0 "GATEWAY site-b$" "dry-run" "" --yes
+echo 1 > "$T/gw.rc"
+t "  ... and stops before the import when it can't" 1 "GATEWAY site-b$" "IMPORTED|summary for" "" --yes
+t "  ... while the preview still shows the import" 0 "summary for" "" ""
+rm "$T/gw.rc"
 printf 'True True' > "$T/mc-state"
 t "already joined and available: nothing to do" 0 "site-b is already imported; nothing to do" "summary for" "" --yes
+t "  ... but still labels the gateway nodes" 0 "GATEWAY site-b$" "" "" --yes
 printf 'True False' > "$T/mc-state"
 t "joined but not available: runs the import" 0 "IMPORTED" "nothing to do" "" --yes
 rm "$T/mc-state"

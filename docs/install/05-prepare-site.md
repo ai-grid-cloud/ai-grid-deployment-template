@@ -44,9 +44,12 @@ Then run `make site-check` again. Its `previous AI Grid install` line should be 
 make site-check
 ```
 
-You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass`, `previous AI Grid install` and
-`apps domain DNS`. The hub delivers the registry logins and image mirror once the site is imported. For what a site
-must provide, such as GPU nodes and the NVIDIA GPU Operator for GPU models, see the library's
+You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass`, `previous AI Grid install`,
+`apps domain DNS` and `Submariner gateway nodes`. The last one says which nodes the import labels, or `already
+labelled`. If it's `MISSING`, the site has too few workers outside the control plane, as on a compact cluster or
+single-node OpenShift: run the `oc label node` command it prints with the site's login, then check again. The hub
+delivers the registry logins and image mirror once the site is imported. For what a site must provide, such as GPU
+nodes and the NVIDIA GPU Operator for GPU models, see the library's
 [site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide).
 
 If the check prints `FOUND` for a `cert-manager OperatorGroup`, the site already runs the platform's cert-manager
@@ -68,7 +71,10 @@ make site-import
 In the summary, check that `Hub API server` is your hub's API URL and `Cluster name` is your site's name, and see
 whether `Action` is `new import` or `resume registration`.
 
-Import the site. This runs the library's import script, which runs `clusteradm` against both clusters:
+Import the site. This first labels two of the site's worker nodes `submariner.io/gateway=true` for Submariner's
+gateways, preferring nodes without GPUs, because nothing in the library labels them
+([limits of `main`, L21](../upstream-main-limits.md#l21-nothing-labels-the-submariner-gateway-nodes)). Then it runs
+the library's import script, which runs `clusteradm` against both clusters:
 
 ```sh
 make site-import CONFIRM=1
@@ -77,8 +83,8 @@ make site-import CONFIRM=1
 Run again for a site that's already joined and available, it says `already imported; nothing to do`.
 
 The site joins ACM, and the hub's Argo CD registers it. The hub then prepares the site: it creates empty namespaces
-for OpenShift AI and the grid, delivers the registry logins, labels the Submariner gateway nodes and starts
-Submariner. OpenShift AI and the grid wait until you add the site to the grid on the next page.
+for OpenShift AI and the grid, delivers the registry logins and starts Submariner on the gateway nodes the import
+labelled. OpenShift AI and the grid wait until you add the site to the grid on the next page.
 
 The import ends with `Import complete.` once the ManagedCluster has joined and the hub's Argo CD has its cluster
 Secret for the site; the script waits for both.

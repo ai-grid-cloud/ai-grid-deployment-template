@@ -67,7 +67,7 @@ setup() { # NAME: a deployment repository $D and a stub directory $W, for one ca
   D="$T/$1/repo" W="$T/$1/stub"; mkdir -p "$W" "$D/.config"
   cp -R "$SRC/scripts" "$D/"
   for s in login.sh set-library.sh set-inputs.sh check-deployment.sh empty-catalog.sh \
-      install-report.sh provider-admin.sh check-prerequisites.sh; do fake "$s"; done
+      install-report.sh provider-admin.sh check-prerequisites.sh gateway-nodes.sh; do fake "$s"; done
   fake ready-check.sh '[ ! -f "$STUB_DIR/ready-check.sh.rc" ] || { echo "OK   hub Applications"; echo "FAIL site site-a: not available"; echo "Not ready: see FAIL above."; }'
   fake create-console-secrets.sh '[ -z "${CATALOG_TOKEN_FILE:-}" ] || cat "$CATALOG_TOKEN_FILE" > "$STUB_DIR/catalog-token-seen"'
   fake git-push.sh 'cat "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-seen"; echo "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-path"
@@ -139,6 +139,20 @@ run
 t "rerun: every step already done; console-secrets always reruns" eval '[ "$rc" = 0 ] && ! grep -q "^bootstrap-hub" "$W/calls.log" &&
   grep -q "^create-console-secrets.sh" "$W/calls.log" &&
   grep -q "^== bootstrap" <<<"$out"'
+t "rerun: still labels the hub's Submariner gateway nodes" eval '[ "$rc" = 0 ] && grep -qx "gateway-nodes.sh hub" "$W/calls.log"'
+setup rerun-gw
+printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secret"; echo '{}' > "$W/hub-pull-secret"
+echo 1 > "$W/gateway-nodes.sh.rc"; run
+t "rerun: gateway nodes it can't label stop the install at bootstrap" eval '[ "$rc" = 1 ] && grep -q "stopped at bootstrap" <<<"$out" &&
+  ! grep -q "^create-console-secrets" "$W/calls.log"'
+setup aio-gw
+sed -i.bak 's#^sites:$#sites: []#; /^- {name: site-a/d' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+g -C "$D" commit -qam all-in-one
+printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secret"; echo '{}' > "$W/hub-pull-secret"
+echo 1 > "$W/gateway-nodes.sh.rc"; run --hub-only
+t "all-in-one rerun: gateway nodes it can't label only warn" eval '[ "$rc" = 0 ] && grep -qx "gateway-nodes.sh hub" "$W/calls.log" &&
+  grep -q "warning: no Submariner gateway nodes on the hub; an all-in-one needs them only once a second cluster joins" <<<"$out" &&
+  grep -q "^create-console-secrets" "$W/calls.log"'
 
 setup required
 sed -i.bak 's#^  url: .*#  url: REQUIRED-catalogRepoURL#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"

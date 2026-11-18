@@ -18,6 +18,7 @@ cat > "$T/bin/oc" <<'STUB'
 case " $* " in
   *" whoami "*) echo admin ;;
   *" get ingresses.config.openshift.io "*) printf 'localhost' ;;
+  *" get nodes -o json "*) cat "$STUB_DIR/nodes.json" ;;
   *" get operatorgroups.operators.coreos.com -n cert-manager-operator "*)
     [ ! -f "$STUB_DIR/og-error" ] || { echo "error: Forbidden" >&2; exit 1; }
     cat "$STUB_DIR/ogs" 2>/dev/null || true ;;
@@ -29,6 +30,8 @@ D="$T/repo"; mkdir -p "$D"; cp -R "$SRC/scripts" "$D/"
 printf '#!/bin/bash\nexit 0\n' > "$D/scripts/check-prerequisites.sh"
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n' > "$D/clusters.yaml"
 for n in hub site-b; do mkdir -p "$D/.config/$n"; : > "$D/.config/$n/kubeconfig"; done
+w() { printf '{"metadata":{"name":"%s","labels":{"node-role.kubernetes.io/%s":""}},"status":{"conditions":[{"type":"Ready","status":"True"}]}}' "$1" "$2"; }
+echo "{\"items\":[$(w w1 worker),$(w w2 worker)]}" > "$T/nodes.json"
 # The apps domain is localhost, so router-default.localhost resolves where the
 # resolver maps *.localhost; the cert-manager lines are what's tested.
 t "no OperatorGroup: OK" 0 "^OK +cert-manager OperatorGroup"
@@ -38,4 +41,8 @@ printf 'cert-manager-operator-og' > "$T/ogs"
 t "the platform's cert-manager: FOUND, names the limit, exit 1" 1 "^FOUND +cert-manager OperatorGroup +cert-manager-operator-og: .*TooManyOperatorGroups.*upstream-main-limits.md"
 touch "$T/og-error"
 t "can't read: MISSING, exit 1" 1 "^MISSING +cert-manager OperatorGroup +can't read OperatorGroups in cert-manager-operator: error: Forbidden"
+rm "$T/og-error"; : > "$T/ogs"
+t "two workers to label: OK, says which" 0 "^OK +Submariner gateway nodes +would label w1, w2 submariner.io/gateway=true"
+echo "{\"items\":[$(w m1 master),$(w m2 master)]}" > "$T/nodes.json"
+t "no worker to label: MISSING, names the oc label command, exit 1" 1 "^MISSING +Submariner gateway nodes +site-b needs two .*oc label node m1 m2 submariner.io/gateway=true$"
 echo "site-check tests: $((total-fails)) ok, $fails failed"; exit "$fails"

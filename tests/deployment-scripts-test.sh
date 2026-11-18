@@ -118,12 +118,16 @@ mkdir -p "$d/.config/hub" "$T/ocbin"; : > "$d/.config/hub/kubeconfig"
 cat > "$T/ocbin/oc" <<STUB
 #!/bin/bash
 echo "oc \$*" >> "$T/oc.log"
+case "\$1 \$2" in "label node") exit 0 ;; "get nodes") cat "$T/nodes.json"; exit 0 ;; esac
 case "\$1" in kustomize|label) exec "$(command -v oc)" "\$@" ;; whoami) echo https://api.hub.example.com:6443 ;; esac
 case "\$*" in *"get argocd openshift-gitops"*) echo Available ;; esac
 case "\$*" in *"get operatorgroups.operators.coreos.com -n cert-manager-operator"*) [ ! -f "$T/platform-cm" ] || echo cert-manager-operator-og ;; esac
 STUB
 chmod +x "$T/ocbin/oc"
 printf '{"auths":{"quay.io":{"auth":"dTpw"}}}' > "$T/generic.json"
+# Three workers, none a Submariner gateway yet (scripts/gateway-nodes.sh, tests/gateway-nodes-test.sh).
+w() { printf '{"metadata":{"name":"%s","labels":{"node-role.kubernetes.io/worker":""}},"status":{"conditions":[{"type":"Ready","status":"True"}]}}' "$1"; }
+echo "{\"items\":[$(w w1),$(w w2),$(w w3)]}" > "$T/nodes.json"
 : > "$T/oc.log"
 t "bootstrap-hub refuses a general login before any write" 1 "no quay.io/rhoai login in .*generic.json.*ALLOW_GENERIC_LOGIN=1" \
   env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/generic.json" bash scripts/bootstrap-hub.sh --deployment "$d"
@@ -147,6 +151,23 @@ printf '{"auths":{"quay.io/rhoai":{"auth":"dTpw"},"registry.stage.redhat.io":{"a
 env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/rhoai.json" bash scripts/bootstrap-hub.sh --deployment "$d" >/dev/null 2>&1 || true
 t "bootstrap-hub sets the controller's memory from the library" 0 '"limits":\{"memory":"8Gi"\}' grep "patch argocd openshift-gitops" "$T/oc.log"
 t "  ... before it applies the root" 0 "^ok$" bash -c 'p=$(grep -n "patch argocd" "$0" | head -1 | cut -d: -f1); r=$(grep -n "apply -f -" "$0" | head -1 | cut -d: -f1); [ -n "$p" ] && [ -n "$r" ] && [ "$p" -lt "$r" ] && echo ok' "$T/oc.log"
+
+t "bootstrap-hub labels two hub workers as Submariner gateways" 0 "^oc label node w2 submariner.io/gateway=true$" cat "$T/oc.log"
+t "  ... before its first apply" 0 "^ok$" bash -c 'l=$(grep -n "label node" "$0" | head -1 | cut -d: -f1); r=$(grep -n " apply" "$0" | head -1 | cut -d: -f1); [ -n "$l" ] && [ -n "$r" ] && [ "$l" -lt "$r" ] && echo ok' "$T/oc.log"
+# An all-in-one (sites: []) on single-node OpenShift: nothing to label, but no
+# tunnel to carry either, so it warns and goes on.
+printf '{"items":[{"metadata":{"name":"sno","labels":{"node-role.kubernetes.io/master":"","node-role.kubernetes.io/worker":""}},"status":{"conditions":[{"type":"Ready","status":"True"}]}}]}' > "$T/nodes.json"
+: > "$T/oc.log"
+t "bootstrap-hub, all-in-one on single-node OpenShift: warns and continues" 0 "warning: no Submariner gateway nodes on the hub; an all-in-one needs them only once a second cluster joins" \
+  bash -c 'env PATH="$0:$PATH" QUAY_AUTH_FILE="$1" bash scripts/bootstrap-hub.sh --deployment "$2" 2>&1; true' "$T/ocbin" "$T/rhoai.json" "$d"
+t "  ... and applies the root" 0 "^ok$" bash -c 'grep -q "apply -f -" "$0" && echo ok' "$T/oc.log"
+# With a site, the tunnel needs the hub's gateways: it stops before any write.
+cp "$d/clusters.yaml" "$T/clusters.aio"; printf 'sites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n' >> "$d/clusters.yaml"; : > "$T/oc.log"
+t "bootstrap-hub with a site, on single-node OpenShift: names the oc label command" 1 "oc label node sno submariner.io/gateway=true$" \
+  env PATH="$T/ocbin:$PATH" QUAY_AUTH_FILE="$T/rhoai.json" bash scripts/bootstrap-hub.sh --deployment "$d"
+t "  ... and made no oc apply" 0 "^ok$" bash -c '! grep -q " apply" "$0" && echo ok' "$T/oc.log"
+cp "$T/clusters.aio" "$d/clusters.yaml"
+echo "{\"items\":[$(w w1),$(w w2),$(w w3)]}" > "$T/nodes.json"
 
 # hubCertManager=library (the fixture's) on a hub that runs the platform's
 # cert-manager: stops before any write.
