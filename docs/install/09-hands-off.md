@@ -253,7 +253,8 @@ Confirm that every cluster and credential is ready before anything is installed.
    OpenShift 4.21 or later, has a default StorageClass and gives you `cluster-admin`. It changes nothing.
 
    Fix each `MISSING`, `OLD` or `FAIL` line, then run it again. Everything is ready when it prints no `MISSING`,
-   `OLD` or `FAIL` lines.
+   `OLD` or `FAIL` lines. For a hub-only install (`HUB_ONLY=1` with `sites: []`), the `a site` line is
+   the one `MISSING` you can leave.
 
    If a site had an earlier install, also run `make site-check SITE=SITE_NAME`. It also looks for a previous AI Grid
    install and the platform's cert-manager OperatorGroup, and checks that the site's apps domain resolves.
