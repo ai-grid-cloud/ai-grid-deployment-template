@@ -281,8 +281,8 @@ hub_phase() {
 step_site() { # NAME: check the site, import it into the hub's ACM, wait until it's available
   local name=$1
   step "site $name"
-  # site-check.sh prints its own OK, MISSING or FOUND lines, a previous install
-  # included; they stay above the stop line.
+  # site-check.sh prints its own OK, MISSING, FOUND or WARN lines, a previous
+  # install included; they stay above the stop line. A WARN doesn't stop it.
   run_step "site $name" site-check.sh "$name"
   # import-site.sh leaves a site that is already joined and available alone.
   run_step "site $name" import-site.sh "$name" --yes

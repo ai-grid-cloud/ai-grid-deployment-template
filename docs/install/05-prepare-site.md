@@ -51,9 +51,25 @@ follow these steps first:
    Read the list. It must not name your platform's identity provider, cert-manager, NFD, the GPU operator or your
    ACME ClusterIssuers; the script protects those by name. If your platform uses other names, set them,
    space-separated, in `WIPE_PROTECT_NAMESPACES` and `WIPE_PROTECT_PACKAGES` (operator package names) for both runs.
-   Besides OpenShift AI, MaaS and the grid, the list includes what the detach leaves: the old hub's klusterlet
-   operator (Deployment `klusterlet`, its lease `klusterlet-lock` and its namespace `open-cluster-management`). Left
-   running, that operator can delay a new import until it times out.
+   Besides OpenShift AI, MaaS and the grid, the list includes the stateful leftovers that a new hub only adds to and
+   never replaces:
+
+   - The old hub's klusterlet operator: Deployment `klusterlet`, its lease `klusterlet-lock` and its namespace
+     `open-cluster-management`. Left running, that operator can delay a new import until it times out.
+   - Submariner: its `Submariner` and `ServiceDiscovery` objects, removed while its operator runs so that it
+     uninstalls the gateway, route agent and Globalnet from the nodes; every other `submariner.io` object, such as
+     Globalnet's egress and ingress IPs; its operator; the namespace `submariner-operator`; and last, the
+     `submariner.io/gateway` node labels. Left in place, the old Globalnet keeps its old global IPs after the new hub's
+     broker assigns another range, and the tunnel fails one way. `make site-import` labels two workers again. On a
+     compact cluster or single-node OpenShift, label two nodes by hand again: `make site-check` prints the command.
+   - The MaaS database read replica: the CloudNativePG `Cluster` `maas-read`, its volumes and the namespace `maas-db`.
+     Left in place, it keeps replicating the old hub's database, and `maas-api` fails to sign in to it. The wipe
+     refuses if `maas-db` holds a database that isn't a read replica, because only a hub runs the primary.
+   - The Argo CD tracking label `app.kubernetes.io/instance` and annotation `argocd.argoproj.io/tracking-id` on your
+     `ClusterPolicy`, `NodeFeatureDiscovery` and `ClusterIssuer` objects, when an earlier install created them. The
+     wipe changes nothing else on those objects, and keeps the tracking when it names an Argo CD Application on the
+     site itself, which means your platform's own Argo CD manages the object. Left in place, an old install's tracking
+     makes the new hub's Application of the same name take the objects for its own and delete them.
 3. Run the wipe. It leaves the cluster pull secret and image mirror, which the new hub delivers again:
 
    ```sh
@@ -64,6 +80,10 @@ Then run `make site-check` again. Its `previous AI Grid install` line should be 
 
 ## 1. Check the site's infrastructure
 
+On the library's `main` branch, your platform sets up a GPU site's GPU stack before the import: Node Feature
+Discovery with a `NodeFeatureDiscovery`, and the NVIDIA GPU Operator with a `ClusterPolicy`. The library doesn't
+install them.
+
 ```sh
 make site-check
 ```
@@ -71,9 +91,10 @@ make site-check
 You should see `OK` for `OpenShift 4.21 or later`, `default StorageClass`, `previous AI Grid install`,
 `apps domain DNS` and `Submariner gateway nodes`. The last one says which nodes the import labels, or `already
 labelled`. If it's `MISSING`, the site has too few workers outside the control plane, as on a compact cluster or
-single-node OpenShift: run the `oc label node` command it prints with the site's login, then check again. The hub
-delivers the registry logins and image mirror once the site is imported. For what a site must provide, such as GPU
-nodes and the NVIDIA GPU Operator for GPU models, see the library's
+single-node OpenShift: run the `oc label node` command it prints with the site's login, then check again. A `WARN`
+for `GPU stack` means the site has GPU nodes without a `ClusterPolicy` or a `NodeFeatureDiscovery`: set those up
+before you deploy GPU models there. The hub delivers the registry logins and image mirror once the site is imported.
+For what a site must provide, such as GPU nodes and the NVIDIA GPU Operator for GPU models, see the library's
 [site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide).
 
 If the check prints `FOUND` for a `cert-manager OperatorGroup`, the site already runs the platform's cert-manager
