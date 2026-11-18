@@ -73,6 +73,9 @@ if ! login=$(cluster_login_ok "$hub" 2>&1); then
   fail "hub $hub: ${login#error: }"; echo "Not ready: see FAIL above."; exit 1
 fi
 export KUBECONFIG; KUBECONFIG=$(cluster_kubeconfig "$hub")
+# The hub's ca: in clusters.yaml, for every https call to its Routes (route_answers too).
+if ! tls=$(cluster_tls "$hub" 2>&1); then fail "hub $hub: ${tls#error: }"; echo "Not ready: see FAIL above."; exit 1; fi
+cluster_tls "$hub"
 route_host() { oc get route "$2" -n "$1" -o json 2>/dev/null | jq -r '.spec.host // empty' 2>/dev/null || true; }
 url() { [ -z "$1" ] || echo "https://$1"; }
 ready_read() { # OC_ARG...: oc's output; empty when the resource or its type doesn't
@@ -205,7 +208,7 @@ else fail "deployment-root Synced at origin's $branch: $main_err"; fi
 # No test content: the console lists no organizations, models or subscriptions.
 none_listed() { # SERVICE NOUN: ai_grid.v1.SERVICE/List lists no NOUN
   local code n
-  code=$(curl -sS --max-time 20 -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
+  code=$(curl -sS --max-time 20 ${CURL_TLS[@]+"${CURL_TLS[@]}"} -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
     -H 'Connect-Protocol-Version: 1' --data-binary '{}' -w '%{http_code}' \
     "https://$console_host/ai_grid.v1.$1/List" 2>/dev/null) || code=000
   n=$(jq -r '.total // (.items | length)' "$tmp/body" 2>/dev/null || true)

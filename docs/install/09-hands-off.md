@@ -122,7 +122,7 @@ Tell the install which clusters and repositories to use, and give it the credent
      its `name` and `api`; for an [all-in-one](#all-in-one-one-cluster), write `sites: []`. A site's name is a DNS label; it becomes the site's ACM cluster name, and you can't
      change it once the site is imported. The hub's name is always `hub`. The file says only how to reach each
      cluster: no role and no location. If a cluster's API or apps certificate isn't publicly trusted, such as a
-     self-signed one, see [An untrusted cluster certificate](#other-options).
+     self-signed one, its entry also needs a `ca:`: see step 6.
    - **`catalog`:** `url` is the URL of the catalog repository you created in step 2, such as
      `https://github.com/my-org/ai-grid-catalog.git`, and `token` is the token from step 3. The token is in
      `catalog.token` in `.config/clusters.yaml`, and nowhere else.
@@ -190,6 +190,18 @@ Confirm that every cluster and credential is ready before anything is installed.
    make login
    make prereqs
    ```
+
+   If `make login` stops with `self signed certificate in certificate chain`, or another certificate problem, the
+   cluster's certificates aren't publicly trusted, which is usual on a new cluster. Fetch its CA, then log in again:
+
+   ```sh
+   make fetch-ca NAME=hub
+   make login
+   ```
+
+   Replace `hub` with the cluster's name. `make fetch-ca` prints the subject, issuer and SHA-256 fingerprint of each
+   certificate it fetches. Compare each fingerprint with the one that a cluster admin who already trusts the cluster
+   sees, then keep it. For more, see [An untrusted cluster certificate](#an-untrusted-cluster-certificate).
 
    `make login` writes `.config/NAME/kubeconfig` for each cluster from the cluster's API URL and its credentials in
    `.config/clusters.yaml`. It uses the first of these that it finds:
@@ -401,24 +413,7 @@ the grid in the console, as in [Add a site to the grid](#add-a-site-to-the-grid)
   repository only. With a token, `make install` uses only the token and skips your git credential helpers.
 - **A login you already have:** copy a working kubeconfig, such as the installer's `auth/kubeconfig`, to
   `.config/NAME/kubeconfig`. `make install` keeps a login that works.
-- **An untrusted cluster certificate:** put the CAs the cluster's certificates chain to in `.config/NAME/ca.crt`, as
-  PEM. With a username and password, the login also reaches the cluster's OAuth server, which the ingress router
-  serves, and checks it against the same file, so the file holds both the API's CA and the router's CA. To build it
-  with the installer's `auth/kubeconfig`:
-
-  ```sh
-  # The API's CA, from the installer's kubeconfig
-  oc config view --kubeconfig auth/kubeconfig --raw \
-    -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > api-ca.crt
-  # The router's CA
-  oc get secret router-ca -n openshift-ingress-operator --kubeconfig auth/kubeconfig \
-    -o jsonpath='{.data.tls\.crt}' | base64 -d > router-ca.crt
-  mkdir -p .config/NAME && cat api-ca.crt router-ca.crt > .config/NAME/ca.crt
-  ```
-
-  Without the installer's kubeconfig, run the `router-ca` command with any working `cluster-admin` login, and save
-  the last certificate that `openssl s_client -showcerts -connect api.CLUSTER_DOMAIN:6443 </dev/null` prints as
-  `api-ca.crt`. If the router serves a custom certificate, use the CA that issued it instead of `router-ca`.
+- **An untrusted cluster certificate:** see [An untrusted cluster certificate](#an-untrusted-cluster-certificate).
 - **A general `quay.io` account:** put its name and password under `quay:`. The install uses it for `quay.io/rhoai`
   as it would a robot account, so it works only when that account can pull from `quay.io/rhoai`.
 - **An auth file instead of `quay:`:** set `QUAY_AUTH_FILE`, or save it as `.config/quay-auth.json`. It must hold the
@@ -435,6 +430,62 @@ the grid in the console, as in [Add a site to the grid](#add-a-site-to-the-grid)
   ```sh
   make install HUB_ONLY=1
   ```
+
+## An untrusted cluster certificate
+
+The scripts check each cluster's certificates: the API server's, and, with a username and password, the OAuth
+server's, which the ingress router serves. On a new cluster, neither is usually signed by a public CA. Give such a
+cluster a `ca:` in its `hub:` or `sites:` entry, in `.config/clusters.yaml` or in `clusters.yaml`. A CA isn't a
+secret, so the committed file can hold it too. `ca:` takes one of these values:
+
+- **The PEM certificates,** as a block:
+
+  ```yaml
+  hub:
+    api: https://api.hub.example.com:6443
+    ca: |
+      -----BEGIN CERTIFICATE-----
+      ...
+      -----END CERTIFICATE-----
+  ```
+
+  `make fetch-ca NAME=NAME` writes this for you. It reads the certificate chain that the cluster's API host and its
+  OAuth host, `oauth-openshift.apps.DOMAIN`, present. From each chain it keeps the self-signed certificates, else the
+  last certificate the server sent, and warns when one it keeps isn't a self-signed CA, because such a certificate
+  changes when the cluster renews it. It writes them after the cluster's `api:` line, keeping the file's comments. If
+  the OAuth host doesn't answer, it writes the API's CA alone and warns; a login with a password then still fails until
+  you run it again. It edits `.config/clusters.yaml` if that file exists, else
+  `clusters.yaml`. If the cluster already has a `ca:`, it changes nothing and prints the block for you to paste; run
+  `make fetch-ca NAME=NAME FORCE=1` to replace it.
+- **A PEM file's path,** relative to your deployment repository or absolute, such as `ca: certs/hub-ca.pem`.
+- **`ignore`:** the scripts don't check the cluster's certificates at all, and every run warns that your password is
+  sent unverified. Anyone between you and the cluster can then read your password and tokens. Use it only on a
+  throwaway test cluster, when you can't get its CA.
+
+With no `ca:`, the scripts use `.config/NAME/ca.crt` if it exists, else your system's trust.
+
+A `ca:` replaces your system's trust for that cluster, so it must cover every certificate the scripts check: the API
+server's, and the ingress router's, which serves the OAuth server and the hub's Routes, such as the provider console.
+`make fetch-ca` fetches both. `ca:` doesn't apply to a site's MaaS gateway, which presents the cluster's internal
+certificate ([limits of `main`](../upstream-main-limits.md#l5-the-maas-gateway-presents-the-cluster-internal-certificate)).
+
+`make fetch-ca` trusts what the cluster presents the first time you run it, so check what it fetched. It prints the
+subject, issuer and SHA-256 fingerprint of each certificate. A cluster admin who already trusts the cluster, such as
+one with the installer's `auth/kubeconfig`, can print the same fingerprints:
+
+```sh
+# The API's CAs, from the installer's kubeconfig, one file each
+oc config view --kubeconfig auth/kubeconfig --raw \
+  -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d |
+  awk '/BEGIN CERTIFICATE/ { f = "api-ca-" ++n ".pem" } f { print > f }'
+# The router's CA
+oc get secret router-ca -n openshift-ingress-operator --kubeconfig auth/kubeconfig \
+  -o jsonpath='{.data.tls\.crt}' | base64 -d > router-ca.pem
+for f in api-ca-*.pem router-ca.pem; do openssl x509 -noout -subject -fingerprint -sha256 -in "$f"; done
+```
+
+The installer's kubeconfig holds several CAs; one of them matches the API's. If the router serves a custom
+certificate, compare with the CA that issued it instead of `router-ca`.
 
 ## Known limits
 

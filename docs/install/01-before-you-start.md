@@ -14,6 +14,12 @@ Submariner gateway nodes: check those yourself.
   ([limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values)).
   `make site-check` checks it on [page 5](05-prepare-site.md).
 - **A `cluster-admin` sign-in to each cluster,** and its API URL.
+- **The CA of a cluster whose certificates aren't publicly trusted.** On a new cluster, the API server and the
+  ingress router, which serves the OAuth server, often present self-signed certificates, so `make login` stops with
+  `self signed certificate in certificate chain`. Give each such cluster a `ca:` in `clusters.yaml`: run
+  `make fetch-ca NAME=hub`, or a site's name, which writes the certificates the cluster presents there, and compare
+  the fingerprints it prints with the ones a cluster admin sees
+  ([an untrusted cluster certificate](09-hands-off.md#an-untrusted-cluster-certificate)).
 - **Network:** Submariner creates a LoadBalancer Service on each cluster for its gateways, so each cluster needs a
   load-balancer provider. Each cluster reaches the other's load balancer on UDP 4500 and 4490, and every router name
   answers `AAAA` queries without `NXDOMAIN`

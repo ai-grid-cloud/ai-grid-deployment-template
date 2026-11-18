@@ -300,4 +300,11 @@ W="$T/notoken"; ready "$W"; mv "$D/.config/provider-admin-token" "$T/token.bak";
 mv "$T/token.bak" "$D/.config/provider-admin-token"
 t "no provider-admin token: WARN, not FAIL" 0 "^WARN .*provider-admin-token" '[ ! -f "$W/curl.log" ] || ! grep -q ai_grid.v1 "$W/curl.log"'
 
+# The hub's ca: reaches every https call to the hub's Routes.
+D="$T/repo-ca"; newrepo "$D"; mkdir -p "$D/certs"; : > "$D/certs/hub.pem"
+sed -i.bak 's#^hub: {api: "https://api.hub.example.com:6443"}#hub: {api: "https://api.hub.example.com:6443", ca: certs/hub.pem}#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
+W="$T/ready-ca"; ready "$W"; run
+t "ca: a path: every curl to the hub checks against it" 0 "^OK " \
+  '[ -s "$W/curl.log" ] && [ -z "$(grep -v -- "--cacert $D/certs/hub.pem " "$W/curl.log")" ]'
+
 echo "ready-check tests: $((total-fails)) ok, $fails failed"; exit "$fails"

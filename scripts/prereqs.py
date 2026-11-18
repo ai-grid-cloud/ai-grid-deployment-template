@@ -292,6 +292,9 @@ def read_clusters(deployment):
     if p.returncode != 0:
         err = next((scrub(line.strip()) for line in p.stderr.splitlines() if line.strip()), "")
         return LoadError(err.removeprefix("error: ") or "can't read clusters.yaml")
+    for line in p.stderr.splitlines():  # the ca: ignore warning, which every run prints
+        if ": TLS verification off (ca: ignore)" in line:
+            print(scrub(line), file=sys.stderr)
     return [tuple(line.split()[:2]) for line in p.stdout.splitlines() if line.strip()]
 
 

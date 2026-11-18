@@ -2,7 +2,8 @@
 # Reads a deployment repository's clusters.yaml: .config/clusters.yaml when it
 # exists (private: git-ignored, mode 600, and the only place secrets may go),
 # else clusters.yaml at the root (copied from clusters-example.yaml). It says
-# only how to reach each cluster: the hub and each site with its API URL and,
+# only how to reach each cluster: the hub and each site with its API URL, its
+# optional ca: (cluster_ca) and,
 # in the private file only, its token or username and password;
 # the catalog repository (catalog.url; its token, catalog.token, in the private
 # file only); make install's settings (options:); and, in the private file
@@ -28,6 +29,8 @@
 #   acm_name NAME                 the ManagedCluster: local-cluster for the hub
 #   cluster_api NAME              the cluster's API URL
 #   cluster_kubeconfig NAME       the path of NAME's kubeconfig
+#   cluster_ca NAME               the CA file to check NAME against, "ignore", or nothing
+#   cluster_tls NAME              sets CURL_TLS, OC_TLS and KUBECONFIG_TLS from cluster_ca
 #   merge_kubeconfigs HUB SITE OUT  one kubeconfig with contexts hub and site
 #   INSTALL_NS_RE                 an extended regex matching the namespaces an
 #                                 install creates on a hub or a site
@@ -121,10 +124,10 @@ clusters_load() {
       ((.deployment // {}) | keys - ["token"] | count("deployment")),
       ((.quay // {}) | keys - ["username", "password"] | count("quay")),
       ((.stage // {}) | keys - ["username", "password"] | count("stage")),
-      ((.hub // {}) | keys - ["api", "token", "username", "password"] | beside("hub")),
+      ((.hub // {}) | keys - ["api", "token", "username", "password", "ca"] | beside("hub")),
       ((.sites // []) | to_entries[] | .key as $i | (.value // {})
         | (.name | if type == "string" and test("\\A[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\z") then . else $i end) as $ref
-        | (keys - ["name", "api", "token", "username", "password", "maasCertificate"] | beside("sites[\($ref)]"))),
+        | (keys - ["name", "api", "token", "username", "password", "ca", "maasCertificate"] | beside("sites[\($ref)]"))),
       ((.options // {}) | keys | map(select(test($opts) | not)) | map("options." + .))
       | .[]' <<<"$json" | tr '\n' ' ')
   [ -z "$left" ] || { echo "error: clusters.yaml: unknown keys (typos?): ${left% }" >&2; return 1; }
@@ -162,6 +165,13 @@ clusters_load() {
   [ -z "$private" ] || [ -n "$(jq -r '.catalog.url // "" | select(startswith("REQUIRED-") | not)' <<<"$json")" ] ||
     { echo "error: set catalog.url in .config/clusters.yaml" >&2; return 1; }
   CLUSTERS_ROWS=$rows CLUSTERS_JSON=$json
+  # ca: ignore turns certificate checks off for that cluster: say so on every run, once per
+  # cluster, even when a script runs another (AI_GRID_CA_IGNORE_WARNED is inherited).
+  for name in $(jq -r '[(.hub | objects | select(.ca == "ignore") | "hub"), ((.sites // [])[] | objects | select(.ca == "ignore") | .name)][]' <<<"$json"); do
+    case " ${AI_GRID_CA_IGNORE_WARNED:-} " in *" $name "*) continue ;; esac
+    echo "$name: TLS verification off (ca: ignore); your password is sent unverified" >&2
+    AI_GRID_CA_IGNORE_WARNED="${AI_GRID_CA_IGNORE_WARNED:-} $name"; export AI_GRID_CA_IGNORE_WARNED
+  done
 }
 
 secret_get() { # JQ_PATH: the secret's value on stdout, empty when unset; it never reaches a command line
@@ -232,9 +242,53 @@ cluster_api() { # NAME
 
 cluster_kubeconfig() { cluster_api "$1" >/dev/null && echo "$CLUSTERS_DIR/.config/$1/kubeconfig"; }
 
+# The CA a cluster's API and OAuth servers are checked against, from its ca: in
+# clusters.yaml. A CA isn't a secret, so either file may hold it:
+#   ca: ignore              no check at all (not recommended; a warning on every run)
+#   ca: PATH                a PEM file, relative to the repository, absolute, or ~/...
+#   ca: |                   the PEM itself, written to .config/generated/NAME-ca.crt
+#     -----BEGIN CERTIFICATE-----
+# Left out, .config/NAME/ca.crt when that file exists, else the system's trust.
+cluster_ca() { # NAME: prints the CA file, the word ignore, or nothing (the system's trust)
+  local name=$1 v f ref
+  cluster_api "$name" >/dev/null || return 1
+  if [ "$name" = hub ]; then ref=hub.ca; else ref="sites[$name].ca"; fi
+  v=$(jq -r --arg n "$name" '(if $n == "hub" then .hub else first(.sites[] | select(.name == $n)) end).ca // empty
+    | if type == "string" then . else error("not a string") end' <<<"$CLUSTERS_JSON" 2>/dev/null) ||
+    { echo "error: ${CLUSTERS_FILE#"$CLUSTERS_DIR/"}: $ref isn't a string" >&2; return 1; }
+  case "$v" in
+    "") f="$CLUSTERS_DIR/.config/$name/ca.crt"; [ ! -f "$f" ] || echo "$f" ;;
+    ignore) echo ignore ;;
+    "-----BEGIN CERTIFICATE-----"*) printf '%s\n' "$v" | _generated "$name-ca.crt" ;;
+    *) [[ "$v" != *$'\n'* ]] || { echo "error: ${CLUSTERS_FILE#"$CLUSTERS_DIR/"}: $ref is neither ignore, a file's path, nor PEM starting with -----BEGIN CERTIFICATE-----" >&2; return 1; }
+       f=$(_abs "$v")
+       [ -f "$f" ] && [ -r "$f" ] || { echo "error: ${CLUSTERS_FILE#"$CLUSTERS_DIR/"}: $ref: $v: no such file" >&2; return 1; }
+       echo "$f" ;;
+  esac
+}
+
+# cluster_tls NAME sets, from cluster_ca, the options that make each tool check
+# NAME's certificates: CURL_TLS for curl, OC_TLS for oc login, KUBECONFIG_TLS
+# for a kubeconfig's cluster entry. Only ca: ignore turns the check off; nothing
+# else in these scripts may.
+cluster_tls() { # NAME
+  local ca; ca=$(cluster_ca "$1") || return 1
+  CURL_TLS=() OC_TLS=() KUBECONFIG_TLS=""
+  case "$ca" in
+    "") ;;
+    ignore) CURL_TLS=(--insecure) OC_TLS=(--insecure-skip-tls-verify=true) KUBECONFIG_TLS="    insecure-skip-tls-verify: true"$'\n' ;; # ca: ignore only
+    *) CURL_TLS=(--cacert "$ca") OC_TLS=(--certificate-authority="$ca")
+       KUBECONFIG_TLS="    certificate-authority: '${ca//\'/\'\'}'"$'\n' ;;   # YAML single quotes: ' doubled
+  esac
+}
+
 cluster_login_ok() { # NAME: exits non-zero, with the fix, when there's no working login
   local k; k=$(cluster_kubeconfig "$1") || return 1
   [ -f "$k" ] || { echo "error: no login for $1: run make login NAME=$1" >&2; return 1; }
+  # A login that skips certificate checks is only for ca: ignore: once ca: changes, it's rebuilt.
+  if grep -qE '^[[:space:]]*insecure-skip-tls-verify:[[:space:]]*true' "$k" && [ "$(cluster_ca "$1" 2>/dev/null)" != ignore ]; then # ca: ignore check
+    echo "error: $1: its login skips certificate checks, but its ca: isn't ignore: run make login NAME=$1" >&2; return 1
+  fi
   KUBECONFIG=$k oc whoami >/dev/null 2>&1 || { echo "error: $1: login expired: run make login NAME=$1" >&2; return 1; }
 }
 

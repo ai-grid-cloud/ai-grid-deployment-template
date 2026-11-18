@@ -19,6 +19,7 @@ method=$1 body=${2:-'{}'}
 clusters_load "$here/.."
 hub=$(hub_name)
 cluster_login_ok "$hub"
+cluster_tls "$hub"   # the hub's ca: in clusters.yaml, for the call to its console
 export KUBECONFIG; KUBECONFIG=$(cluster_kubeconfig "$hub")
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 token=$(oc whoami -t 2>/dev/null) ||
@@ -26,7 +27,7 @@ token=$(oc whoami -t 2>/dev/null) ||
 (umask 077; printf 'Authorization: Bearer %s\n' "$token" > "$tmp/auth"); unset token
 console=$(oc get route -n ai-grid-provider-console -o jsonpath='{.items[0].spec.host}')
 [ -n "$console" ] || { echo "error: no console Route on $hub yet: see make status" >&2; exit 1; }
-code=$(curl -sS -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
+code=$(curl -sS ${CURL_TLS[@]+"${CURL_TLS[@]}"} -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
   -H 'Connect-Protocol-Version: 1' --data-binary "$body" -w '%{http_code}' "https://$console/$method")
 cat "$tmp/body"; echo
 # On a terminal the status follows the reply; piped, stdout is the reply alone

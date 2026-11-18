@@ -33,7 +33,9 @@
 #   mch_running                  the MultiClusterHub's phase is Running
 #   managedcluster_available NAME  ManagedCluster NAME is joined and available
 #   route_answers NAMESPACE NAME [CODES]  https on the Route's host answers one
-#                                of CODES (default 200 302 401 403), with the
+#                                of CODES (default 200 302 401 403), checked
+#                                with the caller's CURL_TLS (the hub's ca:,
+#                                scripts/clusters.sh cluster_tls), else the
 #                                system's CA trust; with no answer, the reason
 #                                is curl's error
 #
@@ -193,7 +195,7 @@ route_answers() { # NAMESPACE NAME [CODES]
   [ -z "$json" ] || host=$(jq -r '.spec.host // empty' <<<"$json" 2>/dev/null)
   [ -n "$host" ] || { echo "Route $ns/$name: not created yet"; return 1; }
   err=$(mktemp)
-  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "https://$host/" 2>"$err") || true
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 ${CURL_TLS[@]+"${CURL_TLS[@]}"} "https://$host/" 2>"$err") || true
   why=$(grep . "$err" | tail -n 1 || true); rm -f "$err"
   case "$codes" in *" ${code:-000} "*) return 0 ;; esac
   if [ -n "$why" ]; then echo "Route $ns/$name: https://$host/ answered ${code:-000}: $why"

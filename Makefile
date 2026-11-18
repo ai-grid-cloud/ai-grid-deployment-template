@@ -10,7 +10,7 @@
 # KEYCLOAK_REALM default to the library Keycloak's maas-db and saas (console-secrets).
 export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NAMESPACE KEYCLOAK_REALM
 
-.PHONY: help config login prereqs inputs check bootstrap status console-secrets console-call test update \
+.PHONY: help config fetch-ca login prereqs inputs check bootstrap status console-secrets console-call test update \
   site-check site-wipe site-import site-status tenant-call \
   empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
 
@@ -35,6 +35,10 @@ config: ## Create .config/clusters.yaml for you to edit (a copy of clusters.yaml
 	chmod 700 .config && chmod 600 .config/clusters.yaml && \
 	if [ "$$src" = clusters.yaml ]; then echo "Copied clusters.yaml to .config/clusters.yaml (readable only by you): the scripts read it from now on, so edit that one."; \
 	else echo "Created .config/clusters.yaml from clusters-example.yaml (readable only by you): edit it, and replace every REQUIRED- value."; fi
+
+fetch-ca: ## Write the CA certificates a cluster presents into its ca: in clusters.yaml: NAME=hub or a site's name; FORCE=1 replaces one (page 9)
+	@$(call need,NAME,hub)
+	@scripts/fetch-ca.sh $(call shq,$(NAME))
 
 login: ## Log in to each cluster that needs it, with its stored credentials, else the browser; NAME=... for one
 	@scripts/login.sh $(if $(filter 1,$(NONINTERACTIVE)),--non-interactive) $(NAME)

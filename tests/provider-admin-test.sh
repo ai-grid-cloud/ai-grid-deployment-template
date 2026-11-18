@@ -103,4 +103,13 @@ t "rerun: apply is idempotent" 0 "console accepted" \
   '! grep -qE "create (namespace|ns|serviceaccount|sa|clusterrolebinding)( |$)" "$W/argv.log"' \
   'grep -qx SENTINEL "$TOK"'
 
+# The hub's ca: reaches the console call: a CA file, or ca: ignore with its warning.
+mkdir -p "$D/certs"; : > "$D/certs/hub.pem"
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443", ca: certs/hub.pem}\n' > "$D/clusters.yaml"
+W="$T/ca-path"; mkdir -p "$W"; rm -f "$TOK"; run
+t "ca: a path: curl checks the console against it" 0 "console accepted" 'grep -q -- "--cacert $D/certs/hub.pem " "$W/curl.log"'
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443", ca: ignore}\n' > "$D/clusters.yaml"
+W="$T/ca-ignore"; mkdir -p "$W"; rm -f "$TOK"; run
+t "ca: ignore: curl skips the check, with the warning" 0 "^hub: TLS verification off \(ca: ignore\); your password is sent unverified$" 'grep -q -- " --insecure " "$W/curl.log"'
+
 echo "provider-admin tests: $((total-fails)) ok, $fails failed"; exit "$fails"

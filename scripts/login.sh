@@ -28,10 +28,13 @@
 # falls through to the password; a certificate problem stops, since a password
 # wouldn't help. A token, from 2 or 3, is written into .config/NAME/kubeconfig
 # (mode 600) with the API URL from clusters.yaml. The cluster's certificate,
-# and the OAuth server's, are checked against the system's CA trust, or against
-# .config/NAME/ca.crt when that file exists. Tokens and passwords are read and
-# written by shell builtins only, and the password reaches curl on its standard
-# input (curl -K -), so neither appears in a command line or in the output.
+# and the OAuth server's, are checked against the cluster's ca: in clusters.yaml
+# (scripts/clusters.sh cluster_ca: a PEM file's path, the PEM itself, or ignore,
+# which turns the check off), else against .config/NAME/ca.crt when that file
+# exists, else against the system's CA trust; make fetch-ca sets ca:. Tokens
+# and passwords are read and written by shell builtins only, and the password
+# reaches curl on its standard input (curl -K -), so neither appears in a
+# command line or in the output.
 # When stored credentials fail, it stops for that cluster with exit 1 (no
 # browser). With none stored, --non-interactive stops with exit 1 and says where
 # to put one: the cluster's entry in .config/clusters.yaml (make config creates
@@ -46,10 +49,14 @@ login() { # NAME [oc login flags]
   api=$(cluster_api "$name") || return 1
   k=$(cluster_kubeconfig "$name")
   mkdir -p "$(dirname "$k")"; chmod 700 "$(dirname "$k")"
-  [ $# -gt 0 ] || set -- --web
+  if [ $# -eq 0 ]; then cluster_tls "$name" || return 1; set -- ${OC_TLS[@]+"${OC_TLS[@]}"} --web; fi
   echo "Logging in to $name ($api)."
-  KUBECONFIG=$k oc login --server "$api" "$@" || return 1
-  chmod 600 "$k"
+  # Into a fresh file, so no older entry for this server (such as one that skips
+  # certificate checks) carries over; with no stdin, oc can't be answered yes
+  # when it asks to use an insecure connection.
+  rm -f "$k.new"
+  ( umask 077; KUBECONFIG=$k.new oc login --server "$api" "$@" </dev/null ) || { rm -f "$k.new"; return 1; }
+  mv -f "$k.new" "$k"; chmod 600 "$k"
   echo "Logged in to $name as $(KUBECONFIG=$k oc whoami)."
 }
 
@@ -94,17 +101,22 @@ password_source() { # NAME: sets user, pass and src; 1 when there's no password,
   [[ "$user$pass" != *[$'\n\r']* ]] || { echo "error: $name: the username or password in $src has a line break" >&2; return 2; }
 }
 
+trust_fix() { # NAME: the ways to make the scripts trust NAME's certificates
+  local entry force=""; if [ "$1" = hub ]; then entry=hub; else entry="sites[$1]"; fi
+  [ "$(jq -r --arg n "$1" '(if $n == "hub" then .hub else first(.sites[] | select(.name == $n)) end) | has("ca")' <<<"$CLUSTERS_JSON")" = false ] || force=" FORCE=1"
+  echo "run make fetch-ca NAME=$1$force, or set $entry's ca: to a PEM file's path in clusters.yaml, or set ca: ignore (not recommended)"
+}
+
 certificate_or() { # NAME ERR WHAT: says certificate problem when ERR is one, else WHAT
   if [[ "$2" =~ certificate|SSL ]]; then
-    echo "error: $1: a certificate problem with its OAuth server: put a CA that trusts it in $(dirname "$(cluster_kubeconfig "$1")")/ca.crt or fix the trust: ${2%%$'\n'*}" >&2
+    echo "error: $1: a certificate problem with its OAuth server: $(trust_fix "$1"): ${2%%$'\n'*}" >&2
   else echo "error: $1: $3: ${2%%$'\n'*}" >&2; fi
 }
 
 oauth_token() { # NAME: sets token from the cluster's OAuth server for $user and $pass (oc login's challenge flow)
-  local name=$1 api dir cacert=() endpoint hdrs status cred
-  api=$(cluster_api "$name"); dir=$(dirname "$(cluster_kubeconfig "$name")")
-  [ ! -f "$dir/ca.crt" ] || cacert=(--cacert "$dir/ca.crt")
-  if ! endpoint=$(curl -sS --max-time 20 ${cacert[@]+"${cacert[@]}"} "$api/.well-known/oauth-authorization-server" 2>&1); then
+  local name=$1 api endpoint hdrs status cred
+  api=$(cluster_api "$name"); cluster_tls "$name" || return 1
+  if ! endpoint=$(curl -sS --max-time 20 ${CURL_TLS[@]+"${CURL_TLS[@]}"} "$api/.well-known/oauth-authorization-server" 2>&1); then
     certificate_or "$name" "$endpoint" "can't reach $api's OAuth discovery"; return 1
   fi
   endpoint=$(jq -r '.authorization_endpoint // empty' <<<"$endpoint" 2>/dev/null || true)
@@ -112,7 +124,7 @@ oauth_token() { # NAME: sets token from the cluster's OAuth server for $user and
   # curl's config syntax: a double-quoted value, with \ and " escaped. printf is
   # a builtin, so the password goes to curl's stdin without a command line.
   cred="$user:$pass"; cred=${cred//\\/\\\\}; cred=${cred//\"/\\\"}
-  if ! hdrs=$(printf 'user = "%s"\n' "$cred" | curl -sS --max-time 20 ${cacert[@]+"${cacert[@]}"} -K - -H 'X-CSRF-Token: 1' \
+  if ! hdrs=$(printf 'user = "%s"\n' "$cred" | curl -sS --max-time 20 ${CURL_TLS[@]+"${CURL_TLS[@]}"} -K - -H 'X-CSRF-Token: 1' \
       -o /dev/null -D - "$endpoint?response_type=token&client_id=openshift-challenging-client" 2>&1); then
     certificate_or "$name" "$hdrs" "can't reach the OAuth server"; return 1
   fi
@@ -127,7 +139,7 @@ oauth_token() { # NAME: sets token from the cluster's OAuth server for $user and
 
 write_kubeconfig() { # NAME: writes NAME's kubeconfig from $token, then checks it; names $src on failure.
   # 1 when the token doesn't log in, 2 on a certificate problem.
-  local name=$1 api k dir tmp ca="" err
+  local name=$1 api k dir tmp err
   api=$(cluster_api "$name") || return 2
   k=$(cluster_kubeconfig "$name"); dir=$(dirname "$k")
   [ -n "$token" ] || { echo "error: $name: $src is empty: put the cluster's token in it" >&2; return 1; }
@@ -137,16 +149,16 @@ write_kubeconfig() { # NAME: writes NAME's kubeconfig from $token, then checks i
     { echo "error: $name: the token from $src isn't a single word; check it" >&2; return 1; }
   mkdir -p "$dir"; chmod 700 "$dir"
   tmp="$k.new"; rm -f "$tmp"
-  [ ! -f "$dir/ca.crt" ] || ca="    certificate-authority: $dir/ca.crt"$'\n'
+  cluster_tls "$name" || return 2
   # The token is single-quoted so YAML reads it as a string; it can't hold a quote.
   ( umask 077; printf "apiVersion: v1\nkind: Config\nclusters:\n- name: %s\n  cluster:\n    server: %s\n%scontexts:\n- name: %s\n  context:\n    cluster: %s\n    user: %s\ncurrent-context: %s\nusers:\n- name: %s\n  user:\n    token: '%s'\n" \
-      "$name" "$api" "$ca" "$name" "$name" "$name" "$name" "$name" "$token" > "$tmp" )
+      "$name" "$api" "$KUBECONFIG_TLS" "$name" "$name" "$name" "$name" "$name" "$token" > "$tmp" )
   chmod 600 "$tmp"
   # Only stderr is kept, so err never holds the token.
   if ! err=$(KUBECONFIG=$tmp oc whoami 2>&1 >/dev/null); then
     rm -f "$tmp"
     if [[ "$err" =~ x509|certificate|"unknown authority" ]]; then
-      echo "error: $name: a certificate problem with $api, not the token: put the API's CA in $dir/ca.crt or fix the cluster's trust: ${err%%$'\n'*}" >&2
+      echo "error: $name: a certificate problem with $api, not the token: $(trust_fix "$name"): ${err%%$'\n'*}" >&2
       return 2
     fi
     echo "error: $name: the token from $src doesn't log in to $api: replace it" >&2

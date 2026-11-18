@@ -19,7 +19,9 @@ case "$a" in
                grep -qF "token: '${STUB_TOKEN:-sha256~SENTINEL}'" "${KUBECONFIG:-/dev/null}" 2>/dev/null ||
                grep -qxF "    token: ${STUB_TOKEN:-sha256~SENTINEL}" "${KUBECONFIG:-/dev/null}" 2>/dev/null && echo admin ||
                 { echo "error: You must be logged in to the server (Unauthorized)" >&2; exit 1; } ;;
-  *" login "*) echo "stub oc: login $*" ;;
+  *" login "*) echo "stub oc: login $*"; echo "$KUBECONFIG" >> "$STUB_DIR/login-kubeconfig.log"
+               IFS= read -r -t 1 l && echo "$l" >> "$STUB_DIR/login-stdin.log"
+               printf 'apiVersion: v1\nkind: Config\nusers:\n- name: x\n  user:\n    token: sha256~SENTINEL\n' > "$KUBECONFIG" ;;
   *" config view --raw --flatten "*) echo "# flattened"; cat "$KUBECONFIG" ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
@@ -115,7 +117,7 @@ t "x509 from whoami: says certificate, not replace the token" x509
 
 new_repo; mkdir -p "$D/.config/hub"; printf '%s\n' "$SENTINEL" > "$D/.config/hub/token"; : > "$D/.config/hub/ca.crt"
 run -- --non-interactive hub
-t "ca.crt: the kubeconfig names it" grep -qx "    certificate-authority: $D/.config/hub/ca.crt" "$D/.config/hub/kubeconfig"
+t "ca.crt: the kubeconfig names it" grep -qx "    certificate-authority: '$D/.config/hub/ca.crt'" "$D/.config/hub/kubeconfig"
 
 new_repo; mkdir -p "$D/.config/hub"; printf '%s\n' 12345 > "$D/.config/hub/token"
 run STUB_TOKEN=12345 -- --non-interactive hub
@@ -238,4 +240,101 @@ t "explicit oc flags: passed to oc login as today, stored credentials unused" \
 new_repo; private "hub: {username: \"ad\\nmin\", password: \"$PW\"}"
 run -- --non-interactive hub
 t "a username with a line break: refused, no OAuth call" bash -c '[ "$0" = 1 ] && grep -q "line break" <<<"$1" && ! grep -q "^curl" "$2/argv.log"' "$rc" "$out" "$W"
+
+# ca: on a cluster, in either clusters.yaml: ignore, a PEM file's path, or the PEM itself.
+openssl req -x509 -newkey rsa:2048 -nodes -keyout "$T/ca.key" -out "$T/ca.pem" -days 1 -subj /CN=login-test-root 2>/dev/null
+WARN='hub: TLS verification off (ca: ignore); your password is sent unverified'
+ca_repo() { # YAML lines for the hub after api: (indented 2): a repository whose committed clusters.yaml has them
+  new_repo
+  { printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub:\n  api: "https://api.hub.example.com:6443"\n'
+    printf '%s\n' "$@"
+    printf 'sites:\n  - {name: site-b, api: "https://api.site-b.example.com:6443"}\n'; } > "$D/clusters.yaml"
+}
+pem_lines() { sed 's/^/    /' "$T/ca.pem"; }
+k() { echo "$D/.config/hub/kubeconfig"; }
+
+ca_repo '  ca: ignore'
+run AI_GRID_TOKEN_HUB="$SENTINEL" -- --non-interactive hub
+t "ca: ignore: the kubeconfig skips verification" bash -c '[ "$0" = 0 ] && grep -qx "    insecure-skip-tls-verify: true" "$1" && ! grep -q certificate-authority "$1"' "$rc" "$(k)"
+t "  ... one warning line on stderr" bash -c '[ "$(grep -cxF "$1" <<<"$0")" = 1 ]' "$out" "$WARN"
+warn_stderr() { env -u AI_GRID_TOKEN_HUB PATH="$T/bin:$PATH" STUB_DIR="$W" AI_GRID_TOKEN_HUB="$SENTINEL" "$D/scripts/login.sh" --non-interactive hub 2>&1 >/dev/null | grep -qxF "$WARN"; }
+rm -f "$(k)"; t "  ... the warning is on stderr" warn_stderr
+
+new_repo; private "hub: {username: admin, password: '$PW', ca: ignore}"
+run -- --non-interactive hub
+t "ca: ignore: curl gets --insecure for the OAuth calls" bash -c '[ "$0" = 0 ] && [ "$(grep -c "^curl .* --insecure " "$1/argv.log")" = 2 ] && ! grep -q -- --cacert "$1/argv.log"' "$rc" "$W"
+t "  ... and the warning" grep -qxF "$WARN" <<<"$out"
+
+ca_repo '  ca: ignore'
+run -- hub
+t "ca: ignore: oc login --web skips verification too" grep -qx 'login --server https://api.hub.example.com:6443 --insecure-skip-tls-verify=true --web' "$W/argv.log"
+
+ca_repo '  ca: certs/hub.pem'; mkdir -p "$D/certs"; cp "$T/ca.pem" "$D/certs/hub.pem"
+run AI_GRID_TOKEN_HUB="$SENTINEL" -- --non-interactive hub
+t "ca: a relative path: the kubeconfig names that file" bash -c '[ "$0" = 0 ] && grep -qx "    certificate-authority: '"'"'$2/certs/hub.pem'"'"'" "$1" && ! grep -q insecure "$1"' "$rc" "$(k)" "$D"
+t "  ... no warning" bash -c '! grep -q "TLS verification off" <<<"$0"' "$out"
+rm -f "$(k)"; run -- hub
+t "  ... oc login --web gets it" grep -qx "login --server https://api.hub.example.com:6443 --certificate-authority=$D/certs/hub.pem --web" "$W/argv.log"
+
+new_repo; mkdir -p "$D/certs"; cp "$T/ca.pem" "$D/certs/hub.pem"; private "hub: {username: admin, password: '$PW', ca: '$D/certs/hub.pem'}"
+run -- --non-interactive hub
+t "ca: an absolute path: curl checks the OAuth server against it" bash -c '[ "$0" = 0 ] && [ "$(grep -c -- "--cacert $2/certs/hub.pem" "$1/argv.log")" = 2 ] && ! grep -q -- --insecure "$1/argv.log"' "$rc" "$W" "$D"
+
+ca_repo '  ca: certs/nope.pem'
+run AI_GRID_TOKEN_HUB="$SENTINEL" -- --non-interactive hub
+t "ca: a path that doesn't exist: stops, naming it" bash -c '[ "$0" = 1 ] && grep -qF "hub.ca: certs/nope.pem" <<<"$1"' "$rc" "$out"
+
+ca_repo '  ca: |' "$(pem_lines)"
+run AI_GRID_TOKEN_HUB="$SENTINEL" -- --non-interactive hub
+pem_ok() {
+  local f; f=$(sed -n "s/^    certificate-authority: '\\(.*\\)'$/\\1/p" "$(k)")
+  [ "$rc" = 0 ] && [ -n "$f" ] && cmp -s "$f" "$T/ca.pem" && mode600 "$f" && [ "$(ls -ld "$(dirname "$f")" | cut -c1-10)" = drwx------ ]
+}
+t "ca: a PEM block: written to a mode-600 file the kubeconfig names" pem_ok
+
+new_repo; private "hub: {username: admin, password: '$PW', ca: \"$(awk '{printf "%s\\n", $0}' "$T/ca.pem")\"}"
+run -- --non-interactive hub
+t "  ... curl checks the OAuth server against it" bash -c '[ "$0" = 0 ] && f=$(sed -n "s/^curl .*--cacert \([^ ]*\) .*/\1/p" "$1/argv.log" | head -n 1) && cmp -s "$f" "$2"' "$rc" "$W" "$T/ca.pem"
+
+ca_repo
+run AI_GRID_TOKEN_HUB="$SENTINEL" -- --non-interactive hub
+t "no ca: and no ca.crt: system trust, as before" bash -c '[ "$0" = 0 ] && ! grep -qE "certificate-authority|insecure" "$1"' "$rc" "$(k)"
+new_repo; private "hub: {username: admin, password: '$PW'}"
+run -- --non-interactive hub
+t "  ... curl gets no CA option" bash -c '[ "$0" = 0 ] && ! grep -qE -- "--cacert|--insecure" "$1/argv.log"' "$rc" "$W"
+
+new_repo; mkdir -p "$D/.config/hub"; printf '%s\n' "$SENTINEL" > "$D/.config/hub/token"
+run STUB_X509=1 -- --non-interactive hub
+three_ways() { [ "$rc" = 1 ] && grep -qF "make fetch-ca NAME=hub" <<<"$out" && grep -qF "ca: to a PEM file's path" <<<"$out" && grep -qF "ca: ignore (not recommended)" <<<"$out"; }
+t "a certificate error from the API: names fetch-ca, a ca: path and ca: ignore" three_ways
+new_repo; private "hub: {username: admin, password: '$PW'}"
+run STUB_CURL_X509=1 -- --non-interactive hub
+t "  ... and from the OAuth server" three_ways
+
+# I1: a kubeconfig that skips certificate checks is rebuilt once ca: isn't ignore.
+insecure_kc() { mkdir -p "$D/.config/hub"; printf 'apiVersion: v1\nkind: Config\nclusters:\n- name: hub\n  cluster:\n    server: https://api.hub.example.com:6443\n    insecure-skip-tls-verify: true\nusers:\n- name: x\n  user:\n    token: %s\n' "$SENTINEL" > "$(k)"; chmod 600 "$(k)"; }
+ca_repo '  ca: certs/hub.pem'; mkdir -p "$D/certs"; cp "$T/ca.pem" "$D/certs/hub.pem"; insecure_kc
+run AI_GRID_TOKEN_HUB="$SENTINEL" -- --non-interactive hub
+t "an insecure kubeconfig, ca: a path: rebuilt with the CA" bash -c '[ "$0" = 0 ] && ! grep -q "already logged in" <<<"$2" && ! grep -q insecure "$1" && grep -q certificate-authority "$1"' "$rc" "$(k)" "$out"
+ca_repo '  ca: ignore'; insecure_kc
+run -- --non-interactive hub
+t "  ... with ca: ignore: kept" bash -c '[ "$0" = 0 ] && grep -q "hub: already logged in" <<<"$1"' "$rc" "$out"
+
+# I2: oc login --web never reads a prompt's answer, and writes a fresh kubeconfig.
+ca_repo; insecure_kc
+run -- hub <<<"y"
+web_fresh() { [ "$rc" = 0 ] && [ ! -s "$W/login-stdin.log" ] && [ "$(cat "$W/login-kubeconfig.log")" != "$(k)" ] &&
+  mode600 "$(k)" && ! grep -q insecure "$(k)" && grep -q SENTINEL "$(k)"; }
+t "oc login --web: no stdin, a fresh kubeconfig moved into place" web_fresh
+
+# M6: a certificate error on a cluster that has a ca: already says FORCE=1.
+ca_repo '  ca: certs/hub.pem'; mkdir -p "$D/certs"; cp "$T/ca.pem" "$D/certs/hub.pem"
+run AI_GRID_TOKEN_HUB="$SENTINEL" STUB_X509=1 -- --non-interactive hub
+t "a certificate error with a ca: already: make fetch-ca NAME=hub FORCE=1" bash -c '[ "$0" = 1 ] && grep -qF "make fetch-ca NAME=hub FORCE=1" <<<"$1"' "$rc" "$out"
+
+# M7: the CA path is single-quoted in the kubeconfig, a ' doubled.
+ca_repo "  ca: \"certs/it's.pem\""; mkdir -p "$D/certs"; cp "$T/ca.pem" "$D/certs/it's.pem"
+run AI_GRID_TOKEN_HUB="$SENTINEL" -- --non-interactive hub
+t "a CA path with a quote: quoted in the kubeconfig" bash -c '[ "$0" = 0 ] && grep -qxF "    certificate-authority: '"'"'$2/certs/it'"''"'s.pem'"'"'" "$1"' "$rc" "$(k)" "$D"
+
 echo "login tests: $((total-fails)) ok, $fails failed"; exit "$fails"

@@ -26,6 +26,17 @@ kind: Clusters
 # all-in-one, see sites: below.
 hub:
   api: REQUIRED-hubAPIURL          # from oc whoami --show-server, e.g. https://api.hub.example.com:6443
+  # Optional, in either file: the CAs that the cluster's API certificate and its
+  # router's certificate (the OAuth server and Routes) chain to, when no public
+  # CA signed them, as on a new cluster. It replaces your system's trust for
+  # this cluster, so it must cover both; it doesn't apply to a site's MaaS
+  # gateway. make fetch-ca NAME=hub writes it here. One of:
+  #   ca: |                    the PEM certificates
+  #     -----BEGIN CERTIFICATE-----
+  #     ...
+  #   ca: certs/hub-ca.pem     a PEM file, relative to this repository, absolute, or ~/...
+  #   ca: ignore               no check at all (not recommended): your password is sent unverified
+  # Left out, the scripts use .config/hub/ca.crt when it exists, else your system's trust.
   # Private file only: a cluster-admin login. Either a username and password
   # (the scripts get a fresh token on every run, so a rerun works the next day):
   # username: kubeadmin
@@ -43,6 +54,7 @@ hub:
 sites:
   - name: REQUIRED-siteName        # its ACM name, a DNS label, e.g. site-1; fixed once imported
     api: REQUIRED-siteAPIURL       # e.g. https://api.site-1.example.com:6443
+    # Optional: ca:, as for the hub; make fetch-ca NAME=SITE_NAME writes it.
     # Private file only: a cluster-admin login, as for the hub.
     # username: kubeadmin
     # password: PASSWORD
