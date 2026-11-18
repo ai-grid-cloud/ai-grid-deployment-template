@@ -177,6 +177,50 @@ oc delete appliedmanifestwork NAME
 **Fix:** none needed before the first site joins the grid ([install the hub components](04-hub-components.md#2-verify)). After a site joins, check the Submariner gateways on the hub and on the site: two nodes on each need the label
 `submariner.io/gateway=true`, which `make bootstrap` and `make site-import` add (`make install` on every run; [limits of `main`, L21](../upstream-main-limits.md#l21-nothing-labels-the-submariner-gateway-nodes)).
 
+## A site's Submariner keeps an old broker or Globalnet range
+
+**Cause:** the site came from another hub without a detach and wipe, so its old Submariner and the old hub's
+`AppliedManifestWork` records are still there. The old Globalnet keeps its global IPs after the new broker assigns
+another range, and the tunnel fails one way.
+
+**Fix:** delete the old hub's records ([a site keeps its old add-ons](#a-site-imported-from-another-hub-keeps-its-old-add-ons)),
+then reinstall Submariner by deleting the site's `submariner` ManagedClusterAddOn on the hub. Two cautions:
+
+- The hub's Argo CD Application `acm-submariner-SITE` self-heals and recreates the add-on about 2.5 minutes after you
+  delete it. If you need to change the site in between, such as its gateway labels, stop that Application's
+  automated sync first, or make the change in the window between the `Submariner` object going and the reinstall.
+- Submariner's uninstall finds the gateway nodes by their `submariner.io/gateway` label, so don't remove or move
+  that label until the uninstall has finished.
+
+## `maas-api` on a site fails with `password authentication failed`
+
+**Cause:** the site's MaaS database read replica (`maas-read` in namespace `maas-db`) still replicates an old hub's
+database, with that database's users. `make site-status` shows it as a `maas-db read replica` line with two different
+`systemID` values.
+
+**Fix:** on the site, delete the replica; the hub's Argo CD recreates it from the hub's database:
+
+```sh
+oc delete clusters.postgresql.cnpg.io maas-read -n maas-db
+```
+
+## Limitador stays in `CrashLoopBackOff` after the Submariner tunnel comes up
+
+**Cause:** not known yet. It's a known issue on sites that join while Submariner sets up the tunnel.
+
+**Fix:** delete Limitador's pods once on the site; they start again and stay up. Find them first, because their
+namespace and labels depend on the install:
+
+```sh
+oc get pods -A | grep limitador
+```
+
+Then delete them, for example:
+
+```sh
+oc delete pods -n kuadrant-system -l app=limitador
+```
+
 ## Tenants get certificate errors on the MaaS hostname
 
 **Cause:** the MaaS gateway presents the cluster's internal certificate on the public hostname. Clients don't trust

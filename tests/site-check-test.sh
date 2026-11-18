@@ -22,6 +22,10 @@ case " $* " in
   *" get operatorgroups.operators.coreos.com -n cert-manager-operator "*)
     [ ! -f "$STUB_DIR/og-error" ] || { echo "error: Forbidden" >&2; exit 1; }
     cat "$STUB_DIR/ogs" 2>/dev/null || true ;;
+  *" get nodes -l nvidia.com/gpu.present=true -o name "*) cat "$STUB_DIR/gpu-nodes" 2>/dev/null || true ;;
+  *" get nodes -l feature.node.kubernetes.io/pci-10de.present=true -o name "*) cat "$STUB_DIR/nfd-gpu-nodes" 2>/dev/null || true ;;
+  *" get clusterpolicies.nvidia.com -o name "*) cat "$STUB_DIR/clusterpolicies" 2>/dev/null || true ;;
+  *" get nodefeaturediscoveries.nfd.openshift.io -A -o name "*) cat "$STUB_DIR/nfds" 2>/dev/null || true ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
 STUB
@@ -45,4 +49,21 @@ rm "$T/og-error"; : > "$T/ogs"
 t "two workers to label: OK, says which" 0 "^OK +Submariner gateway nodes +would label w1, w2 submariner.io/gateway=true"
 echo "{\"items\":[$(w m1 master),$(w m2 master)]}" > "$T/nodes.json"
 t "no worker to label: MISSING, names the oc label command, exit 1" 1 "^MISSING +Submariner gateway nodes +site-b needs two .*oc label node m1 m2 submariner.io/gateway=true$"
+echo "{\"items\":[$(w w1 worker),$(w w2 worker)]}" > "$T/nodes.json"
+t "no GPU nodes: OK" 0 "^OK +GPU stack +no GPU nodes"
+echo node/gpu-1 > "$T/gpu-nodes"
+t "GPU nodes, no ClusterPolicy or NodeFeatureDiscovery: WARN, not a failure" 0 \
+  "^WARN +GPU stack +1 GPU node\(s\) but no ClusterPolicy, no NodeFeatureDiscovery: the GPU stack \(NFD, GPU Operator, ClusterPolicy\) is a site prerequisite"
+echo clusterpolicy.nvidia.com/gpu-cluster-policy > "$T/clusterpolicies"
+t "  ... a ClusterPolicy but no NodeFeatureDiscovery: WARN" 0 "^WARN +GPU stack +1 GPU node\(s\) but no NodeFeatureDiscovery:"
+echo nodefeaturediscovery.nfd.openshift.io/nfd-instance > "$T/nfds"
+t "  ... both: OK" 0 "^OK +GPU stack +1 GPU node\(s\), a ClusterPolicy and a NodeFeatureDiscovery"
+rm "$T/gpu-nodes"; echo node/gpu-2 > "$T/nfd-gpu-nodes"; rm "$T/clusterpolicies"
+t "a GPU node NFD labelled counts too" 0 "^WARN +GPU stack +1 GPU node\(s\) but no ClusterPolicy"
+g() { printf '{"metadata":{"name":"%s","labels":{"node-role.kubernetes.io/worker":""}},"status":{"capacity":{"nvidia.com/gpu":"%s"},"conditions":[{"type":"Ready","status":"True"}]}}' "$1" "$2"; }
+rm "$T/nfd-gpu-nodes" "$T/nfds"
+echo "{\"items\":[$(w w1 worker),$(w w2 worker),$(g gpu-3 0)]}" > "$T/nodes.json"
+t "a node with GPU capacity 0 isn't a GPU node" 0 "^OK +GPU stack +no GPU nodes"
+echo "{\"items\":[$(w w1 worker),$(w w2 worker),$(g gpu-3 2)]}" > "$T/nodes.json"
+t "a node with GPU capacity above 0 is" 0 "^WARN +GPU stack +1 GPU node\\(s\\) but no ClusterPolicy, no NodeFeatureDiscovery"
 echo "site-check tests: $((total-fails)) ok, $fails failed"; exit "$fails"

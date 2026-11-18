@@ -29,9 +29,12 @@ The uninstall leaves these on every cluster on purpose:
   ones your platform owns.
 - **The cluster pull secret's `quay.io/rhoai` and stage entries, and the image mirror.** A reinstall delivers the same
   again, and removing a mirror drains every node. Remove them by hand if you won't reinstall.
-- **The OAuth configuration and ClusterIssuers.** The uninstall never edits them.
-- **The `submariner.io/gateway=true` node labels** that `make bootstrap` and `make site-import` added. A reinstall
-  uses the same nodes. Remove them with `oc label node NODE submariner.io/gateway-` if you won't reinstall.
+- **The OAuth configuration and ClusterIssuers.** The uninstall never edits them, except that on a site it removes
+  stale Argo CD tracking from ClusterIssuers (step 3 of the site step), unless the site's own Argo CD tracks them.
+- **The hub's `submariner.io/gateway=true` node labels** that `make bootstrap` added. A reinstall uses the same nodes.
+  Remove them with `oc label node NODE submariner.io/gateway-` if you won't reinstall. The site step removes a site's
+  labels, after Submariner is gone. Before you add the site again, let `make site-import` label two workers again; on
+  a compact cluster or single-node OpenShift, label two nodes by hand (`make site-check` prints the command).
 - **The protected namespaces and operators:** the namespaces `keycloak`, `cert-manager`, `cert-manager-operator`,
   `openshift-cert-manager-operator`, `openshift-nfd`, `nvidia-gpu-operator`, `openshift-config` and
   `openshift-authentication`, and the operator packages `rhbk-operator`, `openshift-cert-manager-operator`, `nfd` and
@@ -142,9 +145,12 @@ The site step does the following:
    ACM to remove the site's agent.
 3. Runs `scripts/wipe-site.sh`, which deletes from the site, in order: models while KServe runs; MaaS objects,
    including `MaaSTenantConfig` and `AITenant`, before the DataScienceCluster; the DataScienceCluster and its
-   components; the grid's `GridNetwork` and `GridSite`; the AI Grid gateways and their EnvoyFilters; the operators;
+   components; the grid's `GridNetwork` and `GridSite`; the AI Grid gateways and their EnvoyFilters; anything left of
+   Submariner; the MaaS database read replica and its volumes; the operators;
    their leftover webhooks; the ACM `Klusterlet` if the detach left it, then the klusterlet operator and any
-   `AppliedManifestWork` records; their namespaces.
+   `AppliedManifestWork` records; their namespaces; then the `submariner.io/gateway` node labels. First it removes
+   stale Argo CD tracking from your `ClusterPolicy`, `NodeFeatureDiscovery` and `ClusterIssuer` objects, and changes
+   nothing else on them.
 4. Deletes everything else the hub's Applications applied to the site.
 5. Deletes the ACM `Klusterlet`, then the namespaces that Argo CD's record doesn't list: the ACM agent's and policy
    namespaces, the site's own policy namespace, Submariner's, and the operator-created `ai-tenants` and

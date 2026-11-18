@@ -38,6 +38,8 @@ case " $* " in
   *" get ingresses.config.openshift.io "*) echo apps.example.invalid ;;
   *" get managedclusteraddons.addon.open-cluster-management.io "*) cat "$STUB_LOG.addons" 2>/dev/null || echo '{"items":[]}' ;;
   *" get ns -o jsonpath="*) cat "$STUB_LOG.terminating" 2>/dev/null; true ;;
+  *" get clusters.postgresql.cnpg.io maas-read -n maas-db "*) cat "$STUB_LOG.site-sid" 2>/dev/null; true ;;
+  *" get clusters.postgresql.cnpg.io maas-db -n maas-db "*) cat "$STUB_LOG.hub-sid" 2>/dev/null; true ;;
   *" get datasciencecluster "*) [ -f "$STUB_LOG.no-dsc" ] || echo datasciencecluster.datasciencecluster.opendatahub.io/default-dsc ;;
   *" get llminferenceservices,"*) echo "NAMESPACE   NAME           READY"; echo "models      smollm2-chat   True" ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
@@ -66,6 +68,11 @@ t "  ... a MaaS gateway with the internal certificate: says so, not an error cod
 t "  ... and only reads" 0 "^ok$" bash -c '! grep -E " oc (apply|label|patch|delete|create)" "$0" && echo ok' "$STUB_LOG"
 echo '{"items":[{"metadata":{"name":"submariner"},"status":{"conditions":[{"type":"ManifestApplied","status":"False","message":"namespace submariner-operator is being terminated"}]}},{"metadata":{"name":"work-manager"},"status":{"conditions":[{"type":"ManifestApplied","status":"True","message":"ok"}]}}]}' > "$STUB_LOG.addons"
 printf 'some-app\nsubmariner-operator\n' > "$STUB_LOG.terminating"
+printf 7300000000000000001 > "$STUB_LOG.site-sid"; printf 7300000000000000002 > "$STUB_LOG.hub-sid"
+t "site-status flags a read replica of another primary" 0 "^  !! maas-db read replica maas-read has systemID 7300000000000000001, the hub's primary 7300000000000000002" m "$one" site-status
+printf 7300000000000000002 > "$STUB_LOG.site-sid"
+t "  ... and not one of the hub's primary" 0 "^ok$" bash -c '! PATH="$1:$PATH" make -s -C "$0" site-status 2>&1 | grep -q "maas-db read replica" && echo ok' "$one" "$T/bin"
+rm -f "$STUB_LOG.site-sid" "$STUB_LOG.hub-sid"
 t "site-status flags an add-on whose manifests aren't applied" 0 "^  !! ManagedClusterAddOn submariner: ManifestApplied=False: namespace submariner-operator is being terminated$" m "$one" site-status
 t "  ... and only that one" 0 "^ok$" bash -c '! PATH="$1:$PATH" make -s -C "$0" site-status 2>&1 | grep -q "work-manager" && echo ok' "$one" "$T/bin"
 t "site-status flags an install namespace in Terminating" 0 "^  !! Namespace submariner-operator is Terminating$" m "$one" site-status

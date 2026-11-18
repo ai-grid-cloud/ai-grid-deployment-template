@@ -7,6 +7,9 @@
 #   - the hub's Applications for the site: sync and health
 #   - !! for each of its add-ons on the hub whose ManifestApplied is False
 #   - !! for each install namespace on the site stuck in Terminating
+#   - !! when the site's maas-db read replica (maas-read) has another
+#     PostgreSQL systemID than the hub's primary (maas-db): it still replicates
+#     an old hub's primary, and maas-api can't sign in to it
 #   - for a site added as combined or ingress, the HTTP status of its MaaS hostname
 #     (401 without a token), that it answers with the cluster's internal
 #     certificate (not publicly trusted; curl never skips the check), or "not
@@ -53,6 +56,12 @@ if ! cluster_login_ok "$name"; then exit 0; fi
 s() { KUBECONFIG=$(cluster_kubeconfig "$name") oc "$@"; }
 { s get ns -o jsonpath='{range .items[?(@.status.phase=="Terminating")]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true; } |
   { grep -E "$INSTALL_NS_RE" || true; } | while read -r ns; do echo "  !! Namespace $ns is Terminating"; done
+site_sid=$(s get clusters.postgresql.cnpg.io maas-read -n maas-db -o jsonpath='{.status.systemID}' 2>/dev/null || true)
+hub_sid=""; [ -z "$site_sid" ] || hub_sid=$(h get clusters.postgresql.cnpg.io maas-db -n maas-db -o jsonpath='{.status.systemID}' 2>/dev/null || true)
+if [ -n "$hub_sid" ] && [ "$site_sid" != "$hub_sid" ]; then
+  echo "  !! maas-db read replica maas-read has systemID $site_sid, the hub's primary $hub_sid: it replicates an old primary."
+  echo "     Delete Cluster maas-read in namespace maas-db on $name; Argo CD recreates it from the hub's primary."
+fi
 case "$role" in
   combined|ingress)
     if [ -z "$(s get datasciencecluster -o name 2>/dev/null || true)" ]; then

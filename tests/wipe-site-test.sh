@@ -39,12 +39,22 @@ case "$*" in
   get\ *.submariner.io\ -A\ --no-headers*) cat "$w.subobjs" 2>/dev/null ;;
   "get deployment submariner-operator -n submariner-operator") [ -f "$w.subop" ] ;;
   "get nodes -l submariner.io/gateway -o name") cat "$w.gateways" 2>/dev/null ;;
-  delete\ *|patch\ *|label\ *)
+  "api-resources --api-group=postgresql.cnpg.io -o name") [ -f "$w.dbclusters" ] || [ -f "$w.cnpg" ] && echo clusters.postgresql.cnpg.io; true ;;
+  "get clusters.postgresql.cnpg.io -n maas-db -o jsonpath="*) [ ! -f "$w.dberror" ] || { echo "error: the server is currently unable to handle the request" >&2; exit 1; }
+    cat "$w.dbclusters" 2>/dev/null; true ;;
+  "get applications.argoproj.io -A -o jsonpath="*) cat "$w.apps" 2>/dev/null ;;
+  "get clusters.postgresql.cnpg.io -n maas-db -o name") sed 's#|.*##; s#^#cluster.postgresql.cnpg.io/#' "$w.dbclusters" 2>/dev/null ;;
+  "get persistentvolumeclaims -n maas-db -o name") cat "$w.pvcs" 2>/dev/null ;;
+  get\ clusterpolicies.nvidia.com\ -A\ -o\ jsonpath=*|get\ nodefeaturediscoveries.nfd.openshift.io\ -A\ -o\ jsonpath=*|get\ clusterissuers.cert-manager.io\ -A\ -o\ jsonpath=*)
+    cat "$w.track.$2" 2>/dev/null ;;
+  delete\ *|patch\ *|label\ *|annotate\ *)
     echo "WRITE: $c $*" >> "$STUB/writes"
     if [ "$1" = delete ] && [ ! -f "$w.stuck" ]; then
       case "$2" in
         ns) grep -vx "$3" "$w.ns" > "$w.ns.new" 2>/dev/null; mv "$w.ns.new" "$w.ns" ;;
         # The klusterlet operator removes the agent with its Klusterlet.
+        submariners.submariner.io) rm -f "$w.subcrs" ;;
+        cluster.postgresql.cnpg.io/*) rm -f "$w.dbclusters" ;;
         klusterlets.operator.open-cluster-management.io) rm -f "$w.klusterlet"
           grep -v '^open-cluster-management-agent' "$w.ns" > "$w.ns.new" 2>/dev/null; mv "$w.ns.new" "$w.ns" ;;
       esac
@@ -144,11 +154,105 @@ no_writes "  ... and writes nothing"
 agent_world; touch "$W/site-c.hub"; t "the detach refuses on an ACM hub" 1 "is an ACM hub" detach-site.sh --site site-c
 agent_world; t "a bad timeout is refused" 1 "--timeout takes a number" detach-site.sh --site site-c --timeout soon
 
+# wipe-site.sh: Submariner an old hub's add-on left (F14)
+sub_world() { # a detached site with Submariner, its operator running, Globalnet objects and two gateway nodes
+  world; printf 'submariner-operator\n' > "$W/site-c.ns"; touch "$W/site-c.subop"
+  echo "submariner-operator submariner" > "$W/site-c.subcrs"
+  printf 'submariners.submariner.io\nservicediscoveries.submariner.io\nclusterglobalegressips.submariner.io\nglobalingressips.submariner.io\n' > "$W/site-c.subkinds"
+  echo "<none> cluster-egress.submariner.io" > "$W/site-c.subobjs"
+  printf 'node/worker-a\nnode/worker-b\n' > "$W/site-c.gateways"
+}
+sub_world; out=$(run wipe-site.sh --site site-c --dry-run); total=$((total+1))
+a=$(grep -n "would delete: submariners.submariner.io submariner -n submariner-operator" <<<"$out" | head -1 | cut -d: -f1 || true)
+b=$(grep -n "would delete: subscriptions.operators.coreos.com\|== 6\." <<<"$out" | head -1 | cut -d: -f1 || true)
+if [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; then echo "   ok   the dry run lists the Submariner CR before the operators go"
+else fails=$((fails+1)); echo "   FAIL the dry run lists the Submariner CR before the operators go"; echo "$out" | grep -i -e submariner -e "== "; fi
+sub_world; t "  ... Globalnet's cluster-scoped objects, without finalizers" 0 \
+  "would delete without finalizers: clusterglobalegressips.submariner.io cluster-egress.submariner.io$" wipe-site.sh --site site-c --dry-run
+sub_world; t "  ... the namespace submariner-operator" 0 "would delete: ns submariner-operator$" wipe-site.sh --site site-c --dry-run
+sub_world; t "  ... the gateway node labels" 0 "would remove label submariner.io/gateway from: node/worker-b" wipe-site.sh --site site-c --dry-run
+sub_world; out=$(run wipe-site.sh --site site-c --dry-run); total=$((total+1))
+a=$(grep -n "would delete: ns submariner-operator" <<<"$out" | cut -d: -f1 || true); b=$(grep -n "would remove label submariner.io/gateway" <<<"$out" | head -1 | cut -d: -f1 || true)
+if [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; then echo "   ok     ... the labels last, after the namespace"
+else fails=$((fails+1)); echo "   FAIL   ... the labels last, after the namespace"; fi
+sub_world; run wipe-site.sh --site site-c --dry-run >/dev/null; no_writes "  ... and the dry run writes nothing"
+sub_world; run wipe-site.sh --site site-c >/dev/null
+wrote "the wipe deletes the Submariner CR" "delete submariners.submariner.io submariner -n submariner-operator"
+wrote "  ... Globalnet's objects, finalizers first" "patch clusterglobalegressips.submariner.io cluster-egress.submariner.io .*finalizers"
+wrote "  ... the namespace" "delete ns submariner-operator"
+wrote "  ... the gateway labels" "label node/worker-a submariner.io/gateway-"
+sub_world; rm "$W/site-c.subop"; out=$(run wipe-site.sh --site site-c --dry-run); total=$((total+1))
+if grep -q "would delete without finalizers: submariners.submariner.io submariner -n submariner-operator" <<<"$out"; then
+  echo "   ok   with its operator gone, the Submariner CR goes without its finalizer"
+else fails=$((fails+1)); echo "   FAIL with its operator gone, the Submariner CR goes without its finalizer"; echo "$out" | grep -i submariner; fi
+sub_world; touch "$W/site-c.stuck"; out=$(run wipe-site.sh --site site-c 2>&1 || true); total=$((total+1))
+if grep -q "kept the submariner.io/gateway node labels" <<<"$out" && ! grep -q "label node/" "$W/writes"; then
+  echo "   ok   the labels stay while namespace submariner-operator is still there"
+else fails=$((fails+1)); echo "   FAIL the labels stay while namespace submariner-operator is still there"; fi
+
+# wipe-site.sh: the maas-db read replica of an old primary
+db_world() { world; echo maas-db > "$W/site-c.ns"; echo "maas-read|true" > "$W/site-c.dbclusters"; echo persistentvolumeclaim/maas-read-1 > "$W/site-c.pvcs"; }
+db_world; out=$(run wipe-site.sh --site site-c --dry-run); total=$((total+1))
+a=$(grep -n "would delete: cluster.postgresql.cnpg.io/maas-read -n maas-db" <<<"$out" | cut -d: -f1 || true)
+b=$(grep -n "would delete: persistentvolumeclaim/maas-read-1 -n maas-db" <<<"$out" | cut -d: -f1 || true)
+c=$(grep -n "would delete: ns maas-db$" <<<"$out" | cut -d: -f1 || true)
+if [ -n "$a" ] && [ -n "$b" ] && [ -n "$c" ] && [ "$a" -lt "$b" ] && [ "$b" -lt "$c" ]; then echo "   ok   the dry run lists the replica, then its volume, then namespace maas-db"
+else fails=$((fails+1)); echo "   FAIL the dry run lists the replica, then its volume, then namespace maas-db"; echo "$out" | grep maas; fi
+db_world; run wipe-site.sh --site site-c --dry-run >/dev/null; no_writes "  ... and the dry run writes nothing"
+db_world; run wipe-site.sh --site site-c >/dev/null
+wrote "the wipe deletes the replica" "delete cluster.postgresql.cnpg.io/maas-read -n maas-db"
+wrote "  ... its volume" "delete persistentvolumeclaim/maas-read-1 -n maas-db"
+wrote "  ... and namespace maas-db" "delete ns maas-db"
+db_world; echo "maas-db|" > "$W/site-c.dbclusters"
+t "the wipe refuses a maas-db primary, and names the flag" 1 "isn't a read replica .*maas-db.*--wipe-maas-db-primary" wipe-site.sh --site site-c --dry-run
+no_writes "  ... and writes nothing"
+db_world; echo "maas-db|false" > "$W/site-c.dbclusters"
+t "  ... also with replica.enabled false" 1 "isn't a read replica" wipe-site.sh --site site-c --dry-run
+db_world; echo "maas-db|" > "$W/site-c.dbclusters"
+t "  ... unless --wipe-maas-db-primary is given" 0 "would delete: cluster.postgresql.cnpg.io/maas-db -n maas-db" wipe-site.sh --site site-c --dry-run --wipe-maas-db-primary
+
+# wipe-site.sh: stale Argo CD tracking on the platform's objects (step 0)
+track_world() {
+  world
+  echo "|gpu-cluster-policy|rhoai-site-c-1a2b|rhoai-site-c-1a2b:nvidia.com/ClusterPolicy:/gpu-cluster-policy|" > "$W/site-c.track.clusterpolicies.nvidia.com"
+  echo "openshift-nfd|nfd-instance||rhoai-site-c-1a2b:nfd.openshift.io/NodeFeatureDiscovery:openshift-nfd/nfd-instance|" > "$W/site-c.track.nodefeaturediscoveries.nfd.openshift.io"
+  printf '|letsencrypt|my-release||Helm\n|plain|||\n' > "$W/site-c.track.clusterissuers.cert-manager.io"
+}
+track_world; t "the dry run lists the ClusterPolicy's tracking label" 0 \
+  "would remove label app.kubernetes.io/instance=rhoai-site-c-1a2b from: clusterpolicies.nvidia.com gpu-cluster-policy$" wipe-site.sh --site site-c --dry-run
+track_world; t "  ... and its tracking annotation" 0 "would remove annotation argocd.argoproj.io/tracking-id from: clusterpolicies.nvidia.com gpu-cluster-policy$" wipe-site.sh --site site-c --dry-run
+track_world; t "  ... the NodeFeatureDiscovery's, in its protected namespace" 0 \
+  "would remove annotation argocd.argoproj.io/tracking-id from: nodefeaturediscoveries.nfd.openshift.io nfd-instance -n openshift-nfd" wipe-site.sh --site site-c --dry-run
+track_world; out=$(run wipe-site.sh --site site-c --dry-run); total=$((total+1))
+if ! grep -q "clusterissuers" <<<"$out"; then echo "   ok     ... not Helm's own instance label, nor an untracked ClusterIssuer"
+else fails=$((fails+1)); echo "   FAIL   ... not Helm's own instance label, nor an untracked ClusterIssuer"; grep clusterissuers <<<"$out"; fi
+track_world; run wipe-site.sh --site site-c --dry-run >/dev/null; no_writes "  ... and the dry run writes nothing"
+track_world; run wipe-site.sh --site site-c >/dev/null
+wrote "the wipe removes only the tracking label" "label clusterpolicies.nvidia.com gpu-cluster-policy app.kubernetes.io/instance-$"
+wrote "  ... and the tracking annotation" "annotate nodefeaturediscoveries.nfd.openshift.io nfd-instance -n openshift-nfd argocd.argoproj.io/tracking-id-$"
+total=$((total+1))
+if ! grep -E "(delete|patch) (clusterpolicies|nodefeaturediscoveries|clusterissuers)" "$W/writes" >/dev/null; then echo "   ok     ... and never deletes or patches those objects"
+else fails=$((fails+1)); echo "   FAIL   ... and never deletes or patches those objects"; fi
+
 # Review follow-ups
 klusterlet_world; touch "$W/site-c.ocm-error"
 t "the wipe stops when it can't list open-cluster-management's Deployments" 1 "can't list the Deployments in namespace open-cluster-management: error: forbidden" wipe-site.sh --site site-c --dry-run
 klusterlet_world; touch "$W/site-c.klusterlet" "$W/site-c.stuck"; run wipe-site.sh --site site-c >/dev/null 2>&1 || true
 wrote "a Klusterlet still there once its operator is gone loses its finalizers" "patch klusterlets.operator.open-cluster-management.io klusterlet .*finalizers"
+db_world; touch "$W/site-c.dberror"
+t "the maas-db primary check fails closed when the databases can't be listed" 1 "can't list the databases in namespace maas-db.*unable to handle" wipe-site.sh --site site-c --dry-run
+no_writes "  ... and writes nothing"
+world; touch "$W/site-c.cnpg"; t "  ... a cluster with CloudNativePG but no maas-db database passes" 0 "dry run: nothing deleted" wipe-site.sh --site site-c --dry-run
+track_world; echo "rhoai-site-c-1a2b openshift-gitops_rhoai-site-c-1a2b " > "$W/site-c.apps"
+t "tracking that names an Application on the site itself is kept" 0 \
+  "kept \(tracked by this cluster's own Argo CD Application rhoai-site-c-1a2b\): clusterpolicies.nvidia.com gpu-cluster-policy" wipe-site.sh --site site-c --dry-run
+track_world; echo "rhoai-site-c-1a2b openshift-gitops_rhoai-site-c-1a2b " > "$W/site-c.apps"; out=$(run wipe-site.sh --site site-c --dry-run); total=$((total+1))
+if ! grep -q "would remove .* from: \(clusterpolicies\|nodefeaturediscoveries\)" <<<"$out"; then echo "   ok     ... for both objects it tracks"
+else fails=$((fails+1)); echo "   FAIL   ... for both objects it tracks"; grep "would remove" <<<"$out"; fi
+track_world; echo "|issuer|rhoai-site-c-1a2b|rhoai-site-c-1a2b:cert-manager.io/ClusterIssuer:/issuer|Helm" > "$W/site-c.track.clusterissuers.cert-manager.io"
+t "Helm's instance label goes when the tracking-id names it as the Application" 0 \
+  "would remove label app.kubernetes.io/instance=rhoai-site-c-1a2b from: clusterissuers.cert-manager.io issuer$" wipe-site.sh --site site-c --dry-run
+
 agent_world; mv "$D/.config/hub/kubeconfig" "$T/hub-kubeconfig"
 t "the detach refuses when it can't check your hub" 1 "can't check whether your hub hub manages site-c: run make login NAME=hub" detach-site.sh --site site-c
 no_writes "  ... and writes nothing"

@@ -11,6 +11,10 @@ yourself.
   [site requirements](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/docs/acm/cluster-onboarding/README.md#what-the-site-must-provide)). Size the site for its
   models; GPU models need GPU nodes. For a test, one cluster can be both hub and site
   ([all-in-one](09-hands-off.md#all-in-one-one-cluster)).
+- **The GPU stack on each GPU site, before the import:** Node Feature Discovery with a `NodeFeatureDiscovery`, and
+  the NVIDIA GPU Operator with a `ClusterPolicy`. On the library's `main` branch your platform sets these up; the
+  library doesn't install them. `make site-check` warns on [page 5](05-prepare-site.md) when a site has GPU nodes
+  without them.
 - **No platform cert-manager Operator on the site.** On the library's `main` branch, a site that already runs the
   cert-manager Operator for Red Hat OpenShift can't join the grid
   ([limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values)).
