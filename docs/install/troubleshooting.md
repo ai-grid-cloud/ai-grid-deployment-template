@@ -44,6 +44,80 @@ CronJob's last Job:
 scripts/with-cluster.sh hub oc get jobs -n maas-db
 ```
 
+## Example organizations are missing after switching `keycloakOverlay` to `default`
+
+**Symptom:** you installed the hub with `keycloakOverlay=core`, then set `default` and pushed. The example realms
+`grid-tenant-1-idp` and `grid-tenant-2-idp` exist, but the provider console doesn't list the organizations
+`grid-tenant-1` and `grid-tenant-2`, and creating them in the console fails with `409` on the identity provider's
+alias.
+
+**Cause:** the library's Keycloak imports each realm only when it doesn't exist: the Keycloak container runs
+`kc.sh import --override false` before `kc.sh start`. Realm `saas` already existed, so it kept its `core` content.
+The PostSync realm sync then added the example identity providers to it, but it never creates organizations
+([Realm imports and Git edits](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/apps/keycloak/README.md#realm-imports-and-git-edits)).
+
+**Fix:** re-import realm `saas`. This deletes everything in it: the organizations you created in the console, their
+identity provider links, brokered users and their sessions. Tenants sign in again afterward, and you create your own
+organizations again. The example organizations keep their IDs, which the realm file sets.
+
+Do this only on a test deployment. First delete, in the console, the subscriptions of every organization you created:
+re-created organizations get new IDs, and subscriptions that name the old ones stay in your catalog repository. API
+keys that tenants already have aren't revoked; delete them in the tenant portal if you need to.
+
+Run each command from your deployment repository. `scripts/with-cluster.sh hub` runs it with the hub's login.
+
+1. Check that `keycloakOverlay=default` is pushed and that the `keycloak` Application is `Synced` and `Healthy`, so
+   the realm files in ConfigMap `keycloak-realm-import` include the examples:
+
+   ```sh
+   scripts/with-cluster.sh hub oc get applications.argoproj.io keycloak -n openshift-gitops
+   ```
+
+2. Delete realm `saas`. The command signs in as Keycloak's bootstrap admin, whose username and password the
+   Keycloak container reads from Secret `keycloak-secrets` in namespace `maas-db`. The single quotes keep them
+   inside the pod, so they never reach your shell or your terminal:
+
+   ```sh
+   scripts/with-cluster.sh hub oc exec -n maas-db deployment/keycloak -c keycloak -- bash -c '
+     kcadm=/opt/keycloak/bin/kcadm.sh cfg=/tmp/kcadm-$$.config
+     "$kcadm" config credentials --config "$cfg" --server http://localhost:8080 --realm master \
+       --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" &&
+       "$kcadm" delete realms/saas --config "$cfg"; rc=$?; rm -f "$cfg"; exit "$rc"'
+   ```
+
+3. Restart Keycloak. The new pod imports realm `saas` again, from the example realm file, because it no longer
+   exists:
+
+   ```sh
+   scripts/with-cluster.sh hub oc rollout restart deployment/keycloak -n maas-db
+   scripts/with-cluster.sh hub oc rollout status deployment/keycloak -n maas-db --timeout=10m
+   ```
+
+4. Sync the `keycloak` Application, so its PostSync realm sync applies the library's settings to the new realm. The
+   commands record when the last sync started, start a new one, and wait until that new sync ends, so an earlier
+   sync's result doesn't count:
+
+   ```sh
+   app() { scripts/with-cluster.sh hub oc get applications.argoproj.io keycloak -n openshift-gitops -o jsonpath="$1"; }
+   before=$(app '{.status.operationState.startedAt}')
+   scripts/with-cluster.sh hub oc patch applications.argoproj.io keycloak -n openshift-gitops --type merge \
+     -p '{"operation":{"initiatedBy":{"username":"admin"},"sync":{}}}'
+   until s=$(app '{.status.operationState.startedAt} {.status.operationState.phase}') &&
+     [ "${s% *}" != "$before" ] && case "${s#* }" in Succeeded|Failed|Error) true ;; *) false ;; esac
+   do sleep 10; done; echo "$s"
+   ```
+
+   The last line ends with `Succeeded`. If it ends with `Failed` or `Error`, run `make status` to see why.
+
+5. Create the console backend's Keycloak user again. It was in realm `saas`:
+
+   ```sh
+   make console-secrets
+   ```
+
+The portal's sign-in redirects come back within five minutes, when CronJob `keycloak-redirect-uris` runs. You should
+see `grid-tenant-1` and `grid-tenant-2` on the console's **Organizations** page.
+
 ## The hub check prints `MISSING`
 
 **Fix:** for each `MISSING` line that a selected component doesn't install:

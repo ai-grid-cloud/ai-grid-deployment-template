@@ -203,6 +203,9 @@ D="$T/examples"; newrepo "$D"; printf 'keycloakOverlay=default\n' > "$D/root/inp
 W="$T/org-ex"; ready "$W"; echo '{"items":[{"id":"7c0e","name":"Grid Tenant 1"}],"size":1}' > "$W/Tenants.json"; run
 t "  ... with keycloakOverlay=default: INFO, the library's examples" 0 "^INFO .*1 organization.*keycloakOverlay=default" \
   '! grep -q "^FAIL" <<<"$out"'
+W="$T/org-ex-none"; ready "$W"; run
+t "  ... with keycloakOverlay=default and no organizations: WARN, re-import realm saas" 0 \
+  "^WARN keycloakOverlay=default but no example organizations: re-import realm saas" '! grep -q "^FAIL" <<<"$out"'
 D="$T/repo"
 
 W="$T/model"; ready "$W"; echo '{"size":1,"total":1,"items":[{"id":"m1"}]}' > "$W/Models.json"; rm -f "$(OUT)"; run

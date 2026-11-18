@@ -17,6 +17,12 @@
 # root. A value that's already set in it is left alone. hub/catalog/ always follows inputs.env: it's
 # rewritten from it on every run. It reads no cluster.
 #
+# Choose keycloakOverlay before your first push. When origin's
+# deploymentRevision already has core and root/inputs.env now says default, it
+# stops: a hub that installed Keycloak with core gets the example realms but not
+# the example organizations without a re-import of realm saas
+# (docs/install/troubleshooting.md). KEYCLOAK_OVERLAY_CHANGE=1 lets it go on.
+#
 # The tenant portal's sign-in redirects need nothing from you: the library
 # Keycloak's CronJob keycloak-redirect-uris registers
 # https://maas.SITE_APPS_DOMAIN/oauth2/callback for every ingress or combined site.
@@ -128,4 +134,48 @@ for name in sorted(os.listdir(cdir)) if url and rev else []:
     else:
         print(f"kept     hub/catalog/{name}: already {url} at {rev}")
 PY
+
+# keycloakOverlay core -> default after core was pushed. Keycloak creates the
+# example organizations only when it first imports realm saas, so on a hub that
+# already runs core the switch adds the example realms and identity providers
+# but no organizations (the console then gets 409 on those aliases). "Pushed"
+# is the value at origin's deploymentRevision as this clone last saw it (the
+# remote-tracking ref git-push.sh updates; no network, no cluster read), or,
+# with no such ref, deploymentRevision itself when it's a tag or commit. It
+# refuses unless KEYCLOAK_OVERLAY_CHANGE=1; default -> core only prints a note.
+input_at() { # REF NAME: NAME's value in REF's root/inputs.env (REF empty: the working tree)
+  { if [ -n "$1" ]; then git -C "$dir" show "$1:root/inputs.env" 2>/dev/null || true; else cat "$dir/root/inputs.env"; fi; } |
+    sed -n "s/^[[:space:]]*$2=//p" | tail -n1 | tr -d '\r' | sed 's/[[:space:]]*$//'
+}
+reimport="docs/install/troubleshooting.md#example-organizations-are-missing-after-switching-keycloakoverlay-to-default"
+rev=$(input_at "" deploymentRevision); rev=${rev:-main} ref="refs/remotes/origin/$rev" where="origin's $rev"
+if ! git -C "$dir" rev-parse -q --verify "$ref^{commit}" >/dev/null 2>&1; then
+  # A pinned tag or full commit SHA: the hub syncs exactly that. Never a local
+  # branch, which may not be pushed.
+  ref="" where="deploymentRevision $rev"
+  if [[ "$rev" =~ ^[0-9a-f]{40}$ ]]; then ref=$rev
+  elif git -C "$dir" rev-parse -q --verify "refs/tags/$rev" >/dev/null 2>&1; then ref="refs/tags/$rev"; fi
+  [ -z "$ref" ] || git -C "$dir" rev-parse -q --verify "$ref^{commit}" >/dev/null 2>&1 || ref=""
+fi
+if [ -n "$ref" ]; then
+  now=$(input_at "" keycloakOverlay) pushed=$(input_at "$ref" keycloakOverlay)
+  if [ "$pushed" = core ] && [ "$now" = default ]; then
+    if [ "${KEYCLOAK_OVERLAY_CHANGE:-}" != 1 ]; then
+      cat >&2 <<EOF
+error: root/inputs.env sets keycloakOverlay=default, but $where has core.
+If the hub already installed Keycloak with core, default adds the example realms but
+not the example organizations: Keycloak creates those only when it first imports
+realm saas. Choose one:
+- Keep core: set keycloakOverlay=core in root/inputs.env again.
+- The hub hasn't installed Keycloak yet: run again with KEYCLOAK_OVERLAY_CHANGE=1.
+- The hub has: run again with KEYCLOAK_OVERLAY_CHANGE=1, push, then re-import
+  realm saas ($reimport).
+EOF
+      exit 1
+    fi
+    echo "note: keycloakOverlay changes from core to default (KEYCLOAK_OVERLAY_CHANGE=1). If the hub already installed Keycloak, re-import realm saas after the push: $reimport"
+  elif [ "$pushed" = default ] && [ "$now" = core ]; then
+    echo "note: keycloakOverlay changes from default to core. Keycloak keeps the example realms, organizations and test users it already has; delete them in Keycloak if you don't want them."
+  fi
+fi
 "$here/check-deployment.sh" "$dir"

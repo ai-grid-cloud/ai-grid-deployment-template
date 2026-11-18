@@ -85,6 +85,12 @@ catalog:
 # Optional: make install's settings, shown with their defaults. Uncomment a
 # line to change it. A setting left out comes from the environment variable of
 # the same name, else the default.
+#
+# Not here: the tenants' Keycloak overlay. Choose it before your first make
+# install, in root/inputs.env: keycloakOverlay=default for a test deployment
+# (the library's example organizations and test users), core (the install's
+# default) for production. Switching core to default later needs a re-import
+# of realm saas (install guide, page 9).
 options:
   # LIBRARY: main                        # the library revision: a branch the hub follows as it moves (default main), or a tag or full SHA to pin one commit; left out, root/applicationset.yaml's libraryRevision stands
   # KEYCLOAK: install                    # only "install" is supported

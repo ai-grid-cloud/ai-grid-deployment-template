@@ -94,4 +94,83 @@ t "a URL argument ignores the options: section" 0 "every repository is an input"
   "$d4/scripts/set-inputs.sh" https://github.com/acme/catalog.git
 t "two arguments: usage" 2 "usage: set-inputs.sh \[CATALOG_REPO_URL\]" "$d2/scripts/set-inputs.sh" a b
 
+# keycloakOverlay: core -> default after core was pushed is refused without
+# KEYCLOAK_OVERLAY_CHANGE=1. "Pushed" is origin's deploymentRevision as the
+# clone's remote-tracking ref has it (git-push.sh updates it); no network.
+pushed() { # DIR: commit root/ and record it as origin/main
+  git -C "$1" add root && git -C "$1" -c core.hooksPath=/dev/null -c user.name=test -c user.email=test@example.com commit -qm inputs &&
+    git -C "$1" update-ref refs/remotes/origin/main HEAD
+}
+overlay() { sed -i.bak "s#^keycloakOverlay=.*#keycloakOverlay=$2#" "$1/root/inputs.env"; rm "$1/root/inputs.env.bak"; }
+ko=$(repo overlay https://github.com/acme/deploy.git)
+t "first run with nothing pushed: core, no note" 0 "set +root/inputs.env: keycloakOverlay = core" \
+  "$ko/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+check "  ... and no keycloakOverlay note" eval '! "$ko/scripts/set-inputs.sh" https://github.com/acme/catalog.git 2>&1 | grep -q "keycloakOverlay changes"'
+kf=$(repo overlay-first https://github.com/acme/deploy.git)
+printf 'keycloakOverlay=default\n' > "$kf/root/inputs.env"
+t "first run choosing default, nothing pushed: kept" 0 "kept +root/inputs.env: keycloakOverlay is already set" \
+  "$kf/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+check "  ... default stays" grep -qx 'keycloakOverlay=default' "$kf/root/inputs.env"
+pushed "$ko"
+overlay "$ko" default
+t "core pushed, now default: refused" 1 "error: root/inputs.env sets keycloakOverlay=default, but origin.s main has core" \
+  "$ko/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+t "  ... the message gives the flag and the procedure" 1 "KEYCLOAK_OVERLAY_CHANGE=1.*" \
+  "$ko/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+t "  ... and links the procedure" 1 "troubleshooting.md#example-organizations-are-missing-after-switching-keycloakoverlay-to-default" \
+  "$ko/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+check "  ... and leaves default in inputs.env, unchecked" grep -qx 'keycloakOverlay=default' "$ko/root/inputs.env"
+t "  ... with KEYCLOAK_OVERLAY_CHANGE=1: goes on and checks" 0 "every repository is an input" \
+  env KEYCLOAK_OVERLAY_CHANGE=1 "$ko/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+t "  ... with KEYCLOAK_OVERLAY_CHANGE=1: notes the re-import" 0 "note: keycloakOverlay changes from core to default.*re-import realm saas" \
+  env KEYCLOAK_OVERLAY_CHANGE=1 "$ko/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+t "  ... KEYCLOAK_OVERLAY_CHANGE=yes isn't the flag" 1 "origin's main has core" \
+  env KEYCLOAK_OVERLAY_CHANGE=yes "$ko/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+pushed "$ko"
+t "default pushed: no longer a change, goes on" 0 "every repository is an input" \
+  "$ko/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+overlay "$ko" core
+t "default pushed, now core: goes on with a note that the examples stay" 0 "note: keycloakOverlay changes from default to core.*keeps the example" \
+  "$ko/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+# The hub syncs deploymentRevision: only that branch's tracking ref counts.
+kr=$(repo overlay-rev https://github.com/acme/deploy.git)
+"$kr/scripts/set-inputs.sh" https://github.com/acme/catalog.git >/dev/null
+sed -i.bak 's#^deploymentRevision=.*#deploymentRevision=prod#' "$kr/root/inputs.env"; rm "$kr/root/inputs.env.bak"
+pushed "$kr"; overlay "$kr" default
+t "core only on origin/main, deploymentRevision prod with no tracking ref: not refused" 0 "every repository is an input" \
+  "$kr/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+git -C "$kr" update-ref refs/remotes/origin/prod refs/remotes/origin/main
+t "  ... once origin/prod has core: refused" 1 "origin's prod has core" \
+  "$kr/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+# A pinned deploymentRevision (a tag or a full SHA) with no tracking ref: the pin is what the hub syncs.
+kp=$(repo overlay-pin https://github.com/acme/deploy.git)
+"$kp/scripts/set-inputs.sh" https://github.com/acme/catalog.git >/dev/null
+git -C "$kp" add root && git -C "$kp" -c core.hooksPath=/dev/null -c user.name=test -c user.email=test@example.com commit -qm core
+sha=$(git -C "$kp" rev-parse HEAD); git -C "$kp" tag v1
+sed -i.bak "s#^deploymentRevision=.*#deploymentRevision=$sha#" "$kp/root/inputs.env"; rm "$kp/root/inputs.env.bak"
+overlay "$kp" default
+t "deploymentRevision a full SHA that has core, no tracking ref: refused" 1 "but deploymentRevision $sha has core" \
+  "$kp/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+sed -i.bak "s#^deploymentRevision=.*#deploymentRevision=v1#" "$kp/root/inputs.env"; rm "$kp/root/inputs.env.bak"
+t "deploymentRevision a tag that has core: refused" 1 "but deploymentRevision v1 has core" \
+  "$kp/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+sed -i.bak "s#^deploymentRevision=.*#deploymentRevision=main#" "$kp/root/inputs.env"; rm "$kp/root/inputs.env.bak"
+t "  ... but a local branch with no tracking ref isn't pushed: goes on" 0 "every repository is an input" \
+  "$kp/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+# An indented key still counts.
+ki=$(repo overlay-indent https://github.com/acme/deploy.git)
+"$ki/scripts/set-inputs.sh" https://github.com/acme/catalog.git >/dev/null
+sed -i.bak 's#^keycloakOverlay=core$#  keycloakOverlay=core#' "$ki/root/inputs.env"; rm "$ki/root/inputs.env.bak"
+pushed "$ki"
+sed -i.bak 's#^  keycloakOverlay=core$#  keycloakOverlay=default#' "$ki/root/inputs.env"; rm "$ki/root/inputs.env.bak"
+t "indented keycloakOverlay, core pushed, now default: refused" 1 "origin's main has core" \
+  "$ki/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+# A pushed commit without root/inputs.env (the template as cloned) isn't core.
+kn=$(repo overlay-none https://github.com/acme/deploy.git)
+mkdir -p "$kn/x" && : > "$kn/x/f" && git -C "$kn" add x && git -C "$kn" -c core.hooksPath=/dev/null -c user.name=test -c user.email=test@example.com commit -qm x &&
+  git -C "$kn" update-ref refs/remotes/origin/main HEAD
+printf 'keycloakOverlay=default\n' > "$kn/root/inputs.env"
+t "pushed commit without inputs.env, now default: goes on" 0 "every repository is an input" \
+  "$kn/scripts/set-inputs.sh" https://github.com/acme/catalog.git
+
 echo "set-inputs tests: $((total-fails)) ok, $fails failed"; exit "$fails"
