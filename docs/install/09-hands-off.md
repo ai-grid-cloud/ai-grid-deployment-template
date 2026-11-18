@@ -169,13 +169,27 @@ Tell the install which clusters and repositories to use, and give it the credent
    The tenant portal's sign-in redirects need nothing from you: once you add a site to the grid as `ingress` or
    `combined`, the library's Keycloak registers its redirect, `https://maas.APPS_DOMAIN/oauth2/callback`.
 
-   The install writes `root/inputs.env` with `keycloakOverlay=core`: the tenants' Keycloak has the `saas` broker
-   realm only, with no example organizations and no test users. For a test deployment that wants the library's
-   example organizations and test users, set `keycloakOverlay=default` in `root/inputs.env`, commit and push it
-   before you run `make install`; the install keeps a value that's already set. Never use `default` for a real
-   install ([set your names](02-repositories.md#4-set-your-names)).
+   Choose the tenants' Keycloak overlay, `keycloakOverlay`, now, before your first `make install`: `default` for a
+   test deployment, `core` for production. It isn't in `.config/clusters.yaml`; it's in `root/inputs.env`.
 
-   It also writes `hubCertManager=library`: the hub installs the library's cert-manager. If the hub already runs
+   - **Production:** do nothing. The install writes `root/inputs.env` with `keycloakOverlay=core`: the tenants'
+     Keycloak has the `saas` broker realm only, with no example organizations and no test users.
+   - **A test deployment** that wants the library's example organizations and test users: set it before the
+     install's first push. The install keeps a value that's already set, and commits and pushes the file:
+
+     ```sh
+     echo keycloakOverlay=default >> root/inputs.env
+     ```
+
+     If `root/inputs.env` already has a `keycloakOverlay` line, change that line instead.
+
+   Never use `default` for a real install ([set your names](02-repositories.md#4-set-your-names)). Changing `core`
+   to `default` after the install doesn't add the example organizations without a
+   [re-import of realm `saas`](troubleshooting.md#example-organizations-are-missing-after-switching-keycloakoverlay-to-default),
+   so `make install` stops if `root/inputs.env` says `default` and the branch you pushed says `core`, unless you
+   run it with `KEYCLOAK_OVERLAY_CHANGE=1`.
+
+   The install also writes `hubCertManager=library`: the hub installs the library's cert-manager. If the hub already runs
    the platform's cert-manager, set `hubCertManager=platform` the same way; the install stops and says so if you
    don't. Such a hub can't also be a site, so it can't be an
    [all-in-one](#all-in-one-one-cluster).

@@ -382,6 +382,23 @@ g -C "$D" commit -qam issuer
 run
 t "an issuer: site key is an unknown key now" eval '[ "$rc" = 1 ] && grep -q "unknown keys (typos?): sites\[site-a\].issuer" <<<"$out" && [ ! -s "$W/calls.log" ]'
 
+# The real set-inputs.sh: keycloakOverlay=default after origin's main had core.
+setup overlay
+cp "$SRC/scripts/set-inputs.sh" "$D/scripts/set-inputs.sh"; cp -R "$SRC/hub" "$D/"
+g -C "$D" remote add origin https://github.com/acme/deploy.git
+printf '%s\n' deploymentRevision=main catalogRepoURL=https://github.com/acme/catalog.git keycloakOverlay=core > "$D/root/inputs.env"
+g -C "$D" commit -qam core && g -C "$D" update-ref refs/remotes/origin/main HEAD
+sed -i.bak 's/^keycloakOverlay=core$/keycloakOverlay=default/' "$D/root/inputs.env"; rm "$D/root/inputs.env.bak"
+run
+t "keycloakOverlay core pushed, now default: stops at inputs, before the push" eval '[ "$rc" = 1 ] &&
+  grep -q "origin.s main has core" <<<"$out" && grep -q "KEYCLOAK_OVERLAY_CHANGE=1" <<<"$out" &&
+  grep -qx "make install stopped at inputs. Fix the cause, then run make install again." <<<"$out" &&
+  ! grep -q "^git-push.sh" "$W/calls.log"'
+: > "$W/calls.log"
+KEYCLOAK_OVERLAY_CHANGE=1 run
+t "  ... with KEYCLOAK_OVERLAY_CHANGE=1: notes the re-import and pushes" eval '[ "$rc" = 0 ] &&
+  grep -q "re-import realm saas" <<<"$out" && grep -q "^git-push.sh" "$W/calls.log"'
+
 t "no token value in any output" eval '[ -n "$all_out" ] && ! grep -qF "$SENTINEL" <<<"$all_out" &&
   ! grep -rqF "$SENTINEL" "$T"/*/repo/.install "$T"/*/stub/calls.log "$T"/*/stub/argv.log 2>/dev/null'
 

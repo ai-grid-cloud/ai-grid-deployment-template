@@ -36,7 +36,7 @@ template's earlier library branch didn't have.
 | L11 | Resolved: a fresh hub needed PR 322 | Follows `main`, which includes it |
 | L12 | `acm-models` bundles samples and a duplicate GitOpsCluster | Doesn't select `acm-models` |
 | L13 | The dedicated-hub root re-syncs itself from `HEAD` | Doesn't select `dedicated-hub-root`; has its own root |
-| L14 | Keycloak's default profile adds example organizations and test users | `keycloakOverlay`: `core` by default; `default` for test deployments only |
+| L14 | Keycloak's default profile adds example organizations and test users | `keycloakOverlay`: `core` by default; `default` for test deployments only; chosen before the first push |
 | L15 | The tenant client secret shares a Secret with the Keycloak admin password | Documents it |
 | L16 | A Keycloak version bump can run two versions against one database | Documents it |
 | L17 | The hub's cert-manager has one owner: the library, the platform or the hub's own site | `hubCertManager`: `library` by default, `platform` or `site`; `make install` stops on a conflict |
@@ -302,7 +302,17 @@ overlay:
   deployments only. Never use it on a real install: the test users' passwords
   are in Secret `maas-db/keycloak-secrets` on the hub, and anyone who reads
   them signs in as a tenant. The ready check reports the example organizations
-  as `INFO`.
+  as `INFO`, and none as `WARN` (realm `saas` needs a re-import).
+
+Choose it before the first push. Keycloak creates the example organizations
+only when it first imports realm `saas`
+([`apps/keycloak/base/manifests/keycloak.yaml:84`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/apps/keycloak/base/manifests/keycloak.yaml#L84),
+`kc.sh import --override false`), and the realm sync never creates
+organizations ([`apps/keycloak/README.md:243`](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/apps/keycloak/README.md?plain=1#L243)). So `core` then `default` on an installed hub
+adds the example realms and identity providers but no organizations. `make
+inputs` and `make install` stop when `root/inputs.env` says `default` and the
+pushed branch says `core`, unless `KEYCLOAK_OVERLAY_CHANGE=1`; the fix is a
+[re-import of realm `saas`](install/troubleshooting.md#example-organizations-are-missing-after-switching-keycloakoverlay-to-default).
 
 ## L15: the tenant client secret shares a Secret with the Keycloak admin password
 

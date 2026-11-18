@@ -32,7 +32,8 @@
 #   - deployment-root is Synced at the head of origin's deploymentRevision;
 #   - the console lists no organizations, models or subscriptions (WARN, not
 #     checked, without the provider-admin token). With keycloakOverlay=default
-#     in root/inputs.env, the library's example organizations are INFO.
+#     in root/inputs.env, the library's example organizations are INFO, and none
+#     is a WARN (realm saas needs a re-import).
 # With --in-use, the last two site checks and the console's content are INFO,
 # and so are the console's model Applications (acm-models-catalog-*) that
 # aren't Synced and Healthy: a model failing on a site doesn't stop a rerun.
@@ -215,6 +216,8 @@ none_listed() { # SERVICE NOUN: ai_grid.v1.SERVICE/List lists no NOUN
     "https://$console_host/ai_grid.v1.$1/List" 2>/dev/null) || code=000
   n=$(jq -r '.total // (.items | length)' "$tmp/body" 2>/dev/null || true)
   if [ "$code" != 200 ] || [ -z "$n" ]; then fail "no ${2}s: ai_grid.v1.$1/List answered HTTP $code"
+  elif [ "$n" = 0 ] && [ "$1" = Tenants ] && [ "$overlay" = default ]; then
+    warn "keycloakOverlay=default but no example organizations: re-import realm saas (docs/install/troubleshooting.md#example-organizations-are-missing-after-switching-keycloakoverlay-to-default)"
   elif [ "$n" = 0 ]; then ok "no ${2}s"
   elif [ -n "$in_use" ]; then info "the console lists $n $2(s)"
   elif [ "$1" = Tenants ] && [ "$overlay" = default ]; then info "the console lists $n $2(s): keycloakOverlay=default's examples"

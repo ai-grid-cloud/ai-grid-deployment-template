@@ -186,7 +186,13 @@ already set is kept, so you can run `make inputs` again. `hub/catalog/` always f
 rewrites it from that file. If `root/inputs.env` still has inputs the root no longer reads, such as `idpIssuerURL` or
 `portalRedirectURI`, `make inputs` removes them and prints a `removed` line for each.
 
-`keycloakOverlay` chooses what the library's Keycloak, the tenants' identity provider on the hub, starts with:
+`keycloakOverlay` chooses what the library's Keycloak, the tenants' identity provider on the hub, starts with.
+Choose it now, before your first push:
+
+| Deployment | `keycloakOverlay` |
+|---|---|
+| A test deployment | `default` |
+| Production | `core` |
 
 - `core`: the `saas` broker realm only, with no example organizations and no test users. Use it for every real
   install. Tenants sign in through an organization's own identity provider, which you link in the provider console.
@@ -194,7 +200,16 @@ rewrites it from that file. If `root/inputs.env` still has inputs the root no lo
   ([Keycloak install profiles](https://github.com/ai-grid-cloud/ai-grid-cluster-gitops/blob/a3c63a980d3130a81af0b367039b547c5c738f22/apps/keycloak/README.md#install-profiles)).
   Use it only for a test deployment, never for a real one: anyone who knows the test users' passwords can sign in.
 
-To use `default`, set `keycloakOverlay=default` in `root/inputs.env` before you push.
+To use `default`, set `keycloakOverlay=default` in `root/inputs.env` before you
+[commit and push](#5-commit-and-push). `make inputs` keeps a value that's already set.
+
+Changing `keycloakOverlay` from `core` to `default` after the hub has installed Keycloak doesn't add the example
+organizations: Keycloak creates them only when it first imports realm `saas`. You get the example realms, but the
+provider console can't create organizations that use their identity providers. To switch then, you
+[re-import realm `saas`](troubleshooting.md#example-organizations-are-missing-after-switching-keycloakoverlay-to-default),
+which deletes every organization, user and session in it (test deployments only). `make inputs` and `make install` stop when `root/inputs.env` says `default`
+and the branch you pushed says `core`. If the hub hasn't installed Keycloak yet, or you'll re-import realm `saas`,
+run the command again with `KEYCLOAK_OVERLAY_CHANGE=1`, such as `make inputs KEYCLOAK_OVERLAY_CHANGE=1`.
 
 `hubCertManager` chooses which cert-manager the hub runs:
 

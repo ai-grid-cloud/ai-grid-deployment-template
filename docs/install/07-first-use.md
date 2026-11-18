@@ -31,6 +31,9 @@ What you do here depends on `keycloakOverlay` in `root/inputs.env`
 - **`default`, on a test deployment:** the library's example organizations `grid-tenant-1` and `grid-tenant-2`
   already exist, with test users. Skip to [3. Deploy a model](#3-deploy-a-model) and use `grid-tenant-1`.
 
+If you switched from `core` to `default` after the hub was installed, the example organizations aren't there until
+you [re-import realm `saas`](troubleshooting.md#example-organizations-are-missing-after-switching-keycloakoverlay-to-default).
+
 To create an organization:
 
 1. Go to **Organizations** and click **Create organization**.
