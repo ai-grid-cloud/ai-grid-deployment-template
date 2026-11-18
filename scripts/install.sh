@@ -69,6 +69,10 @@
 # With --hub-only it stops after hub-apps: no sites, no provider-admin and no
 # ready check, because the ready check asserts every site is imported.
 #
+# Without --hub-only, clusters.yaml must name at least one site: a hub that is
+# also a site (an all-in-one) isn't supported (docs/upstream-main-limits.md,
+# L18). With --hub-only, sites: [] is fine: you add the sites later.
+#
 # Before any cluster call it also checks that this checkout is on the branch
 # root/inputs.env names as deploymentRevision (default main), the one the hub
 # syncs.
@@ -136,6 +140,11 @@ abs_path() { # PATH: absolute, relative to this repository; ~/ is your home
     "~/"*) echo "$HOME/${1#"~/"}" ;;
     *) echo "$dir/$1" ;;
   esac
+}
+
+check_sites() { # a full install needs a site; --hub-only adds them later
+  [ -n "$hub_only" ] || [ -n "$(site_names)" ] ||
+    die "clusters.yaml has no site: a hub needs at least one site; all-in-one isn't supported (docs/upstream-main-limits.md L18)"
 }
 
 check_settings() { # the values the hub phase needs, and the files they name
@@ -248,12 +257,13 @@ step_bootstrap() {
       exists secret rhoai-quay-pull-secret -n rhoai-prerequisites; then
     echo "deployment-root and the hub pull secret exist: the hub is bootstrapped."
     # bootstrap-hub.sh labels them; a hub bootstrapped before it did gets them here.
-    # An all-in-one (sites: []) has no tunnel to carry, so there it only warns.
+    # A hub-only install with no sites yet has no tunnel to carry, so there it
+    # only warns.
     if [ -n "$(site_names)" ]; then
       run_step bootstrap gateway-nodes.sh "$(hub_name)"
     else
       "$here/gateway-nodes.sh" "$(hub_name)" ||
-        echo "warning: no Submariner gateway nodes on the hub; an all-in-one needs them only once a second cluster joins" >&2
+        echo "warning: no Submariner gateway nodes on the hub; the hub needs them before its first site joins" >&2
     fi
   else
     run_step bootstrap bootstrap-hub.sh
@@ -340,6 +350,7 @@ cd "$dir"
 . "$here/clusters.sh"
 check_old_files
 deployment_load "$dir" || exit 1
+check_sites
 check_settings
 check_branch
 . "$here/gates.sh"   # after the settings, so their GATE_* values win

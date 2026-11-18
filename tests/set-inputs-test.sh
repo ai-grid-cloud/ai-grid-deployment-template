@@ -94,6 +94,14 @@ t "a URL argument ignores the options: section" 0 "every repository is an input"
   "$d4/scripts/set-inputs.sh" https://github.com/acme/catalog.git
 t "two arguments: usage" 2 "usage: set-inputs.sh \[CATALOG_REPO_URL\]" "$d2/scripts/set-inputs.sh" a b
 
+# hubCertManager=site is kept (an existing deployment's root still renders),
+# with a warning: it was for a hub that is also a site, which isn't supported.
+d3=$(repo cm-site https://github.com/acme/deploy.git)
+printf 'hubCertManager=site\n' > "$d3/root/inputs.env"
+t "hubCertManager=site: kept, and warned about" 0 "^warning: hubCertManager=site is for a hub that is also a site \(all-in-one\), which isn't supported" \
+  bash -c 'out=$("$0/scripts/set-inputs.sh" https://github.com/acme/catalog.git 2>&1) && grep -q "every repository is an input" <<<"$out" &&
+    grep -qE "^kept +root/inputs.env: hubCertManager is already set" <<<"$out" && echo "$out"' "$d3"
+
 # keycloakOverlay: core -> default after core was pushed is refused without
 # KEYCLOAK_OVERLAY_CHANGE=1. "Pushed" is origin's deploymentRevision as the
 # clone's remote-tracking ref has it (git-push.sh updates it); no network.

@@ -74,10 +74,11 @@ touch "$T/untrusted"
 t "an untrusted MaaS certificate: names the limit" 1 "maas.apps.site-b.example.com.*not trusted.*internal certificate" "${ARGS[@]}"
 rm "$T/untrusted"
 
-# An all-in-one: no site in clusters.yaml, so the hub (local-cluster in the grid) serves the call.
+# No site in clusters.yaml: a hub is never a site, so there's nothing to call.
 printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites: []\n' > "$D/clusters.yaml"
-t "all-in-one: no site, so the hub serves the call" 0 "^HTTP 200$" "${ARGS[@]}"
-c "  ... through the hub's MaaS host" 0 "https://maas.apps.hub.example.com/v1/chat/completions" cat "$T/curl.log"
-t "  ... --site still has to name a site" 1 "error: clusters.yaml has no site|isn't a site" "${ARGS[@]}" --site site-b
+: > "$T/curl.log"
+t "no site: refused, the hub never serves the call" 1 "error: clusters.yaml has no site: a hub needs at least one site; all-in-one isn't supported" "${ARGS[@]}"
+c "  ... and no call is made" 0 "^$" cat "$T/curl.log"
+t "  ... --site still has to name a site" 1 "isn't a site" "${ARGS[@]}" --site site-b
 
 echo "tenant-call tests: $((total-fails)) ok, $fails failed"; exit "$fails"

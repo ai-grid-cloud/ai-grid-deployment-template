@@ -350,6 +350,11 @@ def check_clusters(deployment):
         return
     for name, kind in rows:
         check_cluster(name, kind, os.path.join(deployment, ".config", name, "kubeconfig"))
+    if not any(kind == "site" for _, kind in rows):
+        # A hub is never a site: make install stops without one, unless HUB_ONLY=1.
+        section("Sites")
+        report("MISSING", "a site", "clusters.yaml names none: a hub needs at least one site; all-in-one isn't "
+               "supported (docs/upstream-main-limits.md L18). make install HUB_ONLY=1 installs the hub alone")
 
 
 def check_cluster(name, kind, kubeconfig):

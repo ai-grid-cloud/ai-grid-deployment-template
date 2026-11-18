@@ -123,7 +123,8 @@ spec:
   # - cert-manager: with hubCertManager=platform or site, selects no file: the
   #   hub's platform cert-manager, or OpenShift AI's chart on a hub that is also
   #   a site, is the only owner (a second OperatorGroup in cert-manager-operator
-  #   fails both; two Applications owning one fight over it).
+  #   fails both; two Applications owning one fight over it). A hub that is
+  #   also a site isn't supported; site stays valid so an existing root renders.
   # - keycloak: apps/keycloak/overlays/<keycloakOverlay>: core, the saas broker
   #   realm with no example tenants or test users; or default, which adds the
   #   library's example organizations and test users (test deployments only).

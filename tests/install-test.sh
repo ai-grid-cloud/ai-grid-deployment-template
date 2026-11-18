@@ -180,14 +180,20 @@ printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secr
 echo 1 > "$W/gateway-nodes.sh.rc"; run
 t "rerun: gateway nodes it can't label stop the install at bootstrap" eval '[ "$rc" = 1 ] && grep -q "stopped at bootstrap" <<<"$out" &&
   ! grep -q "^create-console-secrets" "$W/calls.log"'
-setup aio-gw
-sed -i.bak 's#^sites:$#sites: []#; /^- {name: site-a/d' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
-g -C "$D" commit -qam all-in-one
+nosites() { sed -i.bak 's#^sites:$#sites: []#; /^- {name: site-a/d' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"; g -C "$D" commit -qam "no sites"; }
+setup nosite; nosites; run
+t "no site without --hub-only: stops before any cluster call" eval '[ "$rc" = 1 ] &&
+  grep -qxF "error: clusters.yaml has no site: a hub needs at least one site; all-in-one isn'"'"'t supported (docs/upstream-main-limits.md L18)" <<<"$out" &&
+  [ ! -s "$W/calls.log" ] && [ ! -s "$W/argv.log" ]'
+setup nosite-hubonly; nosites; run --hub-only
+t "--hub-only with sites: []: installs the hub" eval '[ "$rc" = 0 ] && grep -q "^bootstrap-hub" "$W/calls.log" &&
+  ! grep -qE "^(site-check|import-site|provider-admin|ready-check)" "$W/calls.log" && grep -q "hub only" <<<"$out"'
+setup nosite-gw; nosites
 printf '%s' "$root_at_head" > "$W/deployment-root"; echo '{}' > "$W/console-secret"; echo '{}' > "$W/hub-pull-secret"
 echo 1 > "$W/gateway-nodes.sh.rc"; run --hub-only
-t "all-in-one rerun: gateway nodes it can't label only warn" eval '[ "$rc" = 0 ] && grep -qx "gateway-nodes.sh hub" "$W/calls.log" &&
-  grep -q "warning: no Submariner gateway nodes on the hub; an all-in-one needs them only once a second cluster joins" <<<"$out" &&
-  grep -q "^create-console-secrets" "$W/calls.log"'
+t "--hub-only rerun with no sites yet: gateway nodes it can't label only warn" eval '[ "$rc" = 0 ] && grep -qx "gateway-nodes.sh hub" "$W/calls.log" &&
+  grep -q "warning: no Submariner gateway nodes on the hub; the hub needs them before its first site joins" <<<"$out" &&
+  ! grep -q "all-in-one" <<<"$out" && grep -q "^create-console-secrets" "$W/calls.log"'
 
 setup required
 sed -i.bak 's#^  url: .*#  url: REQUIRED-catalogRepoURL#' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
