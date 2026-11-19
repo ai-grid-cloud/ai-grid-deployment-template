@@ -11,6 +11,8 @@
 # The token goes to curl through a header file, never on a command line or in the
 # output. A kubeconfig that holds a client certificate instead of a token, such as
 # the installer's auth/kubeconfig, can't call the console: run make login NAME=hub.
+# CONSOLE_TOKEN_FILE names a file holding another token to call with instead,
+# such as .config/provider-admin-token (scripts/test-tenants.sh).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/clusters.sh"
@@ -22,9 +24,15 @@ cluster_login_ok "$hub"
 cluster_tls "$hub"   # the hub's ca: in clusters.yaml, for the call to its console
 export KUBECONFIG; KUBECONFIG=$(cluster_kubeconfig "$hub")
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-token=$(oc whoami -t 2>/dev/null) ||
-  { echo "error: your $hub login has no token (a certificate kubeconfig?): run make login NAME=$hub" >&2; exit 1; }
-(umask 077; printf 'Authorization: Bearer %s\n' "$token" > "$tmp/auth"); unset token
+if [ -n "${CONSOLE_TOKEN_FILE:-}" ]; then
+  # Another identity's token, from a file, such as make provider-admin's.
+  [ -s "$CONSOLE_TOKEN_FILE" ] || { echo "error: no token in CONSOLE_TOKEN_FILE $CONSOLE_TOKEN_FILE" >&2; exit 1; }
+  (umask 077; { printf 'Authorization: Bearer '; tr -d '\r\n' < "$CONSOLE_TOKEN_FILE"; printf '\n'; } > "$tmp/auth")
+else
+  token=$(oc whoami -t 2>/dev/null) ||
+    { echo "error: your $hub login has no token (a certificate kubeconfig?): run make login NAME=$hub" >&2; exit 1; }
+  (umask 077; printf 'Authorization: Bearer %s\n' "$token" > "$tmp/auth"); unset token
+fi
 console=$(oc get route -n ai-grid-provider-console -o jsonpath='{.items[0].spec.host}')
 [ -n "$console" ] || { echo "error: no console Route on $hub yet: see make status" >&2; exit 1; }
 code=$(curl -sS ${CURL_TLS[@]+"${CURL_TLS[@]}"} -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
