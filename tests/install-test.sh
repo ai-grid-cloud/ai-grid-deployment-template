@@ -466,6 +466,25 @@ run
 t "hubCertManager=library set, the platform's cert-manager: not overwritten, stops" eval '[ "$rc" = 1 ] &&
   grep -qx hubCertManager=library "$D/root/inputs.env" && grep -q "set hubCertManager=platform" <<<"$out" &&
   ! grep -q "^git-push.sh" "$W/calls.log"'
+detect cm-indented
+printf '  hubCertManager=library\n' >> "$D/root/inputs.env"; g -C "$D" commit -qam indented
+echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"
+run
+t "an indented hubCertManager=library counts as set: not overwritten, stops" eval '[ "$rc" = 1 ] &&
+  grep -qx "  hubCertManager=library" "$D/root/inputs.env" && ! grep -qx hubCertManager=platform "$D/root/inputs.env" &&
+  grep -q "^check-prerequisites.sh .*--cert-manager library" "$W/calls.log" && grep -q "set hubCertManager=platform" <<<"$out"'
+detect cm-crlf
+printf 'hubCertManager=platform\r\n' >> "$D/root/inputs.env"; g -C "$D" commit -qam crlf
+run
+t "a CRLF hubCertManager=platform line: read as platform" eval '[ "$rc" = 0 ] &&
+  [ "$(grep -c "cert-manager" "$W/calls.log")" = 1 ] && grep -q "^check-prerequisites.sh .*--cert-manager platform\$" "$W/calls.log"'
+setup cm-usage
+echo 2 > "$W/check-prerequisites.sh.rc"; echo "--cert-manager must be library, platform or site" > "$W/check-prerequisites.sh.out"
+run
+t "check-prerequisites.sh exits 2: stops at inputs with the cause, before the push" eval '[ "$rc" = 1 ] &&
+  grep -q "couldn.t check the hub.s cert-manager (exit 2" <<<"$out" && grep -q "cert-manager must be library, platform or site" <<<"$out" &&
+  grep -qx "make install stopped at inputs. Fix the cause, then run make install again." <<<"$out" &&
+  ! grep -q "^set-inputs.sh" "$W/calls.log" && ! grep -q "^git-push.sh" "$W/calls.log"'
 
 setup maascert
 sed -i.bak 's/name: site-a,/name: site-a, maasCertificate: {issuer: le-dns},/' "$D/clusters.yaml"; rm "$D/clusters.yaml.bak"
