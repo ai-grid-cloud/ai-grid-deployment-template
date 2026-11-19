@@ -76,12 +76,15 @@ provider would:
    make test-tenants
    ```
 
-   You should see each realm and organization `created`, and for each user the file that holds their password, in
-   `.config/test-tenants/` (readable only by you). Nothing prints a password. Running it again creates only what's
-   missing.
+   You should see each realm and organization `created`, and for each user the file that holds their password,
+   `.config/test-tenants/REALM/USER` in your deployment repository (readable only by you). Nothing prints a password.
+   Running it again creates only what's missing.
 
-To delete them, run `make test-tenants CLEAN=1`. It deletes the organizations, the users that signed in through them,
-the realms and the password files.
+To delete them, first preview what would go with `make test-tenants CLEAN=1`, then run
+`make test-tenants CLEAN=1 CONFIRM=1`. It deletes the users that signed in through the organizations, the
+organizations, their identity provider Secrets, the realms and the password files in `.config/test-tenants/`. It
+keeps an organization named `grid-tenant-1` or `grid-tenant-2` whose identity provider isn't the test realm, and says
+so.
 
 ## 3. Deploy a model
 
@@ -133,12 +136,13 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
    - **A test deployment, after `make test-tenants`:** `alice` of `grid-tenant-1`. Sign in as
      `alice@grid-tenant-1.test`, with the password in `.config/test-tenants/grid-tenant-1-idp/alice`.
    - **`default`, on a test deployment:** `alice` of `grid-tenant-1`. Her password is the key
-     `GRID_TENANT_1_TEST_USER_PASSWORD` of Secret `maas-db/keycloak-secrets` on the hub. To save it to a file in a
-     directory only you can read, without printing it:
+     `GRID_TENANT_1_TEST_USER_PASSWORD` of Secret `maas-db/keycloak-secrets` on the hub. To save it to
+     `.config/test-tenants/grid-tenant-1-idp/GRID_TENANT_1_TEST_USER_PASSWORD`, in a directory only you can read,
+     without printing it:
 
      ```sh
-     (umask 077 && mkdir -p ~/.ai-grid/alice && scripts/with-cluster.sh hub oc extract secret/keycloak-secrets \
-       -n maas-db --keys=GRID_TENANT_1_TEST_USER_PASSWORD --to=$HOME/.ai-grid/alice)
+     (umask 077 && mkdir -p .config/test-tenants/grid-tenant-1-idp && scripts/with-cluster.sh hub oc extract \
+       secret/keycloak-secrets -n maas-db --keys=GRID_TENANT_1_TEST_USER_PASSWORD --to=.config/test-tenants/grid-tenant-1-idp)
      ```
 
      The library lists its test users in
@@ -174,7 +178,7 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
    > ([limits of `main`](../upstream-main-limits.md#l5-the-maas-gateway-presents-the-cluster-internal-certificate)).
 
 To remove what you created, delete the subscription, then the model, then the organization in the console, or on a
-test deployment run `make test-tenants CLEAN=1`. Deleting
+test deployment run `make test-tenants CLEAN=1 CONFIRM=1`. Deleting
 a subscription doesn't revoke its API keys: revoke them in the Org UI first.
 
 ## Checkpoint
