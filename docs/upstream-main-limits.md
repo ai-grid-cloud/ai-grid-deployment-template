@@ -346,7 +346,11 @@ installs the library's `apps/cert-manager`, whose OperatorGroup in
 OpenShift AI chart uses. Many clusters, such as demo.redhat.com's, ship the
 platform's cert-manager instead, with another OperatorGroup in that namespace.
 Two OperatorGroups in one namespace fail every operator there
-(`TooManyOperatorGroups`).
+(`TooManyOperatorGroups`). The platform's CLI install also names its
+OperatorGroup `openshift-cert-manager-operator`
+([OpenShift 4.21 docs](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/security_and_compliance/cert-manager-operator-for-red-hat-openshift#cert-manager-install-cli_cert-manager-operator-install)),
+so the template's checks count an OperatorGroup there as the library's only
+when Argo CD's tracking names the library's Application `cert-manager`.
 
 **Template:** the input `hubCertManager` in `root/inputs.env` chooses:
 

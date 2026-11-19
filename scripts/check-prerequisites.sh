@@ -103,14 +103,24 @@ if [ "$step" = hub ]; then
     fi
   else
     # The root installs the library's, whose OperatorGroup is
-    # openshift-cert-manager-operator; another one in that namespace is the
-    # platform's, and two OperatorGroups fail both (TooManyOperatorGroups).
+    # openshift-cert-manager-operator; any other one in that namespace is the
+    # platform's, and two OperatorGroups fail both (TooManyOperatorGroups). The
+    # platform's CLI install uses the same name (OpenShift 4.21 docs, "Install
+    # the cert-manager Operator for Red Hat OpenShift by using the CLI"), so the
+    # name alone isn't the library's: only Argo CD's tracking for the library's
+    # Application cert-manager is, as the label app.kubernetes.io/instance or
+    # the annotation argocd.argoproj.io/tracking-id (APP:GROUP/KIND:NS/NAME).
     read_ok=1
-    if ! ogs=$(oc_ get operatorgroups.operators.coreos.com -n cert-manager-operator -o jsonpath='{.items[*].metadata.name}' 2>&1); then
+    if ! ogs=$(oc_ get operatorgroups.operators.coreos.com -n cert-manager-operator \
+        -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.metadata.labels.app\.kubernetes\.io/instance}{"|"}{.metadata.annotations.argocd\.argoproj\.io/tracking-id}{"\n"}{end}' 2>&1); then
       report MISSING "cert-manager OperatorGroup" "can't read OperatorGroups in cert-manager-operator: $(tail -n1 <<<"$ogs")"
       other="" read_ok=""
     else
-      other=$(tr ' ' '\n' <<<"$ogs" | grep -vx -e openshift-cert-manager-operator -e '' | head -n1 || true)
+      other=$(while IFS='|' read -r og label ann; do
+          [ -n "$og" ] || continue
+          [ "$og" = openshift-cert-manager-operator ] && { [ "$label" = cert-manager ] || [ "${ann%%:*}" = cert-manager ]; } && continue
+          echo "$og"
+        done <<<"$ogs" | head -n1)
     fi
     if [ -n "$other" ]; then
       report FOUND "cert-manager OperatorGroup" "$other: the hub runs the platform's cert-manager; set hubCertManager=platform in root/inputs.env"
