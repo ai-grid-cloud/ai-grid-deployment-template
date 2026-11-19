@@ -307,6 +307,9 @@ You now have:
   and no OpenShift AI on it;
 - no organizations, models or subscriptions.
 
+Next, continue with [first use](07-first-use.md). On a test deployment with `keycloakOverlay=core`, run
+`make test-tenants` there for test organizations and users; never on a real install.
+
 ## If it stops
 
 When a step fails, `make install` prints why, then stops with a line like the following:
