@@ -242,6 +242,7 @@ imported_is_upstream() { # N
 
 W="$T/first"; mkdir -p "$W"; run
 t "create: two realms, two Secrets, two organizations, the passwords in files" 0 "realm grid-tenant-1-idp: created" \
+  'grep -q "^note: can.t read Deployment ai-grid-provider-console/ai-grid-provider-console on hub; using ai-grid-idp-secrets" <<<"$out"' \
   'grep -q "organization grid-tenant-1: created, id id-grid-tenant-1" <<<"$out"' \
   'grep -q "organization grid-tenant-2: created, id id-grid-tenant-2" <<<"$out"' \
   'grep -q "test deployments only, never a real install" <<<"$out"' \
@@ -386,8 +387,26 @@ t "CLEAN preview: an organization with another issuer would be kept" 0 \
   "organization grid-tenant-1: kept, with Secret ai-grid-idp-secrets/grid-tenant-1-idp: its identity provider's issuer isn't $KC/realms/grid-tenant-1-idp"
 run --clean --confirm
 t "CLEAN CONFIRM: that organization and its Secret stay; the rest goes" 0 "organization grid-tenant-1: kept" \
+  'grep -q "realm grid-tenant-1-idp: the kept organization grid-tenant-1 doesn.t use it (another issuer)" <<<"$out"' \
   '[ -f "$W/orgs/grid-tenant-1.json" ] && [ -f "$W/secrets/grid-tenant-1-idp" ]' '! grep -q "id-grid-tenant-1" "$W/deleted-orgs"' \
   '! grep -q "user 11111111-" "$W/events"' '[ ! -f "$W/realms/grid-tenant-1-idp.json" ]' 'grep -q "organization grid-tenant-2: deleted" <<<"$out"'
+
+# A foreign organization's Secret is never read or written by a create run, even when the realm is missing.
+fresh foreign-secret; jq -c '.spec.identityProvider.config.issuer = "https://idp.example.com/acme"' "$W/orgs/grid-tenant-1.json" > "$W/o" && mv "$W/o" "$W/orgs/grid-tenant-1.json"
+rm "$W/realms/grid-tenant-1-idp.json"; printf 'foreign-value-%s' "$RANDOM" > "$W/secrets/grid-tenant-1-idp"; cp "$W/secrets/grid-tenant-1-idp" "$T/foreign.want"
+mark=$(wc -l < "$W/oc.log"); run
+t "create: a foreign organization's Secret stays as it was, and the new realm doesn't take its value" 0 \
+  "Secret ai-grid-idp-secrets/grid-tenant-1-idp: kept, it belongs to organization grid-tenant-1, whose issuer isn.t $KC/realms/grid-tenant-1-idp" \
+  'grep -q "realm grid-tenant-1-idp: created" <<<"$out"' 'cmp -s "$T/foreign.want" "$W/secrets/grid-tenant-1-idp"' \
+  '[ "$(jq -r ".clients[0].secret" "$W/realms/grid-tenant-1-idp.json")" != "$(cat "$T/foreign.want")" ]' \
+  '! tail -n +$((mark+1)) "$W/oc.log" | grep -q "secret/grid-tenant-1-idp\|secret generic grid-tenant-1-idp"' \
+  'tail -n +$((mark+1)) "$W/oc.log" | grep -q "secret generic grid-tenant-2-idp"'
+
+# CLEAN's member filter uses the organization's own domains, as Tenants/List has them.
+fresh org-domains; jq -c '.spec.domains = ["grid-tenant-2.test"]' "$W/orgs/grid-tenant-2.json" > "$W/o" && mv "$W/o" "$W/orgs/grid-tenant-2.json"
+run --clean --confirm
+t "CLEAN CONFIRM: members only of the organization's own domains (Tenants/List), not the library's" 0 \
+  "organization grid-tenant-2: deleted, and 1 of its users from realm saas" '! grep -q "user 33333333-" "$W/events"'
 
 # A member id that isn't a UUID never reaches a URL.
 fresh baduuid; printf '{"items":[{"id":"../../realms/saas","email":"alice@grid-tenant-1.test"}]}' > "$W/members-grid-tenant-1.json"
@@ -398,7 +417,7 @@ t "CLEAN CONFIRM: a member id that isn't a UUID stops it, deleting nothing" 1 "m
 # The identity provider Secret namespace: the console backend's setting, else the default; IDP_SECRETS_NAMESPACE wins.
 W="$T/idp-ns"; mkdir -p "$W"; rm -rf "$PW"; printf custom-idp > "$W/idp-ns"; run
 t "the Secret goes to the console backend's AI_GRID_IDP_SECRET_NAMESPACE" 0 "organization grid-tenant-1: created" \
-  'grep -q "create secret generic grid-tenant-1-idp -n custom-idp " "$W/oc.log"'
+  'grep -q "create secret generic grid-tenant-1-idp -n custom-idp " "$W/oc.log"' '! grep -q "^note:" <<<"$out"'
 W="$T/idp-ns-env"; mkdir -p "$W"; rm -rf "$PW"; printf custom-idp > "$W/idp-ns"; ENVS=(IDP_SECRETS_NAMESPACE=other-idp); run
 t "  ... IDP_SECRETS_NAMESPACE overrides it" 1 "no namespace other-idp on hub for identity provider secrets" \
   '! grep -q "Tenants/Create" "$W/curl.log"'

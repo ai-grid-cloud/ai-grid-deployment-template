@@ -85,9 +85,15 @@ cluster_tls "$hub"   # the hub's ca: in clusters.yaml, for Keycloak's Route
 export KUBECONFIG; KUBECONFIG=$(cluster_kubeconfig "$hub")
 kc_ns=${KEYCLOAK_NAMESPACE:-maas-db} saas=${KEYCLOAK_REALM:-saas}
 # Where the console backend reads identity provider Secrets: its own setting, else the chart's default.
-idp_ns=${IDP_SECRETS_NAMESPACE:-$(oc get deployment ai-grid-provider-console -n ai-grid-provider-console -o json 2>/dev/null |
-  jq -r 'first(.spec.template.spec.containers[].env[]? | select(.name == "AI_GRID_IDP_SECRET_NAMESPACE") | .value) // empty' 2>/dev/null || true)}
-idp_ns=${idp_ns:-ai-grid-idp-secrets}
+idp_ns=${IDP_SECRETS_NAMESPACE:-}
+if [ -z "$idp_ns" ]; then
+  if backend=$(oc get deployment ai-grid-provider-console -n ai-grid-provider-console -o json 2>/dev/null); then
+    idp_ns=$(jq -r 'first(.spec.template.spec.containers[].env[]? | select(.name == "AI_GRID_IDP_SECRET_NAMESPACE") | .value) // empty' <<<"$backend" 2>/dev/null || true)
+  else
+    echo "note: can't read Deployment ai-grid-provider-console/ai-grid-provider-console on $hub; using ai-grid-idp-secrets for identity provider Secrets (IDP_SECRETS_NAMESPACE sets another)" >&2
+  fi
+  idp_ns=${idp_ns:-ai-grid-idp-secrets}
+fi
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 chmod 700 "$tmp"
 
@@ -161,23 +167,28 @@ api Tenants/List '{}'; cp "$tmp/api.json" "$tmp/orgs.json"
 for n in 1 2; do
   org=grid-tenant-$n realm=grid-tenant-$n-idp secret=grid-tenant-$n-idp
   file="$examples/$realm-realm.json" pwdir="$dir/.config/test-tenants/$realm"
-  domains=$(jq -r --arg a "$org" 'first(.organizations[] | select(.alias == $a)) | .domains[]?.name' "$examples/saas-realm.json")
-  [ -n "$domains" ] || die "the library's saas-realm.json has no organization $org with a domain"
   issuer="$kc_url/realms/$realm"
   o=$(org_of "$org")
-  ours=""; [ -z "$o" ] || [ "$(jq -r '.spec.identityProvider.config.issuer // ""' <<<"$o")" != "$issuer" ] || ours=1
+  # ours: the organization exists and signs in through the test realm. foreign:
+  # an organization of that name signs in elsewhere; it and its Secret are never
+  # read, changed or deleted.
+  ours="" foreign=""
+  if [ -n "$o" ]; then
+    if [ "$(jq -r '.spec.identityProvider.config.issuer // ""' <<<"$o")" = "$issuer" ]; then ours=1; else foreign=1; fi
+  fi
 
   if [ -n "$clean" ]; then
     if [ -z "$o" ]; then
       summary+=("organization $org: none")
-    elif [ -z "$ours" ]; then
+    elif [ -n "$foreign" ]; then
       summary+=("organization $org: kept, with Secret $idp_ns/$secret: its identity provider's issuer isn't $issuer, so it isn't a test organization")
     else
       id=$(jq -r .id <<<"$o") version=$(jq -r '.metadata.version // 1' <<<"$o")
       api Tenants/ListMembers "$(jq -cn --arg id "$id" '{id: $id, limit: 1000}')"
-      # Only members with an email in one of the organization's domains: the users that signed in through its identity provider.
-      jq -r --arg d "$domains" '($d | split("\n") | map("@" + ascii_downcase)) as $ds
-        | .items[]? | select((.email // "") | ascii_downcase as $e | any($ds[]; . as $s | $e | endswith($s))) | .id' \
+      # Only members with an email in one of the organization's own domains (as
+      # Tenants/List has them): the users that signed in through its identity provider.
+      jq -r --argjson ds "$(jq -c '[.spec.domains[]? | "@" + ascii_downcase]' <<<"$o")" \
+        '.items[]? | select((.email // "") | ascii_downcase as $e | any($ds[]; . as $s | $e | endswith($s))) | .id' \
         "$tmp/api.json" > "$tmp/members"
       bad=$(grep -cvE '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' "$tmp/members" || true)
       [ "$bad" = 0 ] || die "the provider API listed $bad member id(s) of $org that aren't UUIDs: deleting nothing"
@@ -196,11 +207,14 @@ for n in 1 2; do
         summary+=("organization $org: deleted, and $gone of its users from realm $saas")
       fi
     fi
-    if [ -n "$o" ] && [ -z "$ours" ]; then :
+    if [ -n "$foreign" ]; then :
     elif oc get secret "$secret" -n "$idp_ns" >/dev/null 2>&1; then
       if [ -n "$confirm" ]; then oc delete secret "$secret" -n "$idp_ns" --ignore-not-found >/dev/null; summary+=("Secret $idp_ns/$secret: deleted")
       else summary+=("Secret $idp_ns/$secret: would delete it"); fi
     else summary+=("Secret $idp_ns/$secret: none"); fi
+    # The realm goes even when a foreign organization of that name stays: that
+    # organization can't be using it, because its issuer isn't the test realm's.
+    [ -z "$foreign" ] || summary+=("realm $realm: the kept organization $org doesn't use it (another issuer), so it's not kept for it")
     kc_login
     if [ -n "$confirm" ]; then
       kc DELETE "/$realm"
@@ -222,8 +236,9 @@ for n in 1 2; do
     gen "$tmp/password"
     # The organization's Secret, when there is one, keeps its client secret, so
     # an organization that outlived its realm still signs in.
+    # Never a foreign organization's Secret: it isn't this realm's.
     rm -rf "$tmp/old"; mkdir "$tmp/old"
-    if oc extract "secret/$secret" -n "$idp_ns" --keys=client-secret --to="$tmp/old" >/dev/null 2>&1 && [ -s "$tmp/old/client-secret" ]; then
+    if [ -z "$foreign" ] && oc extract "secret/$secret" -n "$idp_ns" --keys=client-secret --to="$tmp/old" >/dev/null 2>&1 && [ -s "$tmp/old/client-secret" ]; then
       cp "$tmp/old/client-secret" "$tmp/client-secret"
     else gen "$tmp/client-secret"; fi
     # Without the java-keystore key provider, which reads a keystore only the default profile mounts.
@@ -260,24 +275,30 @@ for n in 1 2; do
   fi
   summary+=("realm $realm: $state")
 
-  # 2. The organization's client secret: the realm's saas-broker secret.
-  kc_login
-  oc get namespace "$idp_ns" >/dev/null 2>&1 ||
-    die "no namespace $idp_ns on $hub for identity provider secrets: set IDP_SECRETS_NAMESPACE to the console chart's backend.idpSecrets.namespace"
-  kc GET "/$realm/clients?clientId=saas-broker"
-  [ "$code" = 200 ] || kc_fail "find client saas-broker in realm $realm"
-  cid=$(jq -r '.[0].id // empty' "$tmp/kc.json")
-  [ -n "$cid" ] || die "realm $realm has no client saas-broker"
-  kc GET "/$realm/clients/$cid/client-secret"
-  [ "$code" = 200 ] || kc_fail "read client saas-broker's secret in realm $realm"
-  (umask 077; jq -j '.value // ""' "$tmp/kc.json" > "$tmp/client-secret"); rm -f "$tmp/kc.json"
-  [ -s "$tmp/client-secret" ] || die "client saas-broker in realm $realm has no secret"
-  oc create secret generic "$secret" -n "$idp_ns" --from-file=client-secret="$tmp/client-secret" --dry-run=client -o yaml |
-    oc apply --server-side --force-conflicts -f - >/dev/null   # server-side: no copy of the data in an annotation
-  rm -f "$tmp/client-secret"
+  # 2. The organization's client secret: the realm's saas-broker secret. Not
+  # for a foreign organization, whose Secret is its own.
+  if [ -n "$foreign" ]; then
+    summary+=("Secret $idp_ns/$secret: kept, it belongs to organization $org, whose issuer isn't $issuer")
+  else
+    kc_login
+    oc get namespace "$idp_ns" >/dev/null 2>&1 ||
+      die "no namespace $idp_ns on $hub for identity provider secrets: set IDP_SECRETS_NAMESPACE to the console chart's backend.idpSecrets.namespace"
+    kc GET "/$realm/clients?clientId=saas-broker"
+    [ "$code" = 200 ] || kc_fail "find client saas-broker in realm $realm"
+    cid=$(jq -r '.[0].id // empty' "$tmp/kc.json")
+    [ -n "$cid" ] || die "realm $realm has no client saas-broker"
+    kc GET "/$realm/clients/$cid/client-secret"
+    [ "$code" = 200 ] || kc_fail "read client saas-broker's secret in realm $realm"
+    (umask 077; jq -j '.value // ""' "$tmp/kc.json" > "$tmp/client-secret"); rm -f "$tmp/kc.json"
+    [ -s "$tmp/client-secret" ] || die "client saas-broker in realm $realm has no secret"
+    oc create secret generic "$secret" -n "$idp_ns" --from-file=client-secret="$tmp/client-secret" --dry-run=client -o yaml |
+      oc apply --server-side --force-conflicts -f - >/dev/null
+    # Server-side, so a Secret this creates holds no copy of its data in a
+    # last-applied annotation; one first applied client-side keeps its old one.
+    rm -f "$tmp/client-secret"
+  fi
 
   # 3. The organization, through the provider API.
-  o=$(org_of "$org")
   if [ -n "$ours" ]; then
     summary+=("organization $org: exists, id $(jq -r .id <<<"$o")")
   elif [ -n "$o" ]; then

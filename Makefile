@@ -124,4 +124,4 @@ ready-check: ## Check the installed end state and write .install/outputs.json; I
 	@scripts/ready-check.sh $(if $(IN_USE),--in-use)
 
 test-tenants: ## Test deployments only: the library's example tenant realms and their organizations, through the provider API; CLEAN=1 previews deleting them, CLEAN=1 CONFIRM=1 deletes them (page 7)
-	@scripts/test-tenants.sh $(if $(filter 1,$(CLEAN)),--clean $(if $(CONFIRM),--confirm))
+	@scripts/test-tenants.sh $(if $(CLEAN),--clean $(if $(CONFIRM),--confirm))
