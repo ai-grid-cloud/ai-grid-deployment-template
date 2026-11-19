@@ -29,6 +29,9 @@ case "$args" in
   *" get subscriptions.operators.coreos.com "*) [ -f "$d/subs" ] || exit 1; cat "$d/subs" ;;
   *" get gridnetworks,gridsites "*) [ -f "$d/grid" ] || exit 1; cat "$d/grid" ;;
   *" get operatorgroups.operators.coreos.com -n cert-manager-operator "*)
+    # The exact jsonpath check-prerequisites.sh asks for: a typo in it fails here.
+    jp='{range .items[*]}{.metadata.name}{"|"}{.metadata.labels.app\.kubernetes\.io/instance}{"|"}{.metadata.annotations.argocd\.argoproj\.io/tracking-id}{"\n"}{end}'
+    [[ "$args" == *" jsonpath=$jp "* ]] || { echo "stub oc: unexpected jsonpath: $*" >&2; exit 3; }
     [ ! -f "$d/og-error" ] || { echo "error: Forbidden" >&2; exit 1; }
     cat "$d/ogs" 2>/dev/null || true ;;
   *" get crds -o name "*) sed 's#^#customresourcedefinition.apiextensions.k8s.io/#' "$d/crds" 2>/dev/null ;;
@@ -118,6 +121,11 @@ PULL="$T/pull" t "  ... annotation tracking: OK" 0 "^OK +cert-manager +the root 
 w2=$(world platform-cli-cm); cp "$w/secrets" "$w2/secrets"; printf 'openshift-cert-manager-operator||\n' > "$w2/ogs"
 PULL="$T/pull" t "the platform's CLI install (same name, no Argo CD tracking): FOUND" 1 \
   "^FOUND +cert-manager OperatorGroup +openshift-cert-manager-operator: the hub runs the platform's" "$w2" --step hub
+w2=$(world empty-ns-cm); cp "$w/secrets" "$w2/secrets"; : > "$w2/ogs"
+PULL="$T/pull" t "an empty cert-manager-operator namespace: OK" 0 "^OK +cert-manager +the root installs" "$w2" --step hub
+w2=$(world both-cm); cp "$w/secrets" "$w2/secrets"
+printf 'openshift-cert-manager-operator|cert-manager|\ncert-manager-operator-og||\n' > "$w2/ogs"
+PULL="$T/pull" t "the library's tracked OperatorGroup next to the platform's: FOUND" 1 "^FOUND +cert-manager OperatorGroup +cert-manager-operator-og" "$w2" --step hub
 w2=$(world other-app-cm); cp "$w/secrets" "$w2/secrets"
 printf 'openshift-cert-manager-operator|platform-operators|platform-operators:operators.coreos.com/OperatorGroup:cert-manager-operator/openshift-cert-manager-operator\n' > "$w2/ogs"
 PULL="$T/pull" t "the same name tracked by another Application: FOUND" 1 "^FOUND +cert-manager OperatorGroup +openshift-cert-manager-operator" "$w2" --step hub

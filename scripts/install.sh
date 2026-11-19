@@ -114,8 +114,9 @@ check_old_files() { # an install.env, which earlier versions read, stops the ins
     die "install.env is no longer read: move its settings into clusters.yaml (CATALOG_REPO_URL as catalog.url, LIBRARY_REVISION as options.LIBRARY, the rest under options:; see clusters-example.yaml), then delete install.env"
 }
 
-inputs_value() { # NAME: its value in root/inputs.env, empty when unset; as set-inputs.sh reads
-  # it: leading spaces before the name, a trailing CR and trailing spaces don't count
+inputs_value() { # NAME: its value in root/inputs.env, empty when unset. Read as set-inputs.sh's
+  # input_at reads it: spaces before NAME are skipped, and a trailing CR and trailing spaces
+  # are dropped from the value; spaces right after the = stay part of the value
   [ -f "$dir/root/inputs.env" ] && sed -n "s/^[[:space:]]*$1=//p" "$dir/root/inputs.env" | tail -n1 | tr -d '\r' | sed 's/[[:space:]]*$//' || true
 }
 
@@ -124,7 +125,7 @@ hub_cert_manager_check() { # MODE: check-prerequisites.sh --step hub on the hub;
   out=$("$here/check-prerequisites.sh" --step hub --cluster "$(hub_name)" --cert-manager "$1" 2>&1) || rc=$?
   if [ "$rc" = 2 ]; then
     printf '%s\n' "$out" >&2
-    echo "error: check-prerequisites.sh couldn't check the hub's cert-manager (exit 2, --cert-manager '$1'): fix the cause above, such as hubCertManager in root/inputs.env, then run make install again" >&2
+    echo "error: check-prerequisites.sh couldn't check the hub's cert-manager (exit 2, --cert-manager '$1'). Likely causes: the hub login (make login), clusters.yaml not loading, or an invalid hubCertManager in root/inputs.env. Fix the cause above, then run make install again" >&2
     return 1
   fi
   printf '%s\n' "$out"
@@ -219,29 +220,38 @@ step_inputs() {
   hub_catalog=$(oc_read get applicationsets.argoproj.io apps -n openshift-gitops \
     -o jsonpath='{.spec.generators[0].git.values.catalogRepoURL}') || hub_catalog_rc=$?
   [ -z "${LIBRARY_REVISION:-}" ] || run_step inputs set-library.sh "$LIBRARY_REVISION"
-  # hubCertManager unset (or a REQUIRED- placeholder): the hub decides, before
-  # set-inputs.sh writes its default (library), so a run that stops later
-  # doesn't leave library behind as if you had chosen it. check-prerequisites.sh
-  # reports the platform's cert-manager OperatorGroup as FOUND: then this writes
-  # platform, which set-inputs.sh keeps. A value that's set is never changed here.
-  local cm_before pre f="$dir/root/inputs.env"
+  # hubCertManager unset (or a REQUIRED- placeholder): the hub decides, read
+  # before set-inputs.sh writes its default (library). check-prerequisites.sh
+  # reports the platform's cert-manager OperatorGroup as FOUND, or OK for none
+  # of the platform's; anything else stops here. platform is written right
+  # after set-inputs.sh, even when set-inputs.sh then fails, so a stop never
+  # leaves its library behind as if you had chosen it, and the file keeps
+  # set-inputs.sh's header. A value that's set is never changed here.
+  local cm_before pre detected="" si_rc=0 f="$dir/root/inputs.env"
   cm_before=$(inputs_value hubCertManager)
   if [[ -z "$cm_before" || "$cm_before" == REQUIRED-* ]]; then
     pre=$(hub_cert_manager_check library) || stopped inputs
     if grep -qE '^FOUND +cert-manager OperatorGroup' <<<"$pre"; then
-      if grep -q '^[[:space:]]*hubCertManager=' "$f" 2>/dev/null; then
-        sed -i.bak 's/^[[:space:]]*hubCertManager=.*/hubCertManager=platform/' "$f" && rm -f "$f.bak"
-      else
-        echo hubCertManager=platform >> "$f"
-      fi
-      echo "set      root/inputs.env: hubCertManager = platform (the hub runs the platform's cert-manager)"
-    elif grep -qE '^MISSING +cert-manager OperatorGroup' <<<"$pre"; then
-      grep -E '^MISSING +cert-manager OperatorGroup' <<<"$pre" >&2
-      echo "error: can't tell which cert-manager the hub runs: fix the read, or set hubCertManager in root/inputs.env, then run make install again" >&2
+      detected=platform
+    elif grep -qE '^OK +cert-manager ' <<<"$pre"; then
+      detected=library
+      echo "checked the hub: no platform cert-manager; hubCertManager=library"
+    else
+      grep -E 'cert-manager' <<<"$pre" >&2 || true
+      echo "error: can't tell which cert-manager the hub runs (no OK or FOUND line for it from check-prerequisites.sh): fix the read, or set hubCertManager in root/inputs.env, then run make install again" >&2
       stopped inputs
     fi
   fi
-  run_step inputs set-inputs.sh "$CATALOG_REPO_URL"
+  "$here/set-inputs.sh" "$CATALOG_REPO_URL" || si_rc=$?
+  if [ "$detected" = platform ] && [ -f "$f" ]; then
+    if grep -q '^[[:space:]]*hubCertManager=' "$f"; then
+      sed -i.bak 's/^[[:space:]]*hubCertManager=.*/hubCertManager=platform/' "$f" && rm -f "$f.bak"
+    else
+      echo hubCertManager=platform >> "$f"
+    fi
+    echo "set      root/inputs.env: hubCertManager = platform (the hub runs the platform's cert-manager)"
+  fi
+  [ "$si_rc" = 0 ] || stopped inputs
   local have want
   have=$(https_url "$(inputs_value catalogRepoURL)") want=$(https_url "$CATALOG_REPO_URL")
   if [ "$have" != "$want" ]; then
@@ -257,12 +267,16 @@ step_inputs() {
   export PUBLIC_REPOS_CHECKED=1
   # hubCertManager=library adds the library's cert-manager OperatorGroup; a hub
   # that runs the platform's would then fail both (TooManyOperatorGroups). This
-  # runs on every install, a rerun or an upgraded hub too, before the push.
-  pre=$(hub_cert_manager_check "$(inputs_value hubCertManager)") || stopped inputs
-  if grep -qE '^(FOUND|MISSING) +cert-manager OperatorGroup' <<<"$pre"; then
-    grep -E '^(FOUND|MISSING) +cert-manager OperatorGroup' <<<"$pre" >&2
-    echo "error: set hubCertManager=platform in root/inputs.env (or fix the read), commit it, then run make install again" >&2
-    stopped inputs
+  # runs on every install, a rerun or an upgraded hub too, before the push. It's
+  # skipped only when detection read the hub for library in this run.
+  local cm_now; cm_now=$(inputs_value hubCertManager)
+  if [ "$detected" != library ] || [ "$cm_now" != library ]; then
+    pre=$(hub_cert_manager_check "$cm_now") || stopped inputs
+    if grep -qE '^(FOUND|MISSING) +cert-manager OperatorGroup' <<<"$pre"; then
+      grep -E '^(FOUND|MISSING) +cert-manager OperatorGroup' <<<"$pre" >&2
+      echo "error: set hubCertManager=platform in root/inputs.env (or fix the read), commit it, then run make install again" >&2
+      stopped inputs
+    fi
   fi
   run_step inputs git-push.sh "install: inputs and library pin" root/ hub/catalog/
   pushed=$(git -C "$dir" rev-parse HEAD)

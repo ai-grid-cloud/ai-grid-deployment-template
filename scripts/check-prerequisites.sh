@@ -120,7 +120,7 @@ if [ "$step" = hub ]; then
           [ -n "$og" ] || continue
           [ "$og" = openshift-cert-manager-operator ] && { [ "$label" = cert-manager ] || [ "${ann%%:*}" = cert-manager ]; } && continue
           echo "$og"
-        done <<<"$ogs" | head -n1)
+        done <<<"$ogs" | head -n1 || true)
     fi
     if [ -n "$other" ]; then
       report FOUND "cert-manager OperatorGroup" "$other: the hub runs the platform's cert-manager; set hubCertManager=platform in root/inputs.env"
