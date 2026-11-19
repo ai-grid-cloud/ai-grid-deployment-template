@@ -3,8 +3,9 @@
 # tenants on a hub whose Keycloak is the core profile (keycloakOverlay=core),
 # the way a provider would, so tests have organizations and users to sign in as.
 #
-#   scripts/test-tenants.sh            create what's missing; report what exists
-#   scripts/test-tenants.sh --clean    delete what it creates
+#   scripts/test-tenants.sh                    create what's missing; report what exists
+#   scripts/test-tenants.sh --clean            preview what --clean --confirm deletes
+#   scripts/test-tenants.sh --clean --confirm  delete what it creates
 #
 # For each example tenant N (1 and 2):
 #
@@ -17,7 +18,8 @@
 #    that only the library's default profile mounts, so it's left out, and
 #    Keycloak generates the realm's signing keys.
 # 2. Secret grid-tenant-N-idp in the console's identity provider namespace
-#    (IDP_SECRETS_NAMESPACE, default ai-grid-idp-secrets), key client-secret:
+#    (the console backend's AI_GRID_IDP_SECRET_NAMESPACE, else
+#    ai-grid-idp-secrets; IDP_SECRETS_NAMESPACE overrides it), key client-secret:
 #    the realm's saas-broker client secret, for the organization's identity
 #    provider.
 # 3. Organization grid-tenant-N, through the provider API
@@ -28,33 +30,41 @@
 #    gives the organization a new id.
 #
 # Each user's password goes to .config/test-tenants/REALM/USER (mode 600, in a
-# directory only you can read), never to the output or a command line. A rerun
+# directory only you can read), never to the output or a command line. The
+# library's render-realm.sh reads the generated values from its environment, as
+# upstream's Keycloak does, so they're in that child process's environment while
+# it renders. A rerun
 # creates only what's missing; for a realm that exists without its password
 # files, it sets new passwords for the file's users.
 #
-# --clean deletes, for each tenant: the organization (provider API), the users
-# that signed in through it from realm saas, the Secret, the realm, and the
-# password files. Without --clean nothing is deleted.
+# --clean lists, and with --confirm deletes, for each tenant: the users that
+# signed in through the organization (its members with an email in one of its
+# domains) from realm saas, the organization (provider API), the Secret, the
+# realm, and the password files. It deletes an organization only when its
+# identity provider's issuer is the test realm's, and otherwise keeps it and its
+# Secret and says why. Without --clean nothing is deleted.
 #
 # Inputs: clusters.yaml, the hub's login (make login), the provider-admin token
 # (.config/provider-admin-token), and the library (scripts/library.sh). The
 # Keycloak admin's credential is read from Secret keycloak-secrets in
 # KEYCLOAK_NAMESPACE (default maas-db) into a temporary file, and sent only to
-# the host of Route keycloak there. KEYCLOAK_REALM (default saas) is the broker realm.
+# the host of Route keycloak there. KEYCLOAK_REALM (default saas) is the broker
+# realm. Both can be set in the environment or in clusters.yaml's options:.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/clusters.sh"
 . "$here/library.sh"
 
-clean=""
-case "${1:-}" in
+clean="" confirm=""
+case "$*" in
   "") ;;
   --clean) clean=1 ;;
-  *) echo "usage: test-tenants.sh [--clean]" >&2; exit 2 ;;
+  "--clean --confirm") clean=1 confirm=1 ;;
+  *) echo "usage: test-tenants.sh [--clean [--confirm]]" >&2; exit 2 ;;
 esac
 die() { echo "error: $*" >&2; exit 1; }
 
-clusters_load "$here/.."
+deployment_load "$here/.."   # options.KEYCLOAK_NAMESPACE and options.KEYCLOAK_REALM
 dir=$CLUSTERS_DIR
 overlay=$(sed -n 's/^keycloakOverlay=//p' "$dir/root/inputs.env" 2>/dev/null | tail -n 1)
 [ "${overlay:-core}" = core ] ||
@@ -73,7 +83,11 @@ hub=$(hub_name)
 cluster_login_ok "$hub"
 cluster_tls "$hub"   # the hub's ca: in clusters.yaml, for Keycloak's Route
 export KUBECONFIG; KUBECONFIG=$(cluster_kubeconfig "$hub")
-kc_ns=${KEYCLOAK_NAMESPACE:-maas-db} saas=${KEYCLOAK_REALM:-saas} idp_ns=${IDP_SECRETS_NAMESPACE:-ai-grid-idp-secrets}
+kc_ns=${KEYCLOAK_NAMESPACE:-maas-db} saas=${KEYCLOAK_REALM:-saas}
+# Where the console backend reads identity provider Secrets: its own setting, else the chart's default.
+idp_ns=${IDP_SECRETS_NAMESPACE:-$(oc get deployment ai-grid-provider-console -n ai-grid-provider-console -o json 2>/dev/null |
+  jq -r 'first(.spec.template.spec.containers[].env[]? | select(.name == "AI_GRID_IDP_SECRET_NAMESPACE") | .value) // empty' 2>/dev/null || true)}
+idp_ns=${idp_ns:-ai-grid-idp-secrets}
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 chmod 700 "$tmp"
 
@@ -136,6 +150,7 @@ all_passwords() { # DIR, the users on stdin: whether each has a password file
   local uid user rest
   while read -r uid user rest; do [ -s "$1/$user" ] || return 1; done
 }
+is_uuid() { [[ "$1" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; }
 org_of() { # NAME: the organization's JSON from $tmp/orgs.json, empty when there's none
   jq -c --arg n "$1" 'first(.items[]? | select(.metadata.name == $n)) // empty' "$tmp/orgs.json"
 }
@@ -146,31 +161,56 @@ api Tenants/List '{}'; cp "$tmp/api.json" "$tmp/orgs.json"
 for n in 1 2; do
   org=grid-tenant-$n realm=grid-tenant-$n-idp secret=grid-tenant-$n-idp
   file="$examples/$realm-realm.json" pwdir="$dir/.config/test-tenants/$realm"
-  domain=$(jq -r --arg a "$org" 'first(.organizations[] | select(.alias == $a)) | .domains[0].name // empty' "$examples/saas-realm.json")
-  [ -n "$domain" ] || die "the library's saas-realm.json has no organization $org with a domain"
+  domains=$(jq -r --arg a "$org" 'first(.organizations[] | select(.alias == $a)) | .domains[]?.name' "$examples/saas-realm.json")
+  [ -n "$domains" ] || die "the library's saas-realm.json has no organization $org with a domain"
+  issuer="$kc_url/realms/$realm"
+  o=$(org_of "$org")
+  ours=""; [ -z "$o" ] || [ "$(jq -r '.spec.identityProvider.config.issuer // ""' <<<"$o")" != "$issuer" ] || ours=1
 
   if [ -n "$clean" ]; then
-    o=$(org_of "$org")
-    if [ -n "$o" ]; then
+    if [ -z "$o" ]; then
+      summary+=("organization $org: none")
+    elif [ -z "$ours" ]; then
+      summary+=("organization $org: kept, with Secret $idp_ns/$secret: its identity provider's issuer isn't $issuer, so it isn't a test organization")
+    else
       id=$(jq -r .id <<<"$o") version=$(jq -r '.metadata.version // 1' <<<"$o")
       api Tenants/ListMembers "$(jq -cn --arg id "$id" '{id: $id, limit: 1000}')"
-      # Only members of the organization's own domain: the users that signed in through its identity provider.
-      jq -r --arg d "@$domain" '.items[]? | select((.email // "") | ascii_downcase | endswith($d)) | .id' "$tmp/api.json" > "$tmp/members"
-      api Tenants/Delete "$(jq -cn --arg id "$id" --argjson v "$version" '{id: $id, version: $v}')"
-      kc_login
-      while read -r uid; do
-        [ -n "$uid" ] || continue
-        kc DELETE "/$saas/users/$uid"
-        case "$code" in 204|404) ;; *) kc_fail "delete user $uid from realm $saas" ;; esac
-      done < "$tmp/members"
-      summary+=("organization $org: deleted ($(wc -l < "$tmp/members" | tr -d ' ') of its users deleted from realm $saas)")
-    else
-      summary+=("organization $org: none")
+      # Only members with an email in one of the organization's domains: the users that signed in through its identity provider.
+      jq -r --arg d "$domains" '($d | split("\n") | map("@" + ascii_downcase)) as $ds
+        | .items[]? | select((.email // "") | ascii_downcase as $e | any($ds[]; . as $s | $e | endswith($s))) | .id' \
+        "$tmp/api.json" > "$tmp/members"
+      bad=$(grep -cvE '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' "$tmp/members" || true)
+      [ "$bad" = 0 ] || die "the provider API listed $bad member id(s) of $org that aren't UUIDs: deleting nothing"
+      count=$(grep -c . "$tmp/members" || true)
+      if [ -z "$confirm" ]; then
+        summary+=("organization $org (id $id): would delete it, and its $count users from realm $saas")
+      else
+        # The users first: once the organization is gone, its members can't be listed.
+        kc_login; gone=0
+        while read -r uid; do
+          is_uuid "$uid" || continue
+          kc DELETE "/$saas/users/$uid"
+          case "$code" in 204) gone=$((gone+1)) ;; 404) ;; *) kc_fail "delete user $uid from realm $saas" ;; esac
+        done < "$tmp/members"
+        api Tenants/Delete "$(jq -cn --arg id "$id" --argjson v "$version" '{id: $id, version: $v}')"
+        summary+=("organization $org: deleted, and $gone of its users from realm $saas")
+      fi
     fi
-    oc delete secret "$secret" -n "$idp_ns" --ignore-not-found >/dev/null
-    kc_login; kc DELETE "/$realm"
-    case "$code" in 204) summary+=("realm $realm: deleted") ;; 404) summary+=("realm $realm: none") ;; *) kc_fail "delete realm $realm" ;; esac
-    rm -rf "$pwdir"
+    if [ -n "$o" ] && [ -z "$ours" ]; then :
+    elif oc get secret "$secret" -n "$idp_ns" >/dev/null 2>&1; then
+      if [ -n "$confirm" ]; then oc delete secret "$secret" -n "$idp_ns" --ignore-not-found >/dev/null; summary+=("Secret $idp_ns/$secret: deleted")
+      else summary+=("Secret $idp_ns/$secret: would delete it"); fi
+    else summary+=("Secret $idp_ns/$secret: none"); fi
+    kc_login
+    if [ -n "$confirm" ]; then
+      kc DELETE "/$realm"
+      case "$code" in 204) summary+=("realm $realm: deleted") ;; 404) summary+=("realm $realm: none") ;; *) kc_fail "delete realm $realm" ;; esac
+      rm -rf "$pwdir"
+    else
+      kc GET "/$realm"
+      case "$code" in 200) summary+=("realm $realm: would delete it") ;; 404) summary+=("realm $realm: none") ;; *) kc_fail "read realm $realm" ;; esac
+      [ ! -d "$pwdir" ] || summary+=("password files $pwdir: would delete them")
+    fi
     continue
   fi
 
@@ -188,7 +228,7 @@ for n in 1 2; do
     else gen "$tmp/client-secret"; fi
     # Without the java-keystore key provider, which reads a keystore only the default profile mounts.
     # With no key provider left, the key goes, so that Keycloak adds its default ones.
-    jq '.components["org.keycloak.keys.KeyProvider"] |= map(select(.providerId != "java-keystore"))
+    jq '.components["org.keycloak.keys.KeyProvider"] |= ((. // []) | map(select(.providerId != "java-keystore")))
       | if (.components["org.keycloak.keys.KeyProvider"] | length) == 0 then del(.components["org.keycloak.keys.KeyProvider"]) else . end' \
       "$file" > "$tmp/realm.json"
     ( umask 077
@@ -221,6 +261,7 @@ for n in 1 2; do
   summary+=("realm $realm: $state")
 
   # 2. The organization's client secret: the realm's saas-broker secret.
+  kc_login
   oc get namespace "$idp_ns" >/dev/null 2>&1 ||
     die "no namespace $idp_ns on $hub for identity provider secrets: set IDP_SECRETS_NAMESPACE to the console chart's backend.idpSecrets.namespace"
   kc GET "/$realm/clients?clientId=saas-broker"
@@ -232,13 +273,15 @@ for n in 1 2; do
   (umask 077; jq -j '.value // ""' "$tmp/kc.json" > "$tmp/client-secret"); rm -f "$tmp/kc.json"
   [ -s "$tmp/client-secret" ] || die "client saas-broker in realm $realm has no secret"
   oc create secret generic "$secret" -n "$idp_ns" --from-file=client-secret="$tmp/client-secret" --dry-run=client -o yaml |
-    oc apply -f - >/dev/null
+    oc apply --server-side --force-conflicts -f - >/dev/null   # server-side: no copy of the data in an annotation
   rm -f "$tmp/client-secret"
 
   # 3. The organization, through the provider API.
   o=$(org_of "$org")
-  if [ -n "$o" ]; then
+  if [ -n "$ours" ]; then
     summary+=("organization $org: exists, id $(jq -r .id <<<"$o")")
+  elif [ -n "$o" ]; then
+    summary+=("organization $org: exists, id $(jq -r .id <<<"$o"), but its identity provider's issuer isn't $issuer: its users don't sign in through the test realm")
   else
     body=$(jq -c --arg a "$org" --arg url "$kc_url" --arg secret "$secret" '
       def u: gsub("\\$\\{KEYCLOAK_PUBLIC_URL\\}"; $url);
@@ -263,7 +306,8 @@ for n in 1 2; do
   done <<<"$users"
 done
 
-if [ -n "$clean" ]; then echo "Test tenants removed (test deployments only):"
+if [ -n "$confirm" ]; then echo "Test tenants removed (test deployments only):"
+elif [ -n "$clean" ]; then echo "Test tenants: what make test-tenants CLEAN=1 CONFIRM=1 would delete (test deployments only):"
 else echo "Test tenants (test deployments only, never a real install):"; fi
 printf '  %s\n' "${summary[@]}"
 [ -n "$clean" ] || echo "Each user signs in to the Org UI with their email; Keycloak sends them to their realm."
