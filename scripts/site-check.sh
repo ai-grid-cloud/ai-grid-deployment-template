@@ -43,9 +43,11 @@ fi
 chart_og=openshift-cert-manager-operator
 sha256() { if command -v sha256sum >/dev/null; then sha256sum; else shasum -a 256; fi; }
 site_app="rhoai-${name:0:34}-$(printf '%s' "$name" | sha256 | cut -c1-8)"
+# stderr apart: an oc Warning: line isn't an OperatorGroup.
+og_err=$(mktemp); trap 'rm -f "$og_err"' EXIT
 if ! ogs=$(KUBECONFIG=$(cluster_kubeconfig "$name") oc get operatorgroups.operators.coreos.com -n cert-manager-operator \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.metadata.labels.app\.kubernetes\.io/instance}{"|"}{.metadata.annotations.argocd\.argoproj\.io/tracking-id}{"\n"}{end}' 2>&1); then
-  printf '%-8s %-40s %s\n' MISSING "cert-manager OperatorGroup" "can't read OperatorGroups in cert-manager-operator: $(tail -n1 <<<"$ogs")"
+    -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.metadata.labels.app\.kubernetes\.io/instance}{"|"}{.metadata.annotations.argocd\.argoproj\.io/tracking-id}{"\n"}{end}' 2>"$og_err"); then
+  printf '%-8s %-40s %s\n' MISSING "cert-manager OperatorGroup" "can't read OperatorGroups in cert-manager-operator: $(tail -n1 "$og_err")"
   rc=1
 else
   other="" unsure="" ours=""

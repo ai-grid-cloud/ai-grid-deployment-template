@@ -81,8 +81,10 @@ root_at_head='{"metadata":{"name":"deployment-root"},"status":{"sync":{"status":
 setup() { # NAME: a deployment repository $D and a stub directory $W, for one case
   D="$T/$1/repo" W="$T/$1/stub"; mkdir -p "$W" "$D/.config"
   cp -R "$SRC/scripts" "$D/"
-  for s in login.sh set-library.sh set-inputs.sh check-deployment.sh empty-catalog.sh \
+  for s in login.sh set-library.sh check-deployment.sh empty-catalog.sh \
       install-report.sh provider-admin.sh check-prerequisites.sh gateway-nodes.sh; do fake "$s"; done
+  # As the real one: writes its default hubCertManager=library when the file doesn't set it.
+  fake set-inputs.sh 'grep -q "^[[:space:]]*hubCertManager=" "$REPO/root/inputs.env" 2>/dev/null || echo hubCertManager=library >> "$REPO/root/inputs.env"'
   fake ready-check.sh '[ ! -f "$STUB_DIR/ready-check.sh.rc" ] || { echo "OK   hub Applications"; echo "FAIL site site-a: not available"; echo "Not ready: see FAIL above."; }'
   fake create-console-secrets.sh '[ -z "${CATALOG_TOKEN_FILE:-}" ] || cat "$CATALOG_TOKEN_FILE" > "$STUB_DIR/catalog-token-seen"'
   fake git-push.sh 'cat "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-seen"; echo "$DEPLOYMENT_TOKEN_FILE" > "$STUB_DIR/deployment-token-path"
@@ -131,7 +133,7 @@ all_out=""
 
 setup fresh; run
 t "fresh: runs every hub step in order" eval '[ "$rc" = 0 ] &&
-  [ "$(calls)" = "login.sh --non-interactive;check-prerequisites.sh --step hub --cluster hub --cert-manager library;set-inputs.sh https://github.com/acme/catalog.git;check-prerequisites.sh --step hub --cluster hub --cert-manager;git-push.sh install: inputs and library pin root/ hub/catalog/;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;site-check.sh site-a;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
+  [ "$(calls)" = "login.sh --non-interactive;check-prerequisites.sh --step hub --cluster hub --cert-manager library;set-inputs.sh https://github.com/acme/catalog.git;git-push.sh install: inputs and library pin root/ hub/catalog/;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;site-check.sh site-a;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
 
 t "end: provider-admin then ready-check, then the outputs line" eval '[ "$rc" = 0 ] &&
   [ "$(grep -E "^(== (provider-admin|ready)|gate (hub-apps-final|ready))" <<<"$out" | sed -E "s/ after .*//" | tr "\n" ";")" = "gate hub-apps-final: passed;== provider-admin;== ready;gate ready: passed;" ] &&
@@ -428,7 +430,7 @@ echo "FOUND    cert-manager OperatorGroup                   cert-manager-operato
 run
 t "hubCertManager unset, the hub runs the platform's cert-manager: writes platform and pushes" eval '[ "$rc" = 0 ] &&
   [ "$(grep -c "^hubCertManager=" "$D/root/inputs.env")" = 1 ] && grep -qx hubCertManager=platform "$D/root/inputs.env" &&
-  grep -q "hubCertManager = platform" <<<"$out" && grep -q "^git-push.sh" "$W/calls.log"'
+  grep -q "replaced library with platform" <<<"$out" && grep -q "^git-push.sh" "$W/calls.log"'
 : > "$W/calls.log"; run
 t "  ... a rerun keeps platform" eval '[ "$rc" = 0 ] && grep -qx hubCertManager=platform "$D/root/inputs.env" &&
   grep -q "^check-prerequisites.sh .*--cert-manager platform" "$W/calls.log"'
@@ -439,6 +441,21 @@ t "hubCertManager unset, no platform cert-manager: library, says so, reads the h
   grep -qx hubCertManager=library "$D/root/inputs.env" && grep -q "^check-prerequisites.sh .*--cert-manager library" "$W/calls.log" &&
   [ "$(grep -c "^check-prerequisites.sh" "$W/calls.log")" = 1 ] &&
   grep -qx "checked the hub: no platform cert-manager; hubCertManager=library" <<<"$out"'
+detect cm-library-stop
+echo 1 > "$W/check-deployment.sh.rc"; run
+t "library detected, then a stop inside set-inputs.sh: library is written" eval '[ "$rc" = 1 ] && grep -qx hubCertManager=library "$D/root/inputs.env"'
+rm "$W/check-deployment.sh.rc"; : > "$W/calls.log"; run
+t "  ... the rerun takes the final check, for the value that's now set" eval '[ "$rc" = 0 ] &&
+  [ "$(grep -E "^(check-deployment|check-prerequisites)\.sh" "$W/calls.log" | cut -d" " -f1 | tr "\n" ";")" = "check-deployment.sh;check-prerequisites.sh;" ] &&
+  grep -q "^check-prerequisites.sh .*--cert-manager library$" "$W/calls.log" && ! grep -q "checked the hub" <<<"$out"'
+detect cm-early-existing
+g -C "$D" remote remove origin
+echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"
+run
+t "platform detected, set-inputs.sh stops before it writes: nothing appended" eval '[ "$rc" = 1 ] && ! grep -q "hubCertManager" "$D/root/inputs.env"'
+g -C "$D" remote add origin https://github.com/acme/deploy.git; : > "$W/calls.log"; run
+t "  ... the rerun detects again and replaces library with platform" eval '[ "$rc" = 0 ] && grep -qx hubCertManager=platform "$D/root/inputs.env" &&
+  grep -q "replaced library with platform" <<<"$out"'
 detect cm-detect-noline
 echo "MISSING  OpenShift 4.21 or later                  unreadable" > "$W/check-prerequisites.sh.out"; echo 1 > "$W/check-prerequisites.sh.rc"
 run

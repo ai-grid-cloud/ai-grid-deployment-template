@@ -24,6 +24,7 @@ case " $* " in
     jp='{range .items[*]}{.metadata.name}{"|"}{.metadata.labels.app\.kubernetes\.io/instance}{"|"}{.metadata.annotations.argocd\.argoproj\.io/tracking-id}{"\n"}{end}'
     [[ " $* " == *" jsonpath=$jp "* ]] || { echo "stub oc: unexpected jsonpath: $*" >&2; exit 3; }
     [ ! -f "$STUB_DIR/og-error" ] || { echo "error: Forbidden" >&2; exit 1; }
+    [ ! -f "$STUB_DIR/og-warning" ] || echo "Warning: operators.coreos.com/v1 OperatorGroup is deprecated" >&2
     cat "$STUB_DIR/ogs" 2>/dev/null || true ;;
   *" get nodes -l nvidia.com/gpu.present=true -o name "*) cat "$STUB_DIR/gpu-nodes" 2>/dev/null || true ;;
   *" get nodes -l feature.node.kubernetes.io/pci-10de.present=true -o name "*) cat "$STUB_DIR/nfd-gpu-nodes" 2>/dev/null || true ;;
@@ -43,7 +44,8 @@ echo "{\"items\":[$(w w1 worker),$(w w2 worker)]}" > "$T/nodes.json"
 # resolver maps *.localhost; the cert-manager lines are what's tested.
 # ogs holds the jsonpath's NAME|app.kubernetes.io/instance|argocd.argoproj.io/tracking-id lines.
 # site-b's Application: rhoai-<name, first 34>-<sha256 of name, first 8>, as the library names it.
-APP="rhoai-site-b-$(printf %s site-b | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-8)"
+# Fixed names, computed with Sprig ({{ .name | trunc 34 }}, {{ sha256sum .name | trunc 8 }}), not with site-check.sh's code.
+APP=rhoai-site-b-18fb20d6
 OGN=openshift-cert-manager-operator
 t "no OperatorGroup: OK" 0 "^OK +cert-manager OperatorGroup +none"
 printf '%s||%s:operators.coreos.com/OperatorGroup:cert-manager-operator/%s\n' "$OGN" "$APP" "$OGN" > "$T/ogs"
@@ -58,6 +60,18 @@ printf '%s||%s:operators.coreos.com/OperatorGroup:cert-manager-operator/%s\ncert
 t "the chart's own next to another: FOUND" 1 "^FOUND +cert-manager OperatorGroup +cert-manager-operator-og"
 printf 'cert-manager-operator-og||\n' > "$T/ogs"
 t "the platform's cert-manager: FOUND, names the limit, exit 1" 1 "^FOUND +cert-manager OperatorGroup +cert-manager-operator-og: .*TooManyOperatorGroups.*upstream-main-limits.md"
+printf '%s||%s:operators.coreos.com/OperatorGroup:cert-manager-operator/%s\n' "$OGN" "$APP" "$OGN" > "$T/ogs"; touch "$T/og-warning"
+t "an oc Warning: on stderr isn't an OperatorGroup: OK" 0 "^OK +cert-manager OperatorGroup +OpenShift AI's chart's, from $APP"
+rm "$T/og-warning"
+# A name longer than 34 characters: Sprig truncates it before the hash of the whole name.
+D0=$D D="$T/long"; mkdir -p "$D"; cp -R "$SRC/scripts" "$D/"; cp "$D0/scripts/check-prerequisites.sh" "$D/scripts/"
+LONG=a-very-long-cluster-name-that-exceeds-thirty-four-chars
+printf 'apiVersion: ai-grid.dev/v1alpha1\nkind: Clusters\nhub: {api: "https://api.hub.example.com:6443"}\nsites:\n  - {name: %s, api: "https://api.long.example.com:6443"}\n' "$LONG" > "$D/clusters.yaml"
+for n in hub "$LONG"; do mkdir -p "$D/.config/$n"; : > "$D/.config/$n/kubeconfig"; done
+printf '%s||rhoai-a-very-long-cluster-name-that-exce-bfa00fe5:operators.coreos.com/OperatorGroup:cert-manager-operator/%s\n' "$OGN" "$OGN" > "$T/ogs"
+t "a long site name: its Application rhoai-a-very-long-cluster-name-that-exce-bfa00fe5: OK" 0 \
+  "^OK +cert-manager OperatorGroup +OpenShift AI's chart's, from rhoai-a-very-long-cluster-name-that-exce-bfa00fe5$"
+D=$D0
 touch "$T/og-error"
 t "can't read: MISSING, exit 1" 1 "^MISSING +cert-manager OperatorGroup +can't read OperatorGroups in cert-manager-operator: error: Forbidden"
 rm "$T/og-error"; : > "$T/ogs"

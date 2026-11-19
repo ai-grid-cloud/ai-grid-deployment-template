@@ -110,10 +110,11 @@ if [ "$step" = hub ]; then
     # name alone isn't the library's: only Argo CD's tracking for the library's
     # Application cert-manager is, as the label app.kubernetes.io/instance or
     # the annotation argocd.argoproj.io/tracking-id (APP:GROUP/KIND:NS/NAME).
-    read_ok=1
+    # stderr apart: an oc Warning: line isn't an OperatorGroup.
+    read_ok=1 og_err=$(mktemp)
     if ! ogs=$(oc_ get operatorgroups.operators.coreos.com -n cert-manager-operator \
-        -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.metadata.labels.app\.kubernetes\.io/instance}{"|"}{.metadata.annotations.argocd\.argoproj\.io/tracking-id}{"\n"}{end}' 2>&1); then
-      report MISSING "cert-manager OperatorGroup" "can't read OperatorGroups in cert-manager-operator: $(tail -n1 <<<"$ogs")"
+        -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.metadata.labels.app\.kubernetes\.io/instance}{"|"}{.metadata.annotations.argocd\.argoproj\.io/tracking-id}{"\n"}{end}' 2>"$og_err"); then
+      report MISSING "cert-manager OperatorGroup" "can't read OperatorGroups in cert-manager-operator: $(tail -n1 "$og_err")"
       other="" read_ok=""
     else
       other=$(while IFS='|' read -r og label ann; do
@@ -122,6 +123,7 @@ if [ "$step" = hub ]; then
           echo "$og"
         done <<<"$ogs" | head -n1 || true)
     fi
+    rm -f "$og_err"
     if [ -n "$other" ]; then
       report FOUND "cert-manager OperatorGroup" "$other: the hub runs the platform's cert-manager; set hubCertManager=platform in root/inputs.env"
     elif [ -n "$read_ok" ]; then

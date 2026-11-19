@@ -42,11 +42,13 @@ library's `main` branch, which reads less from your deployment repository
    with its own MaaS certificate would go back to the cluster's internal one. Don't update such a deployment until
    you've removed those sites from the grid in the provider console. Then delete the files.
 2. **The hub's cert-manager.** Earlier versions used the hub's own cert-manager. `make inputs` writes
-   `hubCertManager=library`, which installs the library's beside it and fails both. If
-   `oc get operatorgroups -n cert-manager-operator` on the hub shows an OperatorGroup that the library's Argo CD
-   Application `cert-manager` doesn't track ([set your names](02-repositories.md#4-set-your-names)), set
-   `hubCertManager=platform` in `root/inputs.env` before you push.
-   `make install` checks this and stops; a push without it doesn't.
+   `hubCertManager=library`, which installs the library's beside it and fails both. If the hub has an OperatorGroup in
+   `cert-manager-operator` that the library's Argo CD Application `cert-manager` doesn't track, set
+   `hubCertManager=platform` in `root/inputs.env` before you push. To list them with their tracking, run
+   `oc get operatorgroups -n cert-manager-operator -o custom-columns='NAME:.metadata.name,TRACKING:.metadata.annotations.argocd\.argoproj\.io/tracking-id,INSTANCE:.metadata.labels.app\.kubernetes\.io/instance'`
+   ([set your names](02-repositories.md#4-set-your-names) says how to read it).
+   `make install` checks this and stops; a push without it doesn't. When `root/inputs.env` doesn't set
+   `hubCertManager` yet, `make install` detects it instead and writes `platform` or `library`.
 3. **The template's own tenant Keycloak.** Earlier versions ran it in namespace `tenant-idp`. After the push, the hub
    drops its Application but keeps what it deployed, because the root preserves resources when an Application goes,
    so that Keycloak keeps serving its realm and users until you remove it:

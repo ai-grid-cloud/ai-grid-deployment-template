@@ -22,9 +22,10 @@ worker nodes or the network.
   login, so private repositories aren't supported. `make prereqs` and `make install` check each one with an
   anonymous `git ls-remote`.
 - [ ] **A default StorageClass on each cluster.**
-- [ ] **No platform cert-manager Operator on a site.** A site whose namespace `cert-manager-operator` has an
-  OperatorGroup that OpenShift AI's chart didn't create for it can't join the grid yet: the install's `site` step stops
-  on it ([limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values)). The name doesn't tell:
+- [ ] **No platform cert-manager Operator on a site.** An OperatorGroup in a site's namespace `cert-manager-operator`
+  that OpenShift AI's chart didn't create stops the install's `site` step: such a site can't join the grid yet
+  ([limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values)). One that another hub's chart
+  created only warns ([page 5](05-prepare-site.md)). The name doesn't tell:
   the platform's CLI install also names it `openshift-cert-manager-operator`
   ([how the checks tell them apart](../upstream-main-limits.md#l17-the-hubs-cert-manager-is-the-librarys-or-the-platforms-not-both)).
 - [ ] **Two worker nodes outside the control plane on each cluster** for Submariner's gateways. The install labels two
