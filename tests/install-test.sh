@@ -129,7 +129,7 @@ all_out=""
 
 setup fresh; run
 t "fresh: runs every hub step in order" eval '[ "$rc" = 0 ] &&
-  [ "$(calls)" = "login.sh --non-interactive;set-inputs.sh https://github.com/acme/catalog.git;check-prerequisites.sh --step hub --cluster hub --cert-manager;git-push.sh install: inputs and library pin root/ hub/catalog/;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;site-check.sh site-a;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
+  [ "$(calls)" = "login.sh --non-interactive;check-prerequisites.sh --step hub --cluster hub --cert-manager library;set-inputs.sh https://github.com/acme/catalog.git;check-prerequisites.sh --step hub --cluster hub --cert-manager;git-push.sh install: inputs and library pin root/ hub/catalog/;empty-catalog.sh --check;bootstrap-hub.sh;create-console-secrets.sh;site-check.sh site-a;import-site.sh site-a --yes;provider-admin.sh;ready-check.sh;" ]'
 
 t "end: provider-admin then ready-check, then the outputs line" eval '[ "$rc" = 0 ] &&
   [ "$(grep -E "^(== (provider-admin|ready)|gate (hub-apps-final|ready))" <<<"$out" | sed -E "s/ after .*//" | tr "\n" ";")" = "gate hub-apps-final: passed;== provider-admin;== ready;gate ready: passed;" ] &&
@@ -418,6 +418,8 @@ detect() { # NAME: setup with the real set-inputs.sh
   setup "$1"
   cp "$SRC/scripts/set-inputs.sh" "$D/scripts/set-inputs.sh"; cp -R "$SRC/hub" "$D/"
   g -C "$D" remote add origin https://github.com/acme/deploy.git
+  # As the real one: only --cert-manager library reads the OperatorGroup.
+  fake check-prerequisites.sh '[ "${!#}" = library ] || exit 0'
 }
 detect cm-detect-platform
 echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"
@@ -425,8 +427,7 @@ run
 t "hubCertManager unset, the hub runs the platform's cert-manager: writes platform and pushes" eval '[ "$rc" = 0 ] &&
   [ "$(grep -c "^hubCertManager=" "$D/root/inputs.env")" = 1 ] && grep -qx hubCertManager=platform "$D/root/inputs.env" &&
   grep -q "hubCertManager = platform" <<<"$out" && grep -q "^git-push.sh" "$W/calls.log"'
-# check-prerequisites.sh --cert-manager platform checks the CRDs, never the OperatorGroup.
-: > "$W/calls.log"; echo "OK       cert-manager CRDs                        present (hubCertManager=platform)" > "$W/check-prerequisites.sh.out"; run
+: > "$W/calls.log"; run
 t "  ... a rerun keeps platform" eval '[ "$rc" = 0 ] && grep -qx hubCertManager=platform "$D/root/inputs.env" &&
   grep -q "^check-prerequisites.sh .*--cert-manager platform" "$W/calls.log"'
 detect cm-detect-library
@@ -437,8 +438,27 @@ t "hubCertManager unset, no platform cert-manager: library" eval '[ "$rc" = 0 ] 
 detect cm-detect-unread
 echo "MISSING  cert-manager OperatorGroup                   can.t read OperatorGroups in cert-manager-operator: Forbidden" > "$W/check-prerequisites.sh.out"
 run
-t "hubCertManager unset, the hub can't be read: stops at inputs, before the push" eval '[ "$rc" = 1 ] &&
-  ! grep -qx hubCertManager=platform "$D/root/inputs.env" && ! grep -q "^git-push.sh" "$W/calls.log"'
+t "hubCertManager unset, the hub can't be read: stops at inputs, nothing written" eval '[ "$rc" = 1 ] &&
+  ! grep -q "^hubCertManager=" "$D/root/inputs.env" && ! grep -q "^set-inputs.sh" "$W/calls.log" &&
+  grep -qx "make install stopped at inputs. Fix the cause, then run make install again." <<<"$out"'
+echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"
+: > "$W/calls.log"; run
+t "  ... a rerun that reads the platform's: writes platform and goes on" eval '[ "$rc" = 0 ] &&
+  grep -qx hubCertManager=platform "$D/root/inputs.env" && grep -q "^git-push.sh" "$W/calls.log"'
+detect cm-detect-after-stop
+echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"
+echo 1 > "$W/check-deployment.sh.rc"; run
+t "a run that stops after the inputs are written: platform is already there" eval '[ "$rc" = 1 ] &&
+  grep -qx hubCertManager=platform "$D/root/inputs.env"'
+rm "$W/check-deployment.sh.rc"; : > "$W/calls.log"; run
+t "  ... the rerun keeps it and goes on" eval '[ "$rc" = 0 ] && grep -qx hubCertManager=platform "$D/root/inputs.env" &&
+  grep -q "^git-push.sh" "$W/calls.log"'
+detect cm-placeholder
+echo hubCertManager=REQUIRED-hubCertManager >> "$D/root/inputs.env"; g -C "$D" commit -qam placeholder
+echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"
+run
+t "a REQUIRED- placeholder counts as unset: platform replaces it" eval '[ "$rc" = 0 ] &&
+  [ "$(grep -c "^hubCertManager=" "$D/root/inputs.env")" = 1 ] && grep -qx hubCertManager=platform "$D/root/inputs.env"'
 detect cm-set-library
 echo hubCertManager=library >> "$D/root/inputs.env"; g -C "$D" commit -qam library
 echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"

@@ -205,8 +205,8 @@ Tell the install which clusters and repositories to use, and give it the credent
 
    You don't choose the hub's cert-manager: when `root/inputs.env` doesn't set `hubCertManager`, the install checks the
    hub. If the hub already runs the platform's cert-manager, it writes `hubCertManager=platform`; otherwise it writes
-   `library`, and the hub installs the library's cert-manager. A value that's already set is kept, and the install
-   stops if it contradicts the hub.
+   `library`, and the hub installs the library's cert-manager. If it can't read the hub, it stops. A value that's
+   already set is kept, and the install stops if it says `library` and the hub runs the platform's cert-manager.
 
    Never paste a secret into a chat, a command line or a file you commit.
 
@@ -340,7 +340,8 @@ deployment token if you set one, and a `quay.io` auth file built from `quay:`, w
 
 1. `login`: writes `.config/NAME/kubeconfig` for each cluster from its credentials and the API URL in
    `.config/clusters.yaml`.
-2. `inputs`: sets the library revision to `LIBRARY` under `options:`, if you set it, writes your names to
+2. `inputs`: sets the library revision to `LIBRARY` under `options:`, if you set it, checks which cert-manager the
+   hub runs when `root/inputs.env` doesn't set `hubCertManager`, writes your names to
    `root/inputs.env` and the catalog to `hub/catalog/`, checks that the hub can read your deployment and catalog
    repositories with no login, and pushes. A private repository stops the install here, before anything is
    pushed or installed; a network error only prints a `WARN`.
