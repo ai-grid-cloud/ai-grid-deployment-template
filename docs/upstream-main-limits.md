@@ -372,6 +372,9 @@ so the template's checks tell them apart by Argo CD's tracking, the label
 - `library` (the default): the root selects `apps/cert-manager`, as upstream's
   root does. `make install` stops before it writes to the hub if the hub
   already runs the platform's cert-manager.
+
+When `root/inputs.env` doesn't set `hubCertManager`, `make install` detects it
+with the hub check above: `platform` for a `FOUND`, else `library`.
 - `platform`: the root's `cert-manager` Application selects no file, and the
   hub's platform cert-manager stays the only one.
 - `site` was only for an all-in-one, which isn't supported (L18). The root

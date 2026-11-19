@@ -238,10 +238,14 @@ A third value, `site`, was for a hub that is also a site (all-in-one), which isn
 ([limits](../upstream-main-limits.md#l18-all-in-one-unsupported)). The root still accepts it, so an existing
 deployment's root renders, but `make inputs` and `make check` warn about it. Don't choose it.
 
-To check, run `oc get operatorgroups -n cert-manager-operator --show-labels` on the hub. Any OperatorGroup there is
-the platform's unless the library's Argo CD Application `cert-manager` tracks it, with the label
-`app.kubernetes.io/instance=cert-manager` or an `argocd.argoproj.io/tracking-id` annotation that starts with
-`cert-manager:`. The name alone doesn't tell: the platform's CLI install also names it
+To check, run this on the hub:
+
+```sh
+oc get operatorgroups -n cert-manager-operator -o custom-columns='NAME:.metadata.name,TRACKING:.metadata.annotations.argocd\.argoproj\.io/tracking-id,INSTANCE:.metadata.labels.app\.kubernetes\.io/instance'
+```
+
+Any OperatorGroup there is the platform's unless the library's Argo CD Application `cert-manager` tracks it: its
+`TRACKING` starts with `cert-manager:`, or its `INSTANCE` is `cert-manager`. The name alone doesn't tell: the platform's CLI install also names it
 `openshift-cert-manager-operator`. If you leave `library` on such a hub, `make install` stops and
 says to set `platform`. If you skip `make inputs` and run the [hands-off install](09-hands-off.md), so that
 `root/inputs.env` doesn't set `hubCertManager` yet, the install checks the hub itself and writes `platform` or

@@ -33,6 +33,7 @@ case "$args" in
     jp='{range .items[*]}{.metadata.name}{"|"}{.metadata.labels.app\.kubernetes\.io/instance}{"|"}{.metadata.annotations.argocd\.argoproj\.io/tracking-id}{"\n"}{end}'
     [[ "$args" == *" jsonpath=$jp "* ]] || { echo "stub oc: unexpected jsonpath: $*" >&2; exit 3; }
     [ ! -f "$d/og-error" ] || { echo "error: Forbidden" >&2; exit 1; }
+    [ ! -f "$d/og-warning" ] || echo "Warning: operators.coreos.com/v1 OperatorGroup is deprecated" >&2
     cat "$d/ogs" 2>/dev/null || true ;;
   *" get crds -o name "*) sed 's#^#customresourcedefinition.apiextensions.k8s.io/#' "$d/crds" 2>/dev/null ;;
   *" get crd "*)
@@ -126,6 +127,8 @@ PULL="$T/pull" t "an empty cert-manager-operator namespace: OK" 0 "^OK +cert-man
 w2=$(world both-cm); cp "$w/secrets" "$w2/secrets"
 printf 'openshift-cert-manager-operator|cert-manager|\ncert-manager-operator-og||\n' > "$w2/ogs"
 PULL="$T/pull" t "the library's tracked OperatorGroup next to the platform's: FOUND" 1 "^FOUND +cert-manager OperatorGroup +cert-manager-operator-og" "$w2" --step hub
+w2=$(world warning-cm); cp "$w/secrets" "$w2/secrets"; printf 'openshift-cert-manager-operator|cert-manager|\n' > "$w2/ogs"; touch "$w2/og-warning"
+PULL="$T/pull" t "an oc Warning: on stderr isn't an OperatorGroup: OK" 0 "^OK +cert-manager +the root installs" "$w2" --step hub
 w2=$(world other-app-cm); cp "$w/secrets" "$w2/secrets"
 printf 'openshift-cert-manager-operator|platform-operators|platform-operators:operators.coreos.com/OperatorGroup:cert-manager-operator/openshift-cert-manager-operator\n' > "$w2/ogs"
 PULL="$T/pull" t "the same name tracked by another Application: FOUND" 1 "^FOUND +cert-manager OperatorGroup +openshift-cert-manager-operator" "$w2" --step hub

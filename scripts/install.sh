@@ -243,13 +243,11 @@ step_inputs() {
     fi
   fi
   "$here/set-inputs.sh" "$CATALOG_REPO_URL" || si_rc=$?
-  if [ "$detected" = platform ] && [ -f "$f" ]; then
-    if grep -q '^[[:space:]]*hubCertManager=' "$f"; then
-      sed -i.bak 's/^[[:space:]]*hubCertManager=.*/hubCertManager=platform/' "$f" && rm -f "$f.bak"
-    else
-      echo hubCertManager=platform >> "$f"
-    fi
-    echo "set      root/inputs.env: hubCertManager = platform (the hub runs the platform's cert-manager)"
+  # set-inputs.sh writes the whole file at once, so it has the line when it
+  # wrote at all; when it didn't, the value is still unset and a rerun detects again.
+  if [ "$detected" = platform ] && grep -q '^[[:space:]]*hubCertManager=' "$f" 2>/dev/null; then
+    sed -i.bak 's/^[[:space:]]*hubCertManager=.*/hubCertManager=platform/' "$f" && rm -f "$f.bak"
+    echo "set      root/inputs.env: hubCertManager: replaced library with platform (the hub runs the platform's cert-manager)"
   fi
   [ "$si_rc" = 0 ] || stopped inputs
   local have want
