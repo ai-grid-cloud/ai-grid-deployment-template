@@ -349,8 +349,23 @@ Two OperatorGroups in one namespace fail every operator there
 (`TooManyOperatorGroups`). The platform's CLI install also names its
 OperatorGroup `openshift-cert-manager-operator`
 ([OpenShift 4.21 docs](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/security_and_compliance/cert-manager-operator-for-red-hat-openshift#cert-manager-install-cli_cert-manager-operator-install)),
-so the template's checks count an OperatorGroup there as the library's only
-when Argo CD's tracking names the library's Application `cert-manager`.
+so the template's checks tell them apart by Argo CD's tracking, the label
+`app.kubernetes.io/instance` or the annotation `argocd.argoproj.io/tracking-id`
+(`APP:GROUP/KIND:NAMESPACE/NAME`):
+
+- **The hub** (`scripts/check-prerequisites.sh --step hub`, which `make install`
+  and `make bootstrap` run): an OperatorGroup in `cert-manager-operator` is the
+  library's only when it's named `openshift-cert-manager-operator` and tracked
+  by the library's Application `cert-manager`. Any other one is the platform's
+  (`FOUND`).
+- **A site** (`scripts/site-check.sh`, `make site-check` and the install's
+  `site` step): an OperatorGroup there is OpenShift AI's chart's only when it's
+  named `openshift-cert-manager-operator` and tracked by the site's own
+  Application, `rhoai-<site name, first 34 characters>-<first 8 hex digits of
+  its SHA-256>` (the library's `apps/rhoai/hub/01-applicationset.yaml`). One
+  tracked by another `rhoai-` Application, such as a site that joined an
+  earlier hub, can't be told apart from the platform's: a `WARN`, not a stop.
+  Any other one is the platform's (`FOUND`).
 
 **Template:** the input `hubCertManager` in `root/inputs.env` chooses:
 
