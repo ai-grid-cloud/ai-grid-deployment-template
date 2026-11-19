@@ -109,8 +109,18 @@ w=$(world platform-cm); printf 'cert-manager-operator-og' > "$w/ogs"; echo "open
 PULL="$T/pull" t "hubCertManager=library on a hub with the platform's: FOUND, says to set platform" 1 \
   "^FOUND +cert-manager OperatorGroup +cert-manager-operator-og: .*set hubCertManager=platform" "$w" --step hub
 PULL="$T/pull" t "hubCertManager=platform on that hub: OK" 0 "^OK +cert-manager CRDs +present \(hubCertManager=platform\)" "$w" --step hub --cert-manager platform
-w=$(world library-cm); printf 'openshift-cert-manager-operator' > "$w/ogs"; echo "open-cluster-management-observability/thanos-object-storage" > "$w/secrets"
-PULL="$T/pull" t "hubCertManager=library, the library's own OperatorGroup (a rerun): OK" 0 "^OK +cert-manager +the root installs" "$w" --step hub
+# The ogs file is the jsonpath's NAME|app.kubernetes.io/instance|argocd.argoproj.io/tracking-id lines.
+w=$(world library-cm); printf 'openshift-cert-manager-operator|cert-manager|\n' > "$w/ogs"; echo "open-cluster-management-observability/thanos-object-storage" > "$w/secrets"
+PULL="$T/pull" t "hubCertManager=library, the library's own OperatorGroup (a rerun, label tracking): OK" 0 "^OK +cert-manager +the root installs" "$w" --step hub
+w2=$(world library-cm-ann); cp "$w/secrets" "$w2/secrets"
+printf 'openshift-cert-manager-operator||cert-manager:operators.coreos.com/OperatorGroup:cert-manager-operator/openshift-cert-manager-operator\n' > "$w2/ogs"
+PULL="$T/pull" t "  ... annotation tracking: OK" 0 "^OK +cert-manager +the root installs" "$w2" --step hub
+w2=$(world platform-cli-cm); cp "$w/secrets" "$w2/secrets"; printf 'openshift-cert-manager-operator||\n' > "$w2/ogs"
+PULL="$T/pull" t "the platform's CLI install (same name, no Argo CD tracking): FOUND" 1 \
+  "^FOUND +cert-manager OperatorGroup +openshift-cert-manager-operator: the hub runs the platform's" "$w2" --step hub
+w2=$(world other-app-cm); cp "$w/secrets" "$w2/secrets"
+printf 'openshift-cert-manager-operator|platform-operators|platform-operators:operators.coreos.com/OperatorGroup:cert-manager-operator/openshift-cert-manager-operator\n' > "$w2/ogs"
+PULL="$T/pull" t "the same name tracked by another Application: FOUND" 1 "^FOUND +cert-manager OperatorGroup +openshift-cert-manager-operator" "$w2" --step hub
 t "a bad --cert-manager: usage" 2 "cert-manager must be library, platform or site" "$w" --step hub --cert-manager both
 PULL="$T/pull" t "hubCertManager=site (the chart owns it): its CRDs are enough" 0 "^OK +cert-manager CRDs +present \(hubCertManager=site\)" "$w" --step hub --cert-manager site
 w=$(world og-error); touch "$w/og-error"; echo "open-cluster-management-observability/thanos-object-storage" > "$w/secrets"

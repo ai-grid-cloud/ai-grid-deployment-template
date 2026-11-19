@@ -43,8 +43,9 @@ library's `main` branch, which reads less from your deployment repository
    you've removed those sites from the grid in the provider console. Then delete the files.
 2. **The hub's cert-manager.** Earlier versions used the hub's own cert-manager. `make inputs` writes
    `hubCertManager=library`, which installs the library's beside it and fails both. If
-   `oc get operatorgroups -n cert-manager-operator` on the hub shows an OperatorGroup other than
-   `openshift-cert-manager-operator`, set `hubCertManager=platform` in `root/inputs.env` before you push.
+   `oc get operatorgroups -n cert-manager-operator` on the hub shows an OperatorGroup that the library's Argo CD
+   Application `cert-manager` doesn't track ([set your names](02-repositories.md#4-set-your-names)), set
+   `hubCertManager=platform` in `root/inputs.env` before you push.
    `make install` checks this and stops; a push without it doesn't.
 3. **The template's own tenant Keycloak.** Earlier versions ran it in namespace `tenant-idp`. After the push, the hub
    drops its Application but keeps what it deployed, because the root preserves resources when an Application goes,
