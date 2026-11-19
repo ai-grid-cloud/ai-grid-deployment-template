@@ -88,8 +88,9 @@ idp() { # N
     }
 EOF
 }
-org() { # N
-  printf '{"id": "fixed-%s", "name": "Grid Tenant %s", "alias": "grid-tenant-%s", "domains": [{"name": "grid-tenant-%s.test", "identityProviderAlias": "grid-tenant-%s"}]}' "$1" "$1" "$1" "$1" "$1"
+org() { # N: tenant 2 has a second domain
+  local more=""; [ "$1" = 1 ] || more=", {\"name\": \"grid-tenant-$1.example\"}"
+  printf '{"id": "fixed-%s", "name": "Grid Tenant %s", "alias": "grid-tenant-%s", "domains": [{"name": "grid-tenant-%s.test", "identityProviderAlias": "grid-tenant-%s"}%s]}' "$1" "$1" "$1" "$1" "$1" "$more"
 }
 printf '{"realm": "saas", "identityProviders": [\n%s,\n%s], "organizations": [%s, %s]}\n' "$(idp 1)" "$(idp 2)" "$(org 1)" "$(org 2)" \
   > "$L/components/examples/saas-realm.json"
@@ -101,23 +102,30 @@ cat > "$T/bin/oc" <<'STUB'
 #!/bin/bash
 d=$STUB_DIR; echo "oc $*" >> "$d/oc.log"; a=" $* "
 to() { local x; for x in "$@"; do case "$x" in --to=*) echo "${x#--to=}" ;; esac; done; }
+ns() { local p=""; for x in "$@"; do [ "$p" = -n ] && echo "$x"; p=$x; done; }
+idp=$(cat "$d/idp-ns" 2>/dev/null || echo ai-grid-idp-secrets)
 case "$a" in
   *" whoami "*) echo admin ;;
-  *" get route keycloak -n maas-db "*) [ -f "$d/no-keycloak" ] || printf keycloak.apps.hub.example.com ;;
+  *" get deployment ai-grid-provider-console -n ai-grid-provider-console -o json "*)
+    [ -f "$d/idp-ns" ] || { echo 'Error from server (NotFound): deployments.apps "ai-grid-provider-console" not found' >&2; exit 1; }
+    printf '{"spec":{"template":{"spec":{"containers":[{"name":"console","env":[{"name":"X","value":"y"}]},{"name":"backend","env":[{"name":"AI_GRID_IDP_SECRET_NAMESPACE","value":"%s"}]}]}}}}' "$idp" ;;
+  *" get route keycloak -n "*) [ -f "$d/no-keycloak" ] || printf keycloak.apps.hub.example.com ;;
   *" get route ai-grid-provider-console -n ai-grid-provider-console "*) printf console.apps.hub.example.com ;;
-  *" get configmap keycloak-public-url -n maas-db "*) cat "$d/public-url" 2>/dev/null || printf 'https://keycloak.apps.hub.example.com/' ;;
-  *" extract secret/keycloak-secrets -n maas-db "*)
+  *" get configmap keycloak-public-url -n "*) cat "$d/public-url" 2>/dev/null || printf 'https://keycloak.apps.hub.example.com/' ;;
+  *" extract secret/keycloak-secrets -n "*)
     t=$(to "$@"); printf admin > "$t/KC_BOOTSTRAP_ADMIN_USERNAME"; printf '%s' "$FAKE_ADMIN" > "$t/KC_BOOTSTRAP_ADMIN_PASSWORD" ;;
-  *" extract secret/grid-tenant-"*"-idp -n ai-grid-idp-secrets --keys=client-secret "*)
+  *" extract secret/grid-tenant-"*"-idp -n $idp --keys=client-secret "*)
     n=${2#secret/}; [ -f "$d/secrets/$n" ] || { echo "Error from server (NotFound): secrets \"$n\" not found" >&2; exit 1; }
     cp "$d/secrets/$n" "$(to "$@")/client-secret" ;;
-  *" get namespace ai-grid-idp-secrets "*) echo namespace/ai-grid-idp-secrets ;;
-  *" create secret generic "*" -n ai-grid-idp-secrets --from-file=client-secret="*" --dry-run=client -o yaml "*)
+  *" get namespace $idp "*) echo "namespace/$idp" ;;
+  *" get namespace "*) echo "Error from server (NotFound): namespaces \"$3\" not found" >&2; exit 1 ;;
+  *" get secret grid-tenant-"*"-idp -n $idp "*) [ -f "$d/secrets/$3" ] || { echo NotFound >&2; exit 1; } ;;
+  *" create secret generic "*" -n $idp --from-file=client-secret="*" --dry-run=client -o yaml "*)
     for x in "$@"; do case "$x" in --from-file=client-secret=*) f=${x#--from-file=client-secret=} ;; esac; done
     printf 'name: %s\nclient-secret: %s\n' "$4" "$(base64 < "$f" | tr -d '\n')" ;;
-  *" apply -f - "*) y=$(cat); n=$(sed -n 's/^name: //p' <<<"$y"); mkdir -p "$d/secrets"
-    sed -n 's/^client-secret: //p' <<<"$y" | base64 -d > "$d/secrets/$n"; echo "secret/$n configured" ;;
-  *" delete secret "*" -n ai-grid-idp-secrets --ignore-not-found "*) rm -f "$d/secrets/$3" ;;
+  *" apply --server-side --force-conflicts -f - "*) y=$(cat); n=$(sed -n 's/^name: //p' <<<"$y"); mkdir -p "$d/secrets"
+    sed -n 's/^client-secret: //p' <<<"$y" | base64 -d > "$d/secrets/$n"; echo "secret/$n serverside-applied" ;;
+  *" delete secret "*" -n $idp --ignore-not-found "*) rm -f "$d/secrets/$3" ;;
   *) echo "stub oc: unexpected: $*" >&2; exit 2 ;;
 esac
 STUB
@@ -164,7 +172,9 @@ case "$m $url" in
     p=${url#"$kc/admin/realms/"}; r=${p%%/*}; u=${p#*/users/}; u=${u%%/*}
     jq -e --arg u "$u" 'any(.users[]; .id == $u)' "$d/realms/$r.json" >/dev/null || reply 404 '{"error":"User not found"}'
     cp "${data#@}" "$d/reset-$r-$u.json"; reply 204 '' ;;
-  "DELETE $kc/admin/realms/saas/users/"*) echo "${url##*/}" >> "$d/deleted-users"; reply 204 '' ;;
+  "DELETE $kc/admin/realms/saas/users/"*)
+    u=${url##*/}; echo "user $u" >> "$d/events"; [ ! -f "$d/gone-$u" ] || reply 404 '{"error":"User not found"}'
+    echo "$u" >> "$d/deleted-users"; reply 204 '' ;;
   "DELETE $kc/admin/realms/"*)
     r=${url##*/}; [ -f "$d/realms/$r.json" ] || reply 404 '{"error":"Realm not found."}'; rm "$d/realms/$r.json"; reply 204 '' ;;
   "POST https://console.apps.hub.example.com/ai_grid.v1.Tenants/List")
@@ -176,9 +186,13 @@ case "$m $url" in
     reply 200 "$(jq -c '{object: .}' "$d/orgs/$n.json")" ;;
   "POST https://console.apps.hub.example.com/ai_grid.v1.Tenants/ListMembers")
     id=$(jq -r .id <<<"$data"); n=${id#id-}
-    reply 200 "{\"items\":[{\"id\":\"user-$n\",\"email\":\"alice@$n.test\"},{\"id\":\"user-elsewhere\",\"email\":\"dave@elsewhere.test\"}]}" ;;
+    [ ! -f "$d/members-$n.json" ] || reply 200 "$(cat "$d/members-$n.json")"
+    case "$n" in grid-tenant-1) u=11111111 ;; *) u=22222222 ;; esac
+    reply 200 "{\"items\":[{\"id\":\"$u-1111-4111-8111-111111111111\",\"email\":\"Alice@$n.test\"},
+      {\"id\":\"33333333-1111-4111-8111-111111111111\",\"email\":\"erin@$n.example\"},
+      {\"id\":\"99999999-1111-4111-8111-111111111111\",\"email\":\"dave@elsewhere.test\"}]}" ;;
   "POST https://console.apps.hub.example.com/ai_grid.v1.Tenants/Delete")
-    id=$(jq -r .id <<<"$data"); n=${id#id-}; echo "$data" >> "$d/deleted-orgs"; rm "$d/orgs/$n.json"; reply 200 '{}' ;;
+    id=$(jq -r .id <<<"$data"); n=${id#id-}; echo "$data" >> "$d/deleted-orgs"; echo "org $id" >> "$d/events"; rm "$d/orgs/$n.json"; reply 200 '{}' ;;
   *) echo "stub curl: unexpected: $m $url" >&2; exit 2 ;;
 esac
 STUB
@@ -193,8 +207,9 @@ TOK="$D/.config/provider-admin-token"; (umask 077; printf '%s\n' "$FAKE_SA" > "$
 PW="$D/.config/test-tenants"
 mode() { stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1"; }
 
-run() { # [ARGS]: runs test-tenants.sh with the stubs reading $W; sets rc and out
-  out=$(env PATH="$T/bin:$PATH" STUB_DIR="$W" LIBRARY="$T/lib" "$D/scripts/test-tenants.sh" "$@" 2>&1) && rc=0 || rc=$?
+ENVS=()
+run() { # [ARGS]: runs test-tenants.sh with the stubs reading $W, and ENVS; sets rc and out
+  out=$(env PATH="$T/bin:$PATH" STUB_DIR="$W" LIBRARY="$T/lib" ${ENVS[@]+"${ENVS[@]}"} "$D/scripts/test-tenants.sh" "$@" 2>&1) && rc=0 || rc=$?
 }
 # Every secret the run saw: the fakes' credentials, the passwords and client secrets.
 leaks() {
@@ -273,14 +288,25 @@ t "rerun with a password file gone: new passwords for that realm's users" 0 "rea
   '[ ! -f "$W/reset-grid-tenant-1-idp-id-alice-1.json" ]'
 
 run --clean
-t "CLEAN: deletes the organizations, their users, the Secrets, the realms and the password files" 0 \
-  "organization grid-tenant-1: deleted \(1 of its users deleted from realm saas\)" \
-  'grep -q "realm grid-tenant-2-idp: deleted" <<<"$out"' \
+t "CLEAN: a preview, deleting nothing" 0 "organization grid-tenant-1 \(id id-grid-tenant-1\): would delete it, and its 1 users from realm saas" \
+  'grep -q "organization grid-tenant-2 (id id-grid-tenant-2): would delete it, and its 2 users from realm saas" <<<"$out"' \
+  'grep -q "Secret ai-grid-idp-secrets/grid-tenant-1-idp: would delete it" <<<"$out"' \
+  'grep -q "realm grid-tenant-2-idp: would delete it" <<<"$out"' 'grep -q "password files .*grid-tenant-1-idp: would delete them" <<<"$out"' \
+  'grep -q "CLEAN=1 CONFIRM=1 would delete" <<<"$out"' \
+  '[ ! -f "$W/events" ]' '[ "$(find "$W/realms" "$W/orgs" "$W/secrets" -type f | wc -l | tr -d " ")" = 6 ]' \
+  '[ -s "$PW/grid-tenant-1-idp/alice" ]' '! grep -q "Tenants/Delete\|-X DELETE" "$W/curl.log"' '! grep -q "oc delete" "$W/oc.log"'
+run --clean --confirm
+t "CLEAN CONFIRM: deletes the users, then the organizations, the Secrets, the realms and the password files" 0 \
+  "organization grid-tenant-1: deleted, and 1 of its users from realm saas" \
+  'grep -q "organization grid-tenant-2: deleted, and 2 of its users from realm saas" <<<"$out"' \
+  'grep -q "realm grid-tenant-2-idp: deleted" <<<"$out"' 'grep -q "Secret ai-grid-idp-secrets/grid-tenant-1-idp: deleted" <<<"$out"' \
   'grep -qxF "{\"id\":\"id-grid-tenant-1\",\"version\":1}" "$W/deleted-orgs"' \
-  '[ "$(sort "$W/deleted-users" | tr "\n" " ")" = "user-grid-tenant-1 user-grid-tenant-2 " ]' \
+  '[ "$(tr "\n" " " < "$W/events")" = "user 11111111-1111-4111-8111-111111111111 org id-grid-tenant-1 user 22222222-1111-4111-8111-111111111111 user 33333333-1111-4111-8111-111111111111 org id-grid-tenant-2 " ]' \
+  '! grep -q 99999999 "$W/events"' \
   '[ -z "$(find "$W/realms" "$W/orgs" "$W/secrets" -type f)" ]' '[ ! -e "$PW/grid-tenant-1-idp" ] && [ ! -e "$PW/grid-tenant-2-idp" ]'
-run --clean
-t "CLEAN again: nothing to delete" 0 "organization grid-tenant-1: none" 'grep -q "realm grid-tenant-1-idp: none" <<<"$out"'
+run --clean --confirm
+t "CLEAN CONFIRM again: nothing to delete" 0 "organization grid-tenant-1: none" 'grep -q "realm grid-tenant-1-idp: none" <<<"$out"' \
+  'grep -q "Secret ai-grid-idp-secrets/grid-tenant-2-idp: none" <<<"$out"'
 run
 t "create after CLEAN: all new again" 0 "organization grid-tenant-2: created" '[ "$(grep -c . "$W/imports")" = 4 ]'
 
@@ -334,11 +360,76 @@ done
 W="$T/default"; mkdir -p "$W"; printf 'keycloakOverlay=default\n' > "$D/root/inputs.env"; run
 t "keycloakOverlay=default: refuses, the examples are already there" 1 "keycloakOverlay is default .*make test-tenants is for keycloakOverlay=core" \
   '[ ! -f "$W/curl.log" ]'
-run --clean
+run --clean --confirm
 t "  ... CLEAN too: never deletes the library's realms" 1 "keycloakOverlay is default" '[ ! -f "$W/curl.log" ]'
 printf 'keycloakOverlay=core\n' > "$D/root/inputs.env"
 
 W="$T/usage"; mkdir -p "$W"; run --bogus
-t "an unknown argument: usage" 2 "usage: test-tenants.sh \[--clean\]"
+t "an unknown argument: usage" 2 "usage: test-tenants.sh \[--clean \[--confirm\]\]"
+run --confirm
+t "  ... --confirm alone: usage" 2 "usage: test-tenants.sh"
+
+fresh() { W="$T/$1"; mkdir -p "$W"; rm -rf "$PW"; run >/dev/null; [ "$rc" = 0 ] || { echo "setup of $1 failed: $out"; exit 1; }; }
+
+# CLEAN counts only the users it deleted: a 404 is one already gone.
+fresh gone; touch "$W/gone-22222222-1111-4111-8111-111111111111"; run --clean --confirm
+t "CLEAN CONFIRM: a user already gone (404) isn't counted, and isn't an error" 0 \
+  "organization grid-tenant-2: deleted, and 1 of its users from realm saas"
+
+# An organization of that name whose identity provider isn't the test realm: kept, with its Secret.
+fresh foreign; jq -c '.spec.identityProvider.config.issuer = "https://idp.example.com/acme"' "$W/orgs/grid-tenant-1.json" > "$W/o" && mv "$W/o" "$W/orgs/grid-tenant-1.json"
+run
+t "create: an organization with another issuer is reported, not changed" 0 \
+  "organization grid-tenant-1: exists, id id-grid-tenant-1, but its identity provider's issuer isn't $KC/realms/grid-tenant-1-idp"
+run --clean
+t "CLEAN preview: an organization with another issuer would be kept" 0 \
+  "organization grid-tenant-1: kept, with Secret ai-grid-idp-secrets/grid-tenant-1-idp: its identity provider's issuer isn't $KC/realms/grid-tenant-1-idp"
+run --clean --confirm
+t "CLEAN CONFIRM: that organization and its Secret stay; the rest goes" 0 "organization grid-tenant-1: kept" \
+  '[ -f "$W/orgs/grid-tenant-1.json" ] && [ -f "$W/secrets/grid-tenant-1-idp" ]' '! grep -q "id-grid-tenant-1" "$W/deleted-orgs"' \
+  '! grep -q "user 11111111-" "$W/events"' '[ ! -f "$W/realms/grid-tenant-1-idp.json" ]' 'grep -q "organization grid-tenant-2: deleted" <<<"$out"'
+
+# A member id that isn't a UUID never reaches a URL.
+fresh baduuid; printf '{"items":[{"id":"../../realms/saas","email":"alice@grid-tenant-1.test"}]}' > "$W/members-grid-tenant-1.json"
+run --clean --confirm
+t "CLEAN CONFIRM: a member id that isn't a UUID stops it, deleting nothing" 1 "member id\(s\) of grid-tenant-1 that aren't UUIDs: deleting nothing" \
+  '[ ! -f "$W/events" ]' '[ -f "$W/orgs/grid-tenant-1.json" ]' '! grep -q "\.\./" "$W/curl.log"'
+
+# The identity provider Secret namespace: the console backend's setting, else the default; IDP_SECRETS_NAMESPACE wins.
+W="$T/idp-ns"; mkdir -p "$W"; rm -rf "$PW"; printf custom-idp > "$W/idp-ns"; run
+t "the Secret goes to the console backend's AI_GRID_IDP_SECRET_NAMESPACE" 0 "organization grid-tenant-1: created" \
+  'grep -q "create secret generic grid-tenant-1-idp -n custom-idp " "$W/oc.log"'
+W="$T/idp-ns-env"; mkdir -p "$W"; rm -rf "$PW"; printf custom-idp > "$W/idp-ns"; ENVS=(IDP_SECRETS_NAMESPACE=other-idp); run
+t "  ... IDP_SECRETS_NAMESPACE overrides it" 1 "no namespace other-idp on hub for identity provider secrets" \
+  '! grep -q "Tenants/Create" "$W/curl.log"'
+ENVS=()
+
+# options.KEYCLOAK_NAMESPACE and KEYCLOAK_REALM in clusters.yaml apply (deployment_load).
+cp "$D/clusters.yaml" "$T/clusters.bak"
+printf 'options: {KEYCLOAK_NAMESPACE: kc-test, KEYCLOAK_REALM: brokers}\n' >> "$D/clusters.yaml"
+fresh options-kc; run --clean --confirm
+t "options.KEYCLOAK_NAMESPACE and KEYCLOAK_REALM from clusters.yaml apply" 0 "of its users from realm brokers" \
+  'grep -q "get route keycloak -n kc-test " "$W/oc.log"' 'grep -q "extract secret/keycloak-secrets -n kc-test " "$W/oc.log"' \
+  '! grep -q " -n maas-db " "$W/oc.log"'
+cp "$T/clusters.bak" "$D/clusters.yaml"
+
+# Upstream's own realm files, when a library checkout is at hand (LIBRARY_CHECKOUT, else the
+# repository's .library/): the transform leaves no placeholder, no java-keystore key, and the users the library documents.
+real=${LIBRARY_CHECKOUT:-$SRC/.library}
+if [ -f "$real/apps/keycloak/components/examples/grid-tenant-2-idp-realm.json" ]; then
+  W="$T/real-lib"; mkdir -p "$W"; rm -rf "$PW"; cp "$real/apps/keycloak/components/examples/"grid-tenant-*-idp-realm.json "$L/components/examples/"
+  cp "$real/apps/keycloak/base/manifests/scripts/render-realm.sh" "$L/base/manifests/scripts/render-realm.sh"
+  git -C "$T/lib" add -A && git -c core.hooksPath=/dev/null -C "$T/lib" commit -qm real
+  sed -i.bak -E "s#(libraryRevision: &libraryRevision )[0-9a-f]+#\1$(git -C "$T/lib" rev-parse HEAD)#" "$D/root/applicationset.yaml"
+  run
+  t "upstream's realm files ($real): imported with no placeholder and no java-keystore key, with the documented users" 0 "realm grid-tenant-2-idp: created" \
+    '! grep -q "\${" "$W/realms/grid-tenant-1-idp.json" "$W/realms/grid-tenant-2-idp.json"' \
+    '! grep -q java-keystore "$W/realms/grid-tenant-1-idp.json" "$W/realms/grid-tenant-2-idp.json"' \
+    '[ "$(jq -r "[.users[].username] | join(\" \")" "$W/realms/grid-tenant-1-idp.json")" = alice ]' \
+    '[ "$(jq -r "[.users[].username] | sort | join(\" \")" "$W/realms/grid-tenant-2-idp.json")" = "alice bob carol" ]' \
+    'jq -e "[.clients[] | select(.clientId == \"saas-broker\") | .redirectUris[]] == [\"'"$KC"'/realms/saas/broker/grid-tenant-2/endpoint\"]" "$W/realms/grid-tenant-2-idp.json" >/dev/null'
+else
+  echo "   skip upstream's realm files: no library checkout at $real (set LIBRARY_CHECKOUT)"
+fi
 
 echo "test-tenants tests: $((total-fails)) ok, $fails failed"; exit "$fails"
