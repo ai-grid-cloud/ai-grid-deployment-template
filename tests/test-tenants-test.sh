@@ -143,6 +143,7 @@ for a in "$@"; do
   prev=$a
 done
 reply() { printf '%s' "$2" > "$out"; printf '%s' "$1"; exit 0; }
+users() { if [ -f "$d/saas-users.json" ]; then echo "$d/saas-users.json"; else echo "$DEFAULT_USERS"; fi; }
 kc=https://keycloak.apps.hub.example.com
 case "$url" in
   "$kc/admin/realms"*) [ "$hdr" = "Authorization: Bearer $FAKE_KC" ] || reply 401 '{"error":"HTTP 401 Unauthorized"}' ;;
@@ -166,13 +167,21 @@ case "$m $url" in
   "GET $kc/admin/realms/"*"/client-secret")
     r=${url#"$kc/admin/realms/"}; r=${r%%/*}
     reply 200 "$(jq -c '{type: "secret", value: (.clients[] | select(.clientId == "saas-broker") | .secret)}' "$d/realms/$r.json")" ;;
+  "GET $kc/admin/realms/"*"/users?email=%40"*)
+    # Keycloak's email search: a case-insensitive substring match.
+    q=${url#*email=%40}; q=${q%%&*}; echo "search $q" >> "$d/searches"
+    reply 200 "$(jq -c --arg q "$q" '[.[] | select(.email | ascii_downcase | contains($q | ascii_downcase)) | {id, email}]' "$(users)")" ;;
+  "GET $kc/admin/realms/"*"/federated-identity")
+    u=${url%/federated-identity}; u=${u##*/}
+    jq -e --arg u "$u" 'any(.[]; .id == $u)' "$(users)" >/dev/null || reply 404 '{"error":"User not found"}'
+    reply 200 "$(jq -c --arg u "$u" '[.[] | select(.id == $u) | .idps[] | {identityProvider: ., userId: "upstream", userName: "x"}]' "$(users)")" ;;
   "GET $kc/admin/realms/"*)
     r=${url##*/}; [ -f "$d/realms/$r.json" ] && reply 200 "{\"realm\":\"$r\"}"; reply 404 '{"error":"Realm not found."}' ;;
   "PUT $kc/admin/realms/"*"/reset-password")
     p=${url#"$kc/admin/realms/"}; r=${p%%/*}; u=${p#*/users/}; u=${u%%/*}
     jq -e --arg u "$u" 'any(.users[]; .id == $u)' "$d/realms/$r.json" >/dev/null || reply 404 '{"error":"User not found"}'
     cp "${data#@}" "$d/reset-$r-$u.json"; reply 204 '' ;;
-  "DELETE $kc/admin/realms/saas/users/"*)
+  "DELETE $kc/admin/realms/"*"/users/"*)
     u=${url##*/}; echo "user $u" >> "$d/events"; [ ! -f "$d/gone-$u" ] || reply 404 '{"error":"User not found"}'
     echo "$u" >> "$d/deleted-users"; reply 204 '' ;;
   "DELETE $kc/admin/realms/"*)
@@ -185,18 +194,28 @@ case "$m $url" in
     jq -c --arg id "id-$n" '.object | .id = $id | .metadata.version = 1' <<<"$data" > "$d/orgs/$n.json"
     reply 200 "$(jq -c '{object: .}' "$d/orgs/$n.json")" ;;
   "POST https://console.apps.hub.example.com/ai_grid.v1.Tenants/ListMembers")
-    id=$(jq -r .id <<<"$data"); n=${id#id-}
-    [ ! -f "$d/members-$n.json" ] || reply 200 "$(cat "$d/members-$n.json")"
-    case "$n" in grid-tenant-1) u=11111111 ;; *) u=22222222 ;; esac
-    reply 200 "{\"items\":[{\"id\":\"$u-1111-4111-8111-111111111111\",\"email\":\"Alice@$n.test\"},
-      {\"id\":\"33333333-1111-4111-8111-111111111111\",\"email\":\"erin@$n.example\"},
-      {\"id\":\"99999999-1111-4111-8111-111111111111\",\"email\":\"dave@elsewhere.test\"}]}" ;;
+    # As the console: it doesn't expose member lists.
+    touch "$d/listmembers-called"; reply 404 '{"code":"not_found","message":"this procedure is not exposed by the console"}' ;;
   "POST https://console.apps.hub.example.com/ai_grid.v1.Tenants/Delete")
     id=$(jq -r .id <<<"$data"); n=${id#id-}; echo "$data" >> "$d/deleted-orgs"; echo "org $id" >> "$d/events"; rm "$d/orgs/$n.json"; reply 200 '{}' ;;
   *) echo "stub curl: unexpected: $m $url" >&2; exit 2 ;;
 esac
 STUB
 chmod +x "$T/bin/oc" "$T/bin/curl"
+
+# Realm saas's users, for CLEAN: each with its email and the identity providers it's linked to.
+# Deleted only with both an email in the organization's domains and a link to its identity provider.
+DEFAULT_USERS="$T/saas-users.json"; export DEFAULT_USERS
+cat > "$DEFAULT_USERS" <<'EOF'
+[
+  {"id": "11111111-1111-4111-8111-111111111111", "email": "alice@grid-tenant-1.test", "idps": ["grid-tenant-1"]},
+  {"id": "22222222-1111-4111-8111-111111111111", "email": "Alice@grid-tenant-2.test", "idps": ["grid-tenant-2"]},
+  {"id": "33333333-1111-4111-8111-111111111111", "email": "erin@grid-tenant-2.example", "idps": ["grid-tenant-2"]},
+  {"id": "44444444-1111-4111-8111-111111111111", "email": "mallory@grid-tenant-1.test", "idps": ["other-idp"]},
+  {"id": "55555555-1111-4111-8111-111111111111", "email": "bob@grid-tenant-2.test", "idps": []},
+  {"id": "99999999-1111-4111-8111-111111111111", "email": "dave@elsewhere.test", "idps": ["grid-tenant-1"]}
+]
+EOF
 
 # --- The deployment repository.
 D="$T/repo"; mkdir -p "$D/root" "$D/.config/hub"; cp -R "$SRC/scripts" "$D/"; : > "$D/.config/hub/kubeconfig"
@@ -294,6 +313,9 @@ t "CLEAN: a preview, deleting nothing" 0 "organization grid-tenant-1 \(id id-gri
   'grep -q "Secret ai-grid-idp-secrets/grid-tenant-1-idp: would delete it" <<<"$out"' \
   'grep -q "realm grid-tenant-2-idp: would delete it" <<<"$out"' 'grep -q "password files .*grid-tenant-1-idp: would delete them" <<<"$out"' \
   'grep -q "CLEAN=1 CONFIRM=1 would delete" <<<"$out"' \
+  'grep -q "its 1 users from realm saas: alice@grid-tenant-1.test$" <<<"$out"' \
+  'grep -q "its 2 users from realm saas: Alice@grid-tenant-2.test erin@grid-tenant-2.example$" <<<"$out"' \
+  '! grep -q "mallory\|bob@\|dave@" <<<"$out"' '[ ! -f "$W/listmembers-called" ]' \
   '[ ! -f "$W/events" ]' '[ "$(find "$W/realms" "$W/orgs" "$W/secrets" -type f | wc -l | tr -d " ")" = 6 ]' \
   '[ -s "$PW/grid-tenant-1-idp/alice" ]' '! grep -q "Tenants/Delete\|-X DELETE" "$W/curl.log"' '! grep -q "oc delete" "$W/oc.log"'
 run --clean --confirm
@@ -303,7 +325,8 @@ t "CLEAN CONFIRM: deletes the users, then the organizations, the Secrets, the re
   'grep -q "realm grid-tenant-2-idp: deleted" <<<"$out"' 'grep -q "Secret ai-grid-idp-secrets/grid-tenant-1-idp: deleted" <<<"$out"' \
   'grep -qxF "{\"id\":\"id-grid-tenant-1\",\"version\":1}" "$W/deleted-orgs"' \
   '[ "$(tr "\n" " " < "$W/events")" = "user 11111111-1111-4111-8111-111111111111 org id-grid-tenant-1 user 22222222-1111-4111-8111-111111111111 user 33333333-1111-4111-8111-111111111111 org id-grid-tenant-2 " ]' \
-  '! grep -q 99999999 "$W/events"' \
+  '! grep -qE "user (44444444|55555555|99999999)-" "$W/events"' \
+  'grep -qx "search grid-tenant-2.example" "$W/searches"' '[ ! -f "$W/listmembers-called" ]' \
   '[ -z "$(find "$W/realms" "$W/orgs" "$W/secrets" -type f)" ]' '[ ! -e "$PW/grid-tenant-1-idp" ] && [ ! -e "$PW/grid-tenant-2-idp" ]'
 run --clean --confirm
 t "CLEAN CONFIRM again: nothing to delete" 0 "organization grid-tenant-1: none" 'grep -q "realm grid-tenant-1-idp: none" <<<"$out"' \
@@ -408,10 +431,22 @@ run --clean --confirm
 t "CLEAN CONFIRM: members only of the organization's own domains (Tenants/List), not the library's" 0 \
   "organization grid-tenant-2: deleted, and 1 of its users from realm saas" '! grep -q "user 33333333-" "$W/events"'
 
-# A member id that isn't a UUID never reaches a URL.
-fresh baduuid; printf '{"items":[{"id":"../../realms/saas","email":"alice@grid-tenant-1.test"}]}' > "$W/members-grid-tenant-1.json"
+# Members come from Keycloak, never from the console, which doesn't expose Tenants/ListMembers.
+fresh no-listmembers; run --clean; run --clean --confirm
+t "CLEAN, preview and CONFIRM: never calls Tenants/ListMembers" 0 "organization grid-tenant-1: deleted" \
+  '[ ! -f "$W/listmembers-called" ]' '! grep -q "Tenants/ListMembers" "$W/curl.log"'
+
+# No users left to delete (the backend may delete them with the organization): normal.
+fresh none-left; printf '[]' > "$W/saas-users.json"; run --clean
+t "CLEAN preview with no users of the organization: says so" 0 "organization grid-tenant-1 \(id id-grid-tenant-1\): would delete it; no users of it in realm saas"
 run --clean --confirm
-t "CLEAN CONFIRM: a member id that isn't a UUID stops it, deleting nothing" 1 "member id\(s\) of grid-tenant-1 that aren't UUIDs: deleting nothing" \
+t "CLEAN CONFIRM with no users of the organization: none left, not an error" 0 \
+  "organization grid-tenant-1: deleted; none of its users left in realm saas" '[ ! -f "$W/deleted-users" ]'
+
+# A member id that isn't a UUID never reaches a URL.
+fresh baduuid; printf '[{"id":"../../realms/saas","email":"alice@grid-tenant-1.test","idps":["grid-tenant-1"]}]' > "$W/saas-users.json"
+run --clean --confirm
+t "CLEAN CONFIRM: a user id that isn't a UUID stops it, deleting nothing" 1 "a user id in realm saas that isn't a UUID: deleting nothing" \
   '[ ! -f "$W/events" ]' '[ -f "$W/orgs/grid-tenant-1.json" ]' '! grep -q "\.\./" "$W/curl.log"'
 
 # The identity provider Secret namespace: the console backend's setting, else the default; IDP_SECRETS_NAMESPACE wins.

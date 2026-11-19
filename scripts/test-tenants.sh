@@ -38,11 +38,12 @@
 # files, it sets new passwords for the file's users.
 #
 # --clean lists, and with --confirm deletes, for each tenant: the users that
-# signed in through the organization (its members with an email in one of its
-# domains) from realm saas, the organization (provider API), the Secret, the
-# realm, and the password files. It deletes an organization only when its
-# identity provider's issuer is the test realm's, and otherwise keeps it and its
-# Secret and says why. Without --clean nothing is deleted.
+# signed in through the organization (in realm saas, with an email in one of
+# its domains and a link to its identity provider, found with Keycloak's admin
+# API; the console doesn't list members), the organization (provider API), the
+# Secret, the realm, and the password files. It deletes an organization only
+# when its identity provider's issuer is the test realm's, and otherwise keeps
+# it and its Secret and says why. Without --clean nothing is deleted.
 #
 # Inputs: clusters.yaml, the hub's login (make login), the provider-admin token
 # (.config/provider-admin-token), and the library (scripts/library.sh). The
@@ -184,27 +185,44 @@ for n in 1 2; do
       summary+=("organization $org: kept, with Secret $idp_ns/$secret: its identity provider's issuer isn't $issuer, so it isn't a test organization")
     else
       id=$(jq -r .id <<<"$o") version=$(jq -r '.metadata.version // 1' <<<"$o")
-      api Tenants/ListMembers "$(jq -cn --arg id "$id" '{id: $id, limit: 1000}')"
-      # Only members with an email in one of the organization's own domains (as
-      # Tenants/List has them): the users that signed in through its identity provider.
-      jq -r --argjson ds "$(jq -c '[.spec.domains[]? | "@" + ascii_downcase]' <<<"$o")" \
-        '.items[]? | select((.email // "") | ascii_downcase as $e | any($ds[]; . as $s | $e | endswith($s))) | .id' \
-        "$tmp/api.json" > "$tmp/members"
-      bad=$(grep -cvE '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' "$tmp/members" || true)
-      [ "$bad" = 0 ] || die "the provider API listed $bad member id(s) of $org that aren't UUIDs: deleting nothing"
+      # The users that signed in through the organization, from Keycloak: an
+      # email in one of the organization's own domains (Tenants/List) and a
+      # link to its identity provider (alias: the organization's name). They're
+      # found before the organization goes, because deleting its identity
+      # provider also deletes those links. The console doesn't list members.
+      kc_login; : > "$tmp/candidates"; : > "$tmp/members"
+      for d in $(jq -r '.spec.domains[]?' <<<"$o"); do
+        [[ "$d" =~ ^[A-Za-z0-9.-]+$ ]] || die "organization $org has a domain that isn't a hostname: deleting nothing"
+        kc GET "/$saas/users?email=%40$d&exact=false&briefRepresentation=true&max=1000"
+        [ "$code" = 200 ] || kc_fail "find the users of domain $d in realm $saas"
+        jq -r --arg s "@$d" '.[]? | select((.email // "") | ascii_downcase | endswith($s | ascii_downcase)) | "\(.id) \(.email)"' \
+          "$tmp/kc.json" >> "$tmp/candidates"
+      done
+      sort -u -o "$tmp/candidates" "$tmp/candidates"
+      while read -r uid email; do
+        [ -n "$uid" ] || continue
+        is_uuid "$uid" || die "Keycloak listed a user id in realm $saas that isn't a UUID: deleting nothing"
+        kc GET "/$saas/users/$uid/federated-identity"
+        case "$code" in
+          200) ! jq -e --arg a "$org" 'any(.[]?; .identityProvider == $a)' "$tmp/kc.json" >/dev/null || echo "$uid $email" >> "$tmp/members" ;;
+          404) ;;
+          *) kc_fail "read the identity provider links of user $uid in realm $saas" ;;
+        esac
+      done < "$tmp/candidates"
       count=$(grep -c . "$tmp/members" || true)
       if [ -z "$confirm" ]; then
-        summary+=("organization $org (id $id): would delete it, and its $count users from realm $saas")
+        if [ "$count" = 0 ]; then summary+=("organization $org (id $id): would delete it; no users of it in realm $saas")
+        else summary+=("organization $org (id $id): would delete it, and its $count users from realm $saas: $(cut -d' ' -f2 "$tmp/members" | paste -sd ' ' -)"); fi
       else
-        # The users first: once the organization is gone, its members can't be listed.
-        kc_login; gone=0
-        while read -r uid; do
-          is_uuid "$uid" || continue
+        # The users first: once the identity provider is gone, so are their links to it.
+        gone=0
+        while read -r uid _; do
           kc DELETE "/$saas/users/$uid"
           case "$code" in 204) gone=$((gone+1)) ;; 404) ;; *) kc_fail "delete user $uid from realm $saas" ;; esac
         done < "$tmp/members"
         api Tenants/Delete "$(jq -cn --arg id "$id" --argjson v "$version" '{id: $id, version: $v}')"
-        summary+=("organization $org: deleted, and $gone of its users from realm $saas")
+        if [ "$gone" = 0 ]; then summary+=("organization $org: deleted; none of its users left in realm $saas")
+        else summary+=("organization $org: deleted, and $gone of its users from realm $saas"); fi
       fi
     fi
     if [ -n "$foreign" ]; then :
