@@ -154,7 +154,8 @@ mkdir -p "$T/cbin"; : > "$d/.config/hub/kubeconfig"
 CONSOLE_TOKEN=$(printf '%s~%s' sha256 "fake-console-$RANDOM$RANDOM"); export CONSOLE_TOKEN   # built at runtime, not a literal
 cat > "$T/cbin/oc" <<'STUB'
 #!/bin/bash
-case "$*" in whoami) echo admin ;; "whoami -t") [ -f "$STUB_DIR/no-token" ] && exit 1; echo "$CONSOLE_TOKEN" ;; *"get route"*) echo console.apps.hub.example.com ;; esac
+case "$*" in whoami) echo admin ;; "whoami -t") [ -f "$STUB_DIR/no-token" ] && exit 1; echo "$CONSOLE_TOKEN" ;; *"get route ai-grid-provider-console -n ai-grid-provider-console "*) echo console.apps.hub.example.com ;;
+  *"get route"*) echo a.attacker.example.net ;; esac
 STUB
 cat > "$T/cbin/curl" <<'STUB'
 #!/bin/bash
@@ -168,6 +169,7 @@ t "console-call calls the console's Route" 0 "HTTP 200" env PATH="$T/cbin:$PATH"
 t "  ... with the hub login's token in a header file" 0 "Authorization: Bearer $CONSOLE_TOKEN" cat "$T/curl.log"
 t "  ... never on the command line" 1 "^0$" bash -c 'grep "^curl " "$0" | grep -cF "$1"' "$T/curl.log" "$CONSOLE_TOKEN"
 t "  ... at the console's host and method" 0 "https://console.apps.hub.example.com/ai_grid.v1.Clusters/List" cat "$T/curl.log"
+t "  ... only the console's own Route, by name" 1 "" grep -q attacker "$T/curl.log"
 t "  ... prints only the reply on stdout when piped, for jq" 0 "^org-1$" \
   bash -c 'PATH="$0:$PATH" "$1/scripts/console-call.sh" ai_grid.v1.Tenants/Create 2>/dev/null | jq -r .object.id' "$T/cbin" "$d"
 printf 403 > "$T/code"
@@ -175,6 +177,15 @@ t "  ... and fails on an error status" 1 "HTTP 403" env PATH="$T/cbin:$PATH" "$d
 rm "$T/code"
 touch "$T/no-token"
 t "console-call without a token says how to get one" 1 "make login NAME=hub" env PATH="$T/cbin:$PATH" "$d/scripts/console-call.sh" ai_grid.v1.Clusters/List
+rm "$T/no-token"
+# CONSOLE_TOKEN_FILE: another identity's token, from a file, instead of the hub login's.
+FILE_TOKEN="fake-file-$RANDOM$RANDOM"; (umask 077; printf '%s\n' "$FILE_TOKEN" > "$T/token-file"); : > "$T/curl.log"; touch "$T/no-token"
+t "console-call with CONSOLE_TOKEN_FILE calls with that token" 0 "HTTP 200" \
+  env PATH="$T/cbin:$PATH" CONSOLE_TOKEN_FILE="$T/token-file" "$d/scripts/console-call.sh" ai_grid.v1.Clusters/List
+t "  ... in a header file, without its newline" 0 "^Authorization: Bearer $FILE_TOKEN$" cat "$T/curl.log"
+t "  ... never on the command line" 1 "^0$" bash -c 'grep "^curl " "$0" | grep -cF "$1"' "$T/curl.log" "$FILE_TOKEN"
+t "  ... an empty CONSOLE_TOKEN_FILE stops" 1 "no token in CONSOLE_TOKEN_FILE" \
+  env PATH="$T/cbin:$PATH" CONSOLE_TOKEN_FILE="$T/no-such-token-file" "$d/scripts/console-call.sh" ai_grid.v1.Clusters/List
 rm "$T/no-token"
 
 # Install settings in clusters.yaml (catalog.url, options:).
