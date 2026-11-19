@@ -13,7 +13,7 @@ export QUAY_AUTH_FILE CATALOG_TOKEN_FILE LIBRARY ALLOW_GENERIC_LOGIN KEYCLOAK_NA
 
 .PHONY: help config fetch-ca login prereqs inputs check bootstrap status console-secrets console-call test test-upstream update \
   site-check site-detach site-wipe site-import site-status tenant-call \
-  empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check
+  empty-catalog uninstall-site uninstall-hub uninstall-check install provider-admin ready-check test-tenants
 
 # The site targets work on the only site in clusters.yaml; with several, set
 # SITE=NAME. Targets that change a cluster without asking preview by default;
@@ -122,3 +122,6 @@ provider-admin: ## Create the provider-admin ServiceAccount and its token
 
 ready-check: ## Check the installed end state and write .install/outputs.json; IN_USE=1 on a hub in use; read-only
 	@scripts/ready-check.sh $(if $(IN_USE),--in-use)
+
+test-tenants: ## Test deployments only: the library's example tenant realms and their organizations, through the provider API; CLEAN=1 deletes them (page 7)
+	@scripts/test-tenants.sh $(if $(filter 1,$(CLEAN)),--clean)
