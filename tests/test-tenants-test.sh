@@ -167,14 +167,19 @@ case "$m $url" in
   "GET $kc/admin/realms/"*"/client-secret")
     r=${url#"$kc/admin/realms/"}; r=${r%%/*}
     reply 200 "$(jq -c '{type: "secret", value: (.clients[] | select(.clientId == "saas-broker") | .secret)}' "$d/realms/$r.json")" ;;
-  "GET $kc/admin/realms/"*"/users?email=%40"*)
-    # Keycloak's email search: a case-insensitive substring match.
-    q=${url#*email=%40}; q=${q%%&*}; echo "search $q" >> "$d/searches"
-    reply 200 "$(jq -c --arg q "$q" '[.[] | select(.email | ascii_downcase | contains($q | ascii_downcase)) | {id, email}]' "$(users)")" ;;
+  "GET $kc/admin/realms/"*"/users?idpAlias="*)
+    # The users linked to an identity provider, a page at a time (first, max).
+    q=${url#*\?}; a=$(sed -E 's/.*idpAlias=([^&]*).*/\1/' <<<"$q"); f=$(sed -E 's/.*first=([0-9]+).*/\1/' <<<"$q"); n=$(sed -E 's/.*max=([0-9]+).*/\1/' <<<"$q")
+    echo "search $a first=$f max=$n" >> "$d/searches"
+    reply 200 "$(jq -c --arg a "$a" --argjson f "$f" --argjson n "$n" '[.[] | select(.idps | index($a)) | {id, email}] | .[$f:$f+$n]' "$(users)")" ;;
   "GET $kc/admin/realms/"*"/federated-identity")
     u=${url%/federated-identity}; u=${u##*/}
+    [ ! -f "$d/vanish-$u" ] || reply 404 '{"error":"User not found"}'
     jq -e --arg u "$u" 'any(.[]; .id == $u)' "$(users)" >/dev/null || reply 404 '{"error":"User not found"}'
     reply 200 "$(jq -c --arg u "$u" '[.[] | select(.id == $u) | .idps[] | {identityProvider: ., userId: "upstream", userName: "x"}]' "$(users)")" ;;
+  "GET $kc/admin/realms/"*"/credentials")
+    u=${url%/credentials}; u=${u##*/}
+    reply 200 "$(jq -c --arg u "$u" '[.[] | select(.id == $u) | (.creds // [])[]]' "$(users)")" ;;
   "GET $kc/admin/realms/"*)
     r=${url##*/}; [ -f "$d/realms/$r.json" ] && reply 200 "{\"realm\":\"$r\"}"; reply 404 '{"error":"Realm not found."}' ;;
   "PUT $kc/admin/realms/"*"/reset-password")
@@ -213,7 +218,10 @@ cat > "$DEFAULT_USERS" <<'EOF'
   {"id": "33333333-1111-4111-8111-111111111111", "email": "erin@grid-tenant-2.example", "idps": ["grid-tenant-2"]},
   {"id": "44444444-1111-4111-8111-111111111111", "email": "mallory@grid-tenant-1.test", "idps": ["other-idp"]},
   {"id": "55555555-1111-4111-8111-111111111111", "email": "bob@grid-tenant-2.test", "idps": []},
-  {"id": "99999999-1111-4111-8111-111111111111", "email": "dave@elsewhere.test", "idps": ["grid-tenant-1"]}
+  {"id": "99999999-1111-4111-8111-111111111111", "email": "dave@elsewhere.test", "idps": ["grid-tenant-1"]},
+  {"id": "66666666-1111-4111-8111-111111111111", "email": "eve@grid-tenant-1.test.evil.example", "idps": ["grid-tenant-1"]},
+  {"id": "77777777-1111-4111-8111-111111111111", "email": "frank@grid-tenant-1.test", "idps": ["grid-tenant-1", "other-idp"]},
+  {"id": "88888888-1111-4111-8111-111111111111", "email": "gina@grid-tenant-2.test", "idps": ["grid-tenant-2"], "creds": [{"type": "password"}]}
 ]
 EOF
 
@@ -326,7 +334,11 @@ t "CLEAN CONFIRM: deletes the users, then the organizations, the Secrets, the re
   'grep -qxF "{\"id\":\"id-grid-tenant-1\",\"version\":1}" "$W/deleted-orgs"' \
   '[ "$(tr "\n" " " < "$W/events")" = "user 11111111-1111-4111-8111-111111111111 org id-grid-tenant-1 user 22222222-1111-4111-8111-111111111111 user 33333333-1111-4111-8111-111111111111 org id-grid-tenant-2 " ]' \
   '! grep -qE "user (44444444|55555555|99999999)-" "$W/events"' \
-  'grep -qx "search grid-tenant-2.example" "$W/searches"' '[ ! -f "$W/listmembers-called" ]' \
+  'grep -qx "search grid-tenant-2 first=0 max=100" "$W/searches"' '[ ! -f "$W/listmembers-called" ]' \
+  '! grep -qE "user (66666666|77777777|88888888)-" "$W/events"' \
+  'grep -q "user frank@grid-tenant-1.test of grid-tenant-1: kept: also linked elsewhere" <<<"$out"' \
+  'grep -q "user gina@grid-tenant-2.test of grid-tenant-2: kept: has local credentials" <<<"$out"' \
+  '! grep -q "eve@" <<<"$out"' \
   '[ -z "$(find "$W/realms" "$W/orgs" "$W/secrets" -type f)" ]' '[ ! -e "$PW/grid-tenant-1-idp" ] && [ ! -e "$PW/grid-tenant-2-idp" ]'
 run --clean --confirm
 t "CLEAN CONFIRM again: nothing to delete" 0 "organization grid-tenant-1: none" 'grep -q "realm grid-tenant-1-idp: none" <<<"$out"' \
@@ -436,7 +448,8 @@ fresh no-listmembers; run --clean; run --clean --confirm
 t "CLEAN, preview and CONFIRM: never calls Tenants/ListMembers" 0 "organization grid-tenant-1: deleted" \
   '[ ! -f "$W/listmembers-called" ]' '! grep -q "Tenants/ListMembers" "$W/curl.log"'
 
-# No users left to delete (the backend may delete them with the organization): normal.
+# No users left to delete: normal, for example after someone deleted them in Keycloak. (Deleting an
+# organization deletes only its MANAGED members, and the default link is unmanaged.)
 fresh none-left; printf '[]' > "$W/saas-users.json"; run --clean
 t "CLEAN preview with no users of the organization: says so" 0 "organization grid-tenant-1 \(id id-grid-tenant-1\): would delete it; no users of it in realm saas"
 run --clean --confirm
@@ -448,6 +461,28 @@ fresh baduuid; printf '[{"id":"../../realms/saas","email":"alice@grid-tenant-1.t
 run --clean --confirm
 t "CLEAN CONFIRM: a user id that isn't a UUID stops it, deleting nothing" 1 "a user id in realm saas that isn't a UUID: deleting nothing" \
   '[ ! -f "$W/events" ]' '[ -f "$W/orgs/grid-tenant-1.json" ]' '! grep -q "\.\./" "$W/curl.log"'
+
+# Paging: one page at a time until a short page; past the cap, it stops, deleting nothing.
+fresh paging; ENVS=(TEST_TENANTS_PAGE=2); run --clean --confirm
+t "CLEAN CONFIRM: reads the users a page at a time, until a short page" 0 "organization grid-tenant-1: deleted, and 1 of its users" \
+  'grep -qx "search grid-tenant-1 first=0 max=2" "$W/searches"' 'grep -qx "search grid-tenant-1 first=2 max=2" "$W/searches"' \
+  'grep -qx "search grid-tenant-1 first=4 max=2" "$W/searches"' '! grep -q "first=6" "$W/searches"'
+fresh cap; ENVS=(TEST_TENANTS_PAGE=2 TEST_TENANTS_MAX_USERS=2); run --clean --confirm
+t "CLEAN CONFIRM: more users than the cap: stops, deleting nothing" 1 \
+  "more than 2 users are linked to identity provider grid-tenant-1 in realm saas: deleting nothing" \
+  '[ ! -f "$W/events" ]' '[ -f "$W/orgs/grid-tenant-1.json" ]'
+ENVS=()
+
+# A domain that isn't a hostname never reaches a URL.
+fresh bad-domain; jq -c '.spec.domains = ["grid-tenant-1.test&x=y"]' "$W/orgs/grid-tenant-1.json" > "$W/o" && mv "$W/o" "$W/orgs/grid-tenant-1.json"
+run --clean --confirm
+t "CLEAN CONFIRM: an organization domain that isn't a hostname stops it, deleting nothing" 1 \
+  "organization grid-tenant-1 has a domain that isn't a hostname: deleting nothing" '[ ! -f "$W/events" ]' '[ ! -f "$W/searches" ]'
+
+# A user that goes while it's read: skipped, named, not an error.
+fresh vanish; touch "$W/vanish-11111111-1111-4111-8111-111111111111"; run --clean --confirm
+t "CLEAN CONFIRM: a user gone while it's read (404) is skipped and named" 0 "user alice@grid-tenant-1.test: gone while reading it" \
+  '! grep -q "user 11111111-" "$W/events"' 'grep -q "organization grid-tenant-1: deleted; none of its users left" <<<"$out"'
 
 # The identity provider Secret namespace: the console backend's setting, else the default; IDP_SECRETS_NAMESPACE wins.
 W="$T/idp-ns"; mkdir -p "$W"; rm -rf "$PW"; printf custom-idp > "$W/idp-ns"; run
