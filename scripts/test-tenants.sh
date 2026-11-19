@@ -39,8 +39,8 @@
 # Inputs: clusters.yaml, the hub's login (make login), the provider-admin token
 # (.config/provider-admin-token), and the library (scripts/library.sh). The
 # Keycloak admin's credential is read from Secret keycloak-secrets in
-# KEYCLOAK_NAMESPACE (default maas-db) into a temporary file, and used only to
-# sign in. KEYCLOAK_REALM (default saas) is the broker realm.
+# KEYCLOAK_NAMESPACE (default maas-db) into a temporary file, and sent only to
+# the host of Route keycloak there. KEYCLOAK_REALM (default saas) is the broker realm.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/clusters.sh"
@@ -77,9 +77,16 @@ kc_ns=${KEYCLOAK_NAMESPACE:-maas-db} saas=${KEYCLOAK_REALM:-saas} idp_ns=${IDP_S
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 chmod 700 "$tmp"
 
-kc_url=$(oc get configmap keycloak-public-url -n "$kc_ns" -o jsonpath='{.data.KEYCLOAK_PUBLIC_URL}' 2>/dev/null || true)
-[ -n "$kc_url" ] || die "no ConfigMap $kc_ns/keycloak-public-url on $hub: Keycloak isn't installed yet (see make status)"
-kc_url=${kc_url%/}
+# The admin credential goes only to the keycloak Route's host, by name. The
+# public URL the realms name (ConfigMap keycloak-public-url, Keycloak's
+# KC_HOSTNAME) must be that host over https, or nothing is sent.
+kc_host=$(oc get route keycloak -n "$kc_ns" -o jsonpath='{.spec.host}' 2>/dev/null || true)
+[ -n "$kc_host" ] || die "no Route $kc_ns/keycloak on $hub: Keycloak isn't installed yet (see make status)"
+kc_url="https://$kc_host"
+public_url=$(oc get configmap keycloak-public-url -n "$kc_ns" -o jsonpath='{.data.KEYCLOAK_PUBLIC_URL}' 2>/dev/null || true)
+[ -n "$public_url" ] || die "no ConfigMap $kc_ns/keycloak-public-url on $hub: Keycloak isn't ready yet (see make status)"
+[ "${public_url%/}" = "$kc_url" ] ||
+  die "Keycloak's public URL in ConfigMap $kc_ns/keycloak-public-url isn't $kc_url, its Route's host over https: test-tenants sends nothing"
 mkdir -p "$tmp/admin"
 oc extract secret/keycloak-secrets -n "$kc_ns" --keys=KC_BOOTSTRAP_ADMIN_USERNAME,KC_BOOTSTRAP_ADMIN_PASSWORD \
   --to="$tmp/admin" >/dev/null 2>&1 || die "can't read Keycloak's admin credential from Secret $kc_ns/keycloak-secrets on $hub"

@@ -103,8 +103,9 @@ d=$STUB_DIR; echo "oc $*" >> "$d/oc.log"; a=" $* "
 to() { local x; for x in "$@"; do case "$x" in --to=*) echo "${x#--to=}" ;; esac; done; }
 case "$a" in
   *" whoami "*) echo admin ;;
-  *" get route "*) printf console.apps.hub.example.com ;;
-  *" get configmap keycloak-public-url -n maas-db "*) [ -f "$d/no-keycloak" ] || printf 'https://keycloak.apps.hub.example.com/' ;;
+  *" get route keycloak -n maas-db "*) [ -f "$d/no-keycloak" ] || printf keycloak.apps.hub.example.com ;;
+  *" get route ai-grid-provider-console -n ai-grid-provider-console "*) printf console.apps.hub.example.com ;;
+  *" get configmap keycloak-public-url -n maas-db "*) cat "$d/public-url" 2>/dev/null || printf 'https://keycloak.apps.hub.example.com/' ;;
   *" extract secret/keycloak-secrets -n maas-db "*)
     t=$(to "$@"); printf admin > "$t/KC_BOOTSTRAP_ADMIN_USERNAME"; printf '%s' "$FAKE_ADMIN" > "$t/KC_BOOTSTRAP_ADMIN_PASSWORD" ;;
   *" extract secret/grid-tenant-"*"-idp -n ai-grid-idp-secrets --keys=client-secret "*)
@@ -320,7 +321,15 @@ t "a Keycloak error: stops, naming the step, the code and Keycloak's message" 1 
   '[ ! -e "$PW/grid-tenant-1-idp" ]' '! grep -q Tenants/Create "$W/curl.log"'
 
 W="$T/no-keycloak"; mkdir -p "$W"; touch "$W/no-keycloak"; run
-t "no Keycloak yet: stops with the friendly message" 1 "no ConfigMap maas-db/keycloak-public-url on hub"
+t "no Keycloak yet: stops with the friendly message" 1 "no Route maas-db/keycloak on hub"
+
+# The admin credential goes only to the keycloak Route's host: a public URL elsewhere, or over http, stops before it's sent.
+for u in https://keycloak.attacker.example.net http://keycloak.apps.hub.example.com; do
+  W="$T/public-url-${u%%:*}"; mkdir -p "$W"; printf '%s' "$u" > "$W/public-url"; run
+  t "public URL $u, not the Route's https host: stops, sends nothing" 1 \
+    "public URL in ConfigMap maas-db/keycloak-public-url isn't https://keycloak.apps.hub.example.com, its Route's host over https" \
+    '! grep -q "openid-connect/token" "$W/curl.log" 2>/dev/null' '! grep -q "extract secret/keycloak-secrets" "$W/oc.log"'
+done
 
 W="$T/default"; mkdir -p "$W"; printf 'keycloakOverlay=default\n' > "$D/root/inputs.env"; run
 t "keycloakOverlay=default: refuses, the examples are already there" 1 "keycloakOverlay is default .*make test-tenants is for keycloakOverlay=core" \
