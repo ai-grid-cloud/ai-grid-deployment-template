@@ -25,11 +25,14 @@ The **Monitoring** page shows the hub's dashboards. If it can't load them, see
 
 ## 2. Create an organization
 
-What you do here depends on `keycloakOverlay` in `root/inputs.env`
+What you do here depends on the deployment and on `keycloakOverlay` in `root/inputs.env`
 ([set your names](02-repositories.md#4-set-your-names)):
 
-- **`core`:** create an organization and link its own identity provider. Its users sign in there.
-- **`default`, on a test deployment:** the library's example organizations `grid-tenant-1` and `grid-tenant-2`
+- **A real deployment (`core`):** create an organization and link its own identity provider, as the steps below
+  describe. Its users sign in there.
+- **A test deployment with `core`:** run `make test-tenants` instead, as
+  [create test organizations](#create-test-organizations) describes, and use `grid-tenant-1`.
+- **A test deployment with `default`:** the library's example organizations `grid-tenant-1` and `grid-tenant-2`
   already exist, with test users. Skip to [3. Deploy a model](#3-deploy-a-model) and use `grid-tenant-1`.
 
 If you switched from `core` to `default` after the hub was installed, the example organizations aren't there until
@@ -46,6 +49,39 @@ To create an organization:
 4. In **Review**, click **Create organization**.
 
 You should see the organization in the **Organizations** list.
+
+### Create test organizations
+
+> **Warning:** `make test-tenants` is for test deployments only. Never run it on a real install: it creates
+> organizations whose test users anyone with the password files can sign in as.
+
+On a test deployment with `keycloakOverlay=core`, `make test-tenants` creates the library's example tenants the way a
+provider would:
+
+- the example identity provider realms `grid-tenant-1-idp` (user `alice`) and `grid-tenant-2-idp` (users `alice`,
+  `bob` and `carol`), imported from the library's files through Keycloak's admin API. They stand in for organizations'
+  own identity providers.
+- the organizations `grid-tenant-1` and `grid-tenant-2`, created through the provider console's API, each linked to
+  its realm, with the domain `grid-tenant-1.test` or `grid-tenant-2.test`.
+
+1. Create the provider-admin token, if you haven't already:
+
+   ```sh
+   make provider-admin
+   ```
+
+2. Create the test organizations:
+
+   ```sh
+   make test-tenants
+   ```
+
+   You should see each realm and organization `created`, and for each user the file that holds their password, in
+   `.config/test-tenants/` (readable only by you). Nothing prints a password. Running it again creates only what's
+   missing.
+
+To delete them, run `make test-tenants CLEAN=1`. It deletes the organizations, the users that signed in through them,
+the realms and the password files.
 
 ## 3. Deploy a model
 
@@ -93,7 +129,9 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
 
 1. Choose a tenant user in group `ai-grid-users`:
 
-   - **`core`:** a user of the organization's identity provider, in its group `ai-grid-users`.
+   - **A real deployment:** a user of the organization's identity provider, in its group `ai-grid-users`.
+   - **A test deployment, after `make test-tenants`:** `alice` of `grid-tenant-1`. Sign in as
+     `alice@grid-tenant-1.test`, with the password in `.config/test-tenants/grid-tenant-1-idp/alice`.
    - **`default`, on a test deployment:** `alice` of `grid-tenant-1`. Her password is the key
      `GRID_TENANT_1_TEST_USER_PASSWORD` of Secret `maas-db/keycloak-secrets` on the hub. To save it to a file in a
      directory only you can read, without printing it:
@@ -135,7 +173,8 @@ minutes, see [troubleshooting](troubleshooting.md#a-models-catalog-applications-
    > the certificate isn't trusted, and names this limit
    > ([limits of `main`](../upstream-main-limits.md#l5-the-maas-gateway-presents-the-cluster-internal-certificate)).
 
-To remove what you created, delete the subscription, then the model, then the organization in the console. Deleting
+To remove what you created, delete the subscription, then the model, then the organization in the console, or on a
+test deployment run `make test-tenants CLEAN=1`. Deleting
 a subscription doesn't revoke its API keys: revoke them in the Org UI first.
 
 ## Checkpoint
