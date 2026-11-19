@@ -113,6 +113,8 @@ YAML
   echo '{"items":[{"status":{"phase":"Running"}}]}' > "$W/mch.json"
   echo '{"items":[{"metadata":{"name":"acm"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"}}}]}' > "$W/apps.json"
   : > "$W/calls.log"; : > "$W/argv.log"; rm -f "$T/git-stub/err" "$T/git-stub/ls-remote.log"
+  # check-prerequisites.sh's line for a hub without the platform's cert-manager.
+  echo "OK       cert-manager                             the root installs the library's (hubCertManager=library)" > "$W/check-prerequisites.sh.out"
 }
 opt() { # KEY VALUE: adds an options: entry to clusters.yaml
   sed -i.bak "s#^options:\$#options:\\
@@ -433,8 +435,28 @@ t "  ... a rerun keeps platform" eval '[ "$rc" = 0 ] && grep -qx hubCertManager=
 detect cm-detect-library
 echo "OK       cert-manager                             the root installs the library's (hubCertManager=library)" > "$W/check-prerequisites.sh.out"
 run
-t "hubCertManager unset, no platform cert-manager: library" eval '[ "$rc" = 0 ] &&
-  grep -qx hubCertManager=library "$D/root/inputs.env" && grep -q "^check-prerequisites.sh .*--cert-manager library" "$W/calls.log"'
+t "hubCertManager unset, no platform cert-manager: library, says so, reads the hub once" eval '[ "$rc" = 0 ] &&
+  grep -qx hubCertManager=library "$D/root/inputs.env" && grep -q "^check-prerequisites.sh .*--cert-manager library" "$W/calls.log" &&
+  [ "$(grep -c "^check-prerequisites.sh" "$W/calls.log")" = 1 ] &&
+  grep -qx "checked the hub: no platform cert-manager; hubCertManager=library" <<<"$out"'
+detect cm-detect-noline
+echo "MISSING  OpenShift 4.21 or later                  unreadable" > "$W/check-prerequisites.sh.out"; echo 1 > "$W/check-prerequisites.sh.rc"
+run
+t "hubCertManager unset, the check exits 1 with no cert-manager line: stops, nothing written" eval '[ "$rc" = 1 ] &&
+  grep -q "no OK or FOUND line for it" <<<"$out" && ! grep -q "^hubCertManager=" "$D/root/inputs.env" &&
+  ! grep -q "^set-inputs.sh" "$W/calls.log" && ! grep -q "^git-push.sh" "$W/calls.log"'
+detect cm-first-run
+g -C "$D" rm -q root/inputs.env && g -C "$D" commit -qm "no inputs" && mkdir -p "$D/root"
+echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"
+echo 1 > "$W/check-deployment.sh.rc"; run
+t "first run, no inputs.env, a stop inside set-inputs.sh: its header stays, with platform" eval '[ "$rc" = 1 ] &&
+  head -n1 "$D/root/inputs.env" | grep -q "^# Your deployment.s inputs" && grep -qx hubCertManager=platform "$D/root/inputs.env" &&
+  [ "$(grep -c "^hubCertManager=" "$D/root/inputs.env")" = 1 ]'
+detect cm-first-run-early
+g -C "$D" rm -q root/inputs.env && g -C "$D" commit -qm "no inputs" && mkdir -p "$D/root" && g -C "$D" remote remove origin
+echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"
+run
+t "  ... set-inputs.sh stops before it writes: no header-less inputs.env" eval '[ "$rc" = 1 ] && [ ! -e "$D/root/inputs.env" ]'
 detect cm-detect-unread
 echo "MISSING  cert-manager OperatorGroup                   can.t read OperatorGroups in cert-manager-operator: Forbidden" > "$W/check-prerequisites.sh.out"
 run
@@ -473,6 +495,13 @@ run
 t "an indented hubCertManager=library counts as set: not overwritten, stops" eval '[ "$rc" = 1 ] &&
   grep -qx "  hubCertManager=library" "$D/root/inputs.env" && ! grep -qx hubCertManager=platform "$D/root/inputs.env" &&
   grep -q "^check-prerequisites.sh .*--cert-manager library" "$W/calls.log" && grep -q "set hubCertManager=platform" <<<"$out"'
+setup cm-usage-final
+echo hubCertManager=platform >> "$D/root/inputs.env"; g -C "$D" commit -qam platform
+echo 2 > "$W/check-prerequisites.sh.rc"; echo "error: no kubeconfig for hub" > "$W/check-prerequisites.sh.out"
+run
+t "a set value, the final check exits 2: stops with the likely causes, before the push" eval '[ "$rc" = 1 ] &&
+  grep -q "exit 2, --cert-manager .platform.).*hub login" <<<"$out" && grep -q "no kubeconfig for hub" <<<"$out" &&
+  grep -q "^set-inputs.sh" "$W/calls.log" && ! grep -q "^git-push.sh" "$W/calls.log"'
 detect cm-crlf
 printf 'hubCertManager=platform\r\n' >> "$D/root/inputs.env"; g -C "$D" commit -qam crlf
 run
