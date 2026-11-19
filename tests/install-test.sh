@@ -404,11 +404,47 @@ run
 t "a hub it can't read: stops at catalog" eval '[ "$rc" = 1 ] && grep -q "can.t read the hub" <<<"$out" && ! grep -q "^empty-catalog.sh" "$W/calls.log" &&
   grep -qx "make install stopped at catalog. Fix the cause, then run make install again." <<<"$out"'
 setup platformcm
+echo hubCertManager=library >> "$D/root/inputs.env"; g -C "$D" commit -qam library
 echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"
 run
 t "the platform's cert-manager with hubCertManager=library: stops at inputs, before the push" eval '[ "$rc" = 1 ] &&
   grep -q "^FOUND .*cert-manager-operator-og" <<<"$out" && grep -q "set hubCertManager=platform" <<<"$out" &&
   grep -qx "make install stopped at inputs. Fix the cause, then run make install again." <<<"$out" &&
+  ! grep -q "^git-push.sh" "$W/calls.log"'
+t "  ... and the value that's set stays" grep -qx hubCertManager=library "$D/root/inputs.env"
+
+# hubCertManager unset: the hub decides, through the real set-inputs.sh.
+detect() { # NAME: setup with the real set-inputs.sh
+  setup "$1"
+  cp "$SRC/scripts/set-inputs.sh" "$D/scripts/set-inputs.sh"; cp -R "$SRC/hub" "$D/"
+  g -C "$D" remote add origin https://github.com/acme/deploy.git
+}
+detect cm-detect-platform
+echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"
+run
+t "hubCertManager unset, the hub runs the platform's cert-manager: writes platform and pushes" eval '[ "$rc" = 0 ] &&
+  [ "$(grep -c "^hubCertManager=" "$D/root/inputs.env")" = 1 ] && grep -qx hubCertManager=platform "$D/root/inputs.env" &&
+  grep -q "hubCertManager = platform" <<<"$out" && grep -q "^git-push.sh" "$W/calls.log"'
+# check-prerequisites.sh --cert-manager platform checks the CRDs, never the OperatorGroup.
+: > "$W/calls.log"; echo "OK       cert-manager CRDs                        present (hubCertManager=platform)" > "$W/check-prerequisites.sh.out"; run
+t "  ... a rerun keeps platform" eval '[ "$rc" = 0 ] && grep -qx hubCertManager=platform "$D/root/inputs.env" &&
+  grep -q "^check-prerequisites.sh .*--cert-manager platform" "$W/calls.log"'
+detect cm-detect-library
+echo "OK       cert-manager                             the root installs the library's (hubCertManager=library)" > "$W/check-prerequisites.sh.out"
+run
+t "hubCertManager unset, no platform cert-manager: library" eval '[ "$rc" = 0 ] &&
+  grep -qx hubCertManager=library "$D/root/inputs.env" && grep -q "^check-prerequisites.sh .*--cert-manager library" "$W/calls.log"'
+detect cm-detect-unread
+echo "MISSING  cert-manager OperatorGroup                   can.t read OperatorGroups in cert-manager-operator: Forbidden" > "$W/check-prerequisites.sh.out"
+run
+t "hubCertManager unset, the hub can't be read: stops at inputs, before the push" eval '[ "$rc" = 1 ] &&
+  ! grep -qx hubCertManager=platform "$D/root/inputs.env" && ! grep -q "^git-push.sh" "$W/calls.log"'
+detect cm-set-library
+echo hubCertManager=library >> "$D/root/inputs.env"; g -C "$D" commit -qam library
+echo "FOUND    cert-manager OperatorGroup                   cert-manager-operator-og: the hub runs the platform's cert-manager" > "$W/check-prerequisites.sh.out"
+run
+t "hubCertManager=library set, the platform's cert-manager: not overwritten, stops" eval '[ "$rc" = 1 ] &&
+  grep -qx hubCertManager=library "$D/root/inputs.env" && grep -q "set hubCertManager=platform" <<<"$out" &&
   ! grep -q "^git-push.sh" "$W/calls.log"'
 
 setup maascert
