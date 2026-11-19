@@ -82,8 +82,8 @@ provider would:
 
 To delete them, first preview what would go with `make test-tenants CLEAN=1`, then run
 `make test-tenants CLEAN=1 CONFIRM=1`. It deletes the users that signed in through the organizations (users of
-realm `saas` with an email in one of the organization's domains and a link to its identity provider, found through
-Keycloak's admin API), the organizations, their identity provider Secrets, the realms and the password files in `.config/test-tenants/`. It
+realm `saas` linked only to the organization's identity provider, with an email in one of its domains and no local
+credentials, found through Keycloak's admin API; it names any it keeps), the organizations, their identity provider Secrets, the realms and the password files in `.config/test-tenants/`. It
 keeps an organization named `grid-tenant-1` or `grid-tenant-2` whose identity provider isn't the test realm, and says
 so.
 

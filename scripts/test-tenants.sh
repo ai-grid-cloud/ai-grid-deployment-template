@@ -38,9 +38,10 @@
 # files, it sets new passwords for the file's users.
 #
 # --clean lists, and with --confirm deletes, for each tenant: the users that
-# signed in through the organization (in realm saas, with an email in one of
-# its domains and a link to its identity provider, found with Keycloak's admin
-# API; the console doesn't list members), the organization (provider API), the
+# signed in through the organization (in realm saas: linked only to its
+# identity provider, with an email in one of its domains and no local
+# credentials, found with Keycloak's admin API; the console doesn't list
+# members), the organization (provider API), the
 # Secret, the realm, and the password files. It deletes an organization only
 # when its identity provider's issuer is the test realm's, and otherwise keeps
 # it and its Secret and says why. Without --clean nothing is deleted.
@@ -85,6 +86,9 @@ cluster_login_ok "$hub"
 cluster_tls "$hub"   # the hub's ca: in clusters.yaml, for Keycloak's Route
 export KUBECONFIG; KUBECONFIG=$(cluster_kubeconfig "$hub")
 kc_ns=${KEYCLOAK_NAMESPACE:-maas-db} saas=${KEYCLOAK_REALM:-saas}
+# CLEAN reads the users of an identity provider TEST_TENANTS_PAGE at a time,
+# and stops, deleting nothing, past TEST_TENANTS_MAX_USERS.
+page=${TEST_TENANTS_PAGE:-100} cap=${TEST_TENANTS_MAX_USERS:-1000}
 # Where the console backend reads identity provider Secrets: its own setting, else the chart's default.
 idp_ns=${IDP_SECRETS_NAMESPACE:-}
 if [ -z "$idp_ns" ]; then
@@ -185,29 +189,50 @@ for n in 1 2; do
       summary+=("organization $org: kept, with Secret $idp_ns/$secret: its identity provider's issuer isn't $issuer, so it isn't a test organization")
     else
       id=$(jq -r .id <<<"$o") version=$(jq -r '.metadata.version // 1' <<<"$o")
-      # The users that signed in through the organization, from Keycloak: an
-      # email in one of the organization's own domains (Tenants/List) and a
-      # link to its identity provider (alias: the organization's name). They're
-      # found before the organization goes, because deleting its identity
-      # provider also deletes those links. The console doesn't list members.
-      kc_login; : > "$tmp/candidates"; : > "$tmp/members"
-      for d in $(jq -r '.spec.domains[]?' <<<"$o"); do
+      # The users that signed in through the organization, from Keycloak (the
+      # console doesn't list members): users of realm saas linked to its
+      # identity provider (idpAlias: the organization's name) whose email's
+      # domain is one of the organization's own (Tenants/List). They're found
+      # before the organization goes, because deleting its identity provider
+      # also deletes those links. A user linked to another identity provider
+      # too, or with local credentials, is kept and named.
+      : > "$tmp/domains"
+      while IFS= read -r d; do
         [[ "$d" =~ ^[A-Za-z0-9.-]+$ ]] || die "organization $org has a domain that isn't a hostname: deleting nothing"
-        kc GET "/$saas/users?email=%40$d&exact=false&briefRepresentation=true&max=1000"
-        [ "$code" = 200 ] || kc_fail "find the users of domain $d in realm $saas"
-        jq -r --arg s "@$d" '.[]? | select((.email // "") | ascii_downcase | endswith($s | ascii_downcase)) | "\(.id) \(.email)"' \
-          "$tmp/kc.json" >> "$tmp/candidates"
+        printf '%s\n' "$d" >> "$tmp/domains"
+      done < <(jq -r '.spec.domains[]?' <<<"$o")
+      kc_login; : > "$tmp/candidates"; : > "$tmp/members"; first=0
+      while :; do
+        kc GET "/$saas/users?idpAlias=$org&briefRepresentation=true&first=$first&max=$page"
+        [ "$code" = 200 ] || kc_fail "find the users linked to identity provider $org in realm $saas"
+        got=$(jq 'length' "$tmp/kc.json")
+        jq -r --rawfile ds "$tmp/domains" '($ds | ascii_downcase | split("\n") | map(select(length > 0))) as $ds
+          | .[]? | select((.email // "") | ascii_downcase | split("@") | length == 2 and (.[1] as $h | any($ds[]; . == $h)))
+          | "\(.id) \(.email)"' "$tmp/kc.json" >> "$tmp/candidates"
+        first=$((first + got))
+        [ "$got" -ge "$page" ] || break
+        [ "$first" -lt "$cap" ] || die "more than $cap users are linked to identity provider $org in realm $saas: deleting nothing"
       done
-      sort -u -o "$tmp/candidates" "$tmp/candidates"
       while read -r uid email; do
         [ -n "$uid" ] || continue
         is_uuid "$uid" || die "Keycloak listed a user id in realm $saas that isn't a UUID: deleting nothing"
         kc GET "/$saas/users/$uid/federated-identity"
         case "$code" in
-          200) ! jq -e --arg a "$org" 'any(.[]?; .identityProvider == $a)' "$tmp/kc.json" >/dev/null || echo "$uid $email" >> "$tmp/members" ;;
-          404) ;;
+          200) ;; 404) summary+=("user $email: gone while reading it"); continue ;;
           *) kc_fail "read the identity provider links of user $uid in realm $saas" ;;
         esac
+        if ! jq -e --arg a "$org" 'length == 1 and .[0].identityProvider == $a' "$tmp/kc.json" >/dev/null; then
+          summary+=("user $email of $org: kept: also linked elsewhere"); continue
+        fi
+        kc GET "/$saas/users/$uid/credentials"
+        case "$code" in
+          200) ;; 404) summary+=("user $email: gone while reading it"); continue ;;
+          *) kc_fail "read the credentials of user $uid in realm $saas" ;;
+        esac
+        if ! jq -e 'length == 0' "$tmp/kc.json" >/dev/null; then
+          summary+=("user $email of $org: kept: has local credentials"); continue
+        fi
+        echo "$uid $email" >> "$tmp/members"
       done < "$tmp/candidates"
       count=$(grep -c . "$tmp/members" || true)
       if [ -z "$confirm" ]; then
@@ -215,7 +240,7 @@ for n in 1 2; do
         else summary+=("organization $org (id $id): would delete it, and its $count users from realm $saas: $(cut -d' ' -f2 "$tmp/members" | paste -sd ' ' -)"); fi
       else
         # The users first: once the identity provider is gone, so are their links to it.
-        gone=0
+        kc_login; gone=0
         while read -r uid _; do
           kc DELETE "/$saas/users/$uid"
           case "$code" in 204) gone=$((gone+1)) ;; 404) ;; *) kc_fail "delete user $uid from realm $saas" ;; esac
