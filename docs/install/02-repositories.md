@@ -240,8 +240,9 @@ deployment's root renders, but `make inputs` and `make check` warn about it. Don
 
 To check, run `oc get operatorgroups -n cert-manager-operator` on the hub. An OperatorGroup other than
 `openshift-cert-manager-operator` is the platform's. If you leave `library` on such a hub, `make install` stops and
-says to set `platform`. If `root/inputs.env` doesn't set `hubCertManager` yet, the [hands-off install](09-hands-off.md)
-checks the hub itself and writes `platform` or `library`.
+says to set `platform`. If you skip `make inputs` and run the [hands-off install](09-hands-off.md), so that
+`root/inputs.env` doesn't set `hubCertManager` yet, the install checks the hub itself and writes `platform` or
+`library`.
 
 The portal's sign-in redirects need nothing from you: the library's Keycloak registers
 `https://maas.SITE_APPS_DOMAIN/oauth2/callback` for every ingress or combined site itself, with its CronJob
