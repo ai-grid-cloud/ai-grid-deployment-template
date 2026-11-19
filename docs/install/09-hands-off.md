@@ -23,8 +23,10 @@ worker nodes or the network.
   anonymous `git ls-remote`.
 - [ ] **A default StorageClass on each cluster.**
 - [ ] **No platform cert-manager Operator on a site.** A site whose namespace `cert-manager-operator` has an
-  OperatorGroup other than `openshift-cert-manager-operator` can't join the grid yet: the install's `site` step stops
-  on it ([limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values)).
+  OperatorGroup that OpenShift AI's chart didn't create for it can't join the grid yet: the install's `site` step stops
+  on it ([limits of `main`](../upstream-main-limits.md#l4-sites-that-need-per-site-values)). The name doesn't tell:
+  the platform's CLI install also names it `openshift-cert-manager-operator`
+  ([how the checks tell them apart](../upstream-main-limits.md#l17-the-hubs-cert-manager-is-the-librarys-or-the-platforms-not-both)).
 - [ ] **Two worker nodes outside the control plane on each cluster** for Submariner's gateways. The install labels two
   of them `submariner.io/gateway=true` on the hub and on each site, preferring nodes without GPUs
   ([limits of `main`, L21](../upstream-main-limits.md#l21-nothing-labels-the-submariner-gateway-nodes)). On a compact

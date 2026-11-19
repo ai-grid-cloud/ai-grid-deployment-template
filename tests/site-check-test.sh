@@ -20,6 +20,9 @@ case " $* " in
   *" get ingresses.config.openshift.io "*) printf 'localhost' ;;
   *" get nodes -o json "*) cat "$STUB_DIR/nodes.json" ;;
   *" get operatorgroups.operators.coreos.com -n cert-manager-operator "*)
+    # The exact jsonpath site-check.sh asks for: a typo in it fails here.
+    jp='{range .items[*]}{.metadata.name}{"|"}{.metadata.labels.app\.kubernetes\.io/instance}{"|"}{.metadata.annotations.argocd\.argoproj\.io/tracking-id}{"\n"}{end}'
+    [[ " $* " == *" jsonpath=$jp "* ]] || { echo "stub oc: unexpected jsonpath: $*" >&2; exit 3; }
     [ ! -f "$STUB_DIR/og-error" ] || { echo "error: Forbidden" >&2; exit 1; }
     cat "$STUB_DIR/ogs" 2>/dev/null || true ;;
   *" get nodes -l nvidia.com/gpu.present=true -o name "*) cat "$STUB_DIR/gpu-nodes" 2>/dev/null || true ;;
@@ -38,10 +41,22 @@ w() { printf '{"metadata":{"name":"%s","labels":{"node-role.kubernetes.io/%s":""
 echo "{\"items\":[$(w w1 worker),$(w w2 worker)]}" > "$T/nodes.json"
 # The apps domain is localhost, so router-default.localhost resolves where the
 # resolver maps *.localhost; the cert-manager lines are what's tested.
-t "no OperatorGroup: OK" 0 "^OK +cert-manager OperatorGroup"
-printf 'openshift-cert-manager-operator' > "$T/ogs"
-t "only the chart's own (a site that already joined): OK" 0 "^OK +cert-manager OperatorGroup"
-printf 'cert-manager-operator-og' > "$T/ogs"
+# ogs holds the jsonpath's NAME|app.kubernetes.io/instance|argocd.argoproj.io/tracking-id lines.
+# site-b's Application: rhoai-<name, first 34>-<sha256 of name, first 8>, as the library names it.
+APP="rhoai-site-b-$(printf %s site-b | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-8)"
+OGN=openshift-cert-manager-operator
+t "no OperatorGroup: OK" 0 "^OK +cert-manager OperatorGroup +none"
+printf '%s||%s:operators.coreos.com/OperatorGroup:cert-manager-operator/%s\n' "$OGN" "$APP" "$OGN" > "$T/ogs"
+t "the chart's own, tracked by this site's Application (annotation): OK" 0 "^OK +cert-manager OperatorGroup +OpenShift AI's chart's, from $APP"
+printf '%s|%s|\n' "$OGN" "$APP" > "$T/ogs"
+t "  ... by label: OK" 0 "^OK +cert-manager OperatorGroup +OpenShift AI's chart's"
+printf '%s||\n' "$OGN" > "$T/ogs"
+t "the chart's name with no tracking (the platform's CLI install): FOUND" 1 "^FOUND +cert-manager OperatorGroup +$OGN: the platform runs cert-manager"
+printf '%s||rhoai-old-name-0123abcd:operators.coreos.com/OperatorGroup:cert-manager-operator/%s\n' "$OGN" "$OGN" > "$T/ogs"
+t "tracked by another rhoai- Application (an earlier join): WARN, not a failure" 0 "^WARN +cert-manager OperatorGroup +$OGN \(tracked by rhoai-old-name-0123abcd\), not this site's $APP"
+printf '%s||%s:operators.coreos.com/OperatorGroup:cert-manager-operator/%s\ncert-manager-operator-og||\n' "$OGN" "$APP" "$OGN" > "$T/ogs"
+t "the chart's own next to another: FOUND" 1 "^FOUND +cert-manager OperatorGroup +cert-manager-operator-og"
+printf 'cert-manager-operator-og||\n' > "$T/ogs"
 t "the platform's cert-manager: FOUND, names the limit, exit 1" 1 "^FOUND +cert-manager OperatorGroup +cert-manager-operator-og: .*TooManyOperatorGroups.*upstream-main-limits.md"
 touch "$T/og-error"
 t "can't read: MISSING, exit 1" 1 "^MISSING +cert-manager OperatorGroup +can't read OperatorGroups in cert-manager-operator: error: Forbidden"

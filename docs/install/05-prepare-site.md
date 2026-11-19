@@ -105,6 +105,10 @@ the cert-manager Operator with `TooManyOperatorGroups`. Use another cluster unti
 For the same reason, you can't set a site's GPU settings, such as its NFD and `ClusterPolicy` values, from your
 deployment repository.
 
+A `WARN` for the `cert-manager OperatorGroup` means one named `openshift-cert-manager-operator` that another hub's OpenShift AI
+Application created: expected on a site that joined an earlier grid, but the platform's if this site never joined one
+([how the check decides](../upstream-main-limits.md#l17-the-hubs-cert-manager-is-the-librarys-or-the-platforms-not-both)).
+
 ## 2. Import the site into ACM
 
 Preview the import. It prints a summary of what the library's import script will do, and changes nothing:
