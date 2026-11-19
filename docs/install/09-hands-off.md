@@ -203,9 +203,10 @@ Tell the install which clusters and repositories to use, and give it the credent
    so `make install` stops if `root/inputs.env` says `default` and the branch you pushed says `core`, unless you
    run it with `KEYCLOAK_OVERLAY_CHANGE=1`.
 
-   The install also writes `hubCertManager=library`: the hub installs the library's cert-manager. If the hub already runs
-   the platform's cert-manager, set `hubCertManager=platform` the same way; the install stops and says so if you
-   don't.
+   You don't choose the hub's cert-manager: when `root/inputs.env` doesn't set `hubCertManager`, the install checks the
+   hub. If the hub already runs the platform's cert-manager, it writes `hubCertManager=platform`; otherwise it writes
+   `library`, and the hub installs the library's cert-manager. A value that's already set is kept, and the install
+   stops if it contradicts the hub.
 
    Never paste a secret into a chat, a command line or a file you commit.
 
