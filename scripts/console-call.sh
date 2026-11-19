@@ -33,7 +33,9 @@ else
     { echo "error: your $hub login has no token (a certificate kubeconfig?): run make login NAME=$hub" >&2; exit 1; }
   (umask 077; printf 'Authorization: Bearer %s\n' "$token" > "$tmp/auth"); unset token
 fi
-console=$(oc get route -n ai-grid-provider-console -o jsonpath='{.items[0].spec.host}')
+# The chart's Route, by name: never another Route someone added to the namespace,
+# because the token is sent to this host.
+console=$(oc get route ai-grid-provider-console -n ai-grid-provider-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
 [ -n "$console" ] || { echo "error: no console Route on $hub yet: see make status" >&2; exit 1; }
 code=$(curl -sS ${CURL_TLS[@]+"${CURL_TLS[@]}"} -o "$tmp/body" -X POST -H "@$tmp/auth" -H 'Content-Type: application/json' \
   -H 'Connect-Protocol-Version: 1' --data-binary "$body" -w '%{http_code}' "https://$console/$method")
